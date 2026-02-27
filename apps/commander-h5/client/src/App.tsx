@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch, useLocation } from "wouter";
+import { Route, Switch, useLocation, Redirect } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import CommanderPhone from "./pages/CommanderPhone";
@@ -18,6 +18,17 @@ import MarketExpansion from "./pages/MarketExpansion";
 import ProductLaunch from "./pages/ProductLaunch";
 import GeoOptimizer from "./pages/GeoOptimizer";
 import { useState, createContext, useContext } from "react";
+import { AuthContext, useAuthState } from "./hooks/useAuth";
+import { isLoggedIn } from "./lib/api";
+import Login from "./pages/Login";
+
+// ─── 受保护路由 ───────────────────────────────────────────────
+function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
+  if (!isLoggedIn()) {
+    return <Redirect to="/login" />;
+  }
+  return <Component />;
+}
 
 // ─── 用户类型 Context（标准版 vs 独立部署版）─────────────────────
 
@@ -96,18 +107,19 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={LandingPage} />
-      <Route path="/phone" component={CommanderPhone} />
-      <Route path="/web" component={WebDashboard} />
-      <Route path="/notifications" component={NotificationCenterPage} />
-      <Route path="/notification-settings" component={NotificationSettingsPage} />
-      <Route path="/tiktok" component={TikTokManager} />
-      <Route path="/facebook" component={FacebookManager} />
-      <Route path="/linkedin" component={LinkedInManager} />
-      <Route path="/whatsapp" component={WhatsAppManager} />
-      <Route path="/openclaw" component={OpenClawDetail} />
-      <Route path="/market" component={MarketExpansion} />
-      <Route path="/product-launch" component={ProductLaunch} />
-      <Route path="/geo" component={GeoOptimizer} />
+      <Route path="/login" component={Login} />
+      <Route path="/phone">{() => <ProtectedRoute component={CommanderPhone} />}</Route>
+      <Route path="/web">{() => <ProtectedRoute component={WebDashboard} />}</Route>
+      <Route path="/notifications">{() => <ProtectedRoute component={NotificationCenterPage} />}</Route>
+      <Route path="/notification-settings">{() => <ProtectedRoute component={NotificationSettingsPage} />}</Route>
+      <Route path="/tiktok">{() => <ProtectedRoute component={TikTokManager} />}</Route>
+      <Route path="/facebook">{() => <ProtectedRoute component={FacebookManager} />}</Route>
+      <Route path="/linkedin">{() => <ProtectedRoute component={LinkedInManager} />}</Route>
+      <Route path="/whatsapp">{() => <ProtectedRoute component={WhatsAppManager} />}</Route>
+      <Route path="/openclaw">{() => <ProtectedRoute component={OpenClawDetail} />}</Route>
+      <Route path="/market">{() => <ProtectedRoute component={MarketExpansion} />}</Route>
+      <Route path="/product-launch">{() => <ProtectedRoute component={ProductLaunch} />}</Route>
+      <Route path="/geo">{() => <ProtectedRoute component={GeoOptimizer} />}</Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
@@ -120,10 +132,12 @@ function App() {
   const [pushHour, setPushHour] = useState(8);
   const [pushMinute, setPushMinute] = useState(0);
   const [plan, setPlan] = useState<UserPlan>("standard");
+  const authState = useAuthState();
 
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="dark">
+        <AuthContext.Provider value={authState}>
         <UserPlanContext.Provider value={{
           plan,
           setPlan,
@@ -140,6 +154,7 @@ function App() {
             </TooltipProvider>
           </NotifSettingsContext.Provider>
         </UserPlanContext.Provider>
+        </AuthContext.Provider>
       </ThemeProvider>
     </ErrorBoundary>
   );

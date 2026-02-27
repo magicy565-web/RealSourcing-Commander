@@ -17,6 +17,9 @@
      → 24h 自动跟进启动
    ============================================================ */
 import { useState, useEffect, useRef, useCallback } from "react";
+import { inquiriesApi, type Inquiry } from "@/lib/api";
+import { useInquiries, useOpenClawStatus } from "@/hooks/useInquiries";
+import { useAuth } from "@/hooks/useAuth";
 import { useLocation } from "wouter";
 import {
   Bell, Zap, Plus, Coins, ChevronRight, ChevronDown,
@@ -299,6 +302,85 @@ const followUpStyles: Record<FollowUpStyle, { label: string; desc: string; color
   },
 };
 
+// ─── API 数据转换 ─────────────────────────────────────────────
+function formatRelativeTime(isoStr: string): string {
+  try {
+    const diff = Date.now() - new Date(isoStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "刚刚";
+    if (mins < 60) return `${mins}分钟前`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}小时前`;
+    const days = Math.floor(hours / 24);
+    if (days === 1) return "昨天";
+    if (days < 7) return `${days}天前`;
+    return new Date(isoStr).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
+  } catch {
+    return isoStr;
+  }
+}
+
+const PLATFORM_LABELS: Record<string, string> = {
+  alibaba: "阿里巴巴", linkedin: "LinkedIn", facebook: "Facebook",
+  tiktok: "TikTok", whatsapp: "WhatsApp", geo: "GEO引流",
+  seo: "SEO", email: "邮件", custom: "自定义",
+};
+const COUNTRY_FLAGS: Record<string, string> = {
+  "越南": "🇻🇳", "德国": "🇩🇪", "美国": "🇺🇸", "英国": "🇬🇧",
+  "澳大利亚": "🇦🇺", "加拿大": "🇨🇦", "法国": "🇫🇷", "日本": "🇯🇵",
+  "韩国": "🇰🇷", "印度": "🇮🇳", "巴西": "🇧🇷", "瑞典": "🇸🇪",
+  "荷兰": "🇳🇱", "意大利": "🇮🇹", "西班牙": "🇪🇸", "波兰": "🇵🇱",
+};
+
+function apiInquiryToLead(inq: Inquiry): Lead {
+  const breakdown = inq.confidence_breakdown ?? { channelWeight: 0, contentQuality: 0, buyerCompleteness: 0 };
+  const score = inq.confidence_score ?? 0;
+  const color = score >= 80 ? "#22c55e" : score >= 60 ? "#f59e0b" : "#ef4444";
+  const label: "高意向" | "中等" | "待验证" = score >= 80 ? "高意向" : score >= 60 ? "中等" : "待验证";
+  const platform = inq.source_platform;
+  const channelType = (["alibaba","linkedin","facebook","tiktok","whatsapp","seo","geo","email"].includes(platform)
+    ? platform : "custom") as Lead["channelType"];
+  const country = inq.buyer_country ?? "";
+  return {
+    id: inq.id,
+    channel: PLATFORM_LABELS[platform] ?? platform,
+    channelType,
+    company: inq.buyer_company ?? "未知公司",
+    contact: inq.buyer_name ?? "未知买家",
+    contactTitle: "",
+    email: inq.buyer_contact?.includes("@") ? inq.buyer_contact : undefined,
+    whatsapp: inq.buyer_contact && !inq.buyer_contact.includes("@") ? inq.buyer_contact : undefined,
+    country,
+    flag: COUNTRY_FLAGS[country] ?? "🌍",
+    product: inq.product_name ?? "",
+    quantity: inq.quantity ?? "",
+    originalMsg: inq.raw_content ?? "",
+    aiDraftCn: inq.ai_draft_cn ?? "",
+    aiDraftEn: inq.ai_draft_en ?? "",
+    aiAnalysis: inq.ai_analysis ?? "",
+    confidence: {
+      total: score,
+      color,
+      label,
+      channelWeight: breakdown.channelWeight,
+      contentQuality: breakdown.contentQuality,
+      buyerCompleteness: breakdown.buyerCompleteness,
+    },
+    status: inq.status as Lead["status"],
+    urgency: (inq.urgency as "high" | "normal" | "low") ?? "normal",
+    tags: Array.isArray(inq.tags) ? inq.tags : [],
+    receivedAt: formatRelativeTime(inq.received_at),
+    followUpRecords: [],
+    followUpStyle: "business",
+    quotedPrice: undefined,
+    quotedUnit: undefined,
+    quotedAt: undefined,
+    nextFollowUpAt: undefined,
+    transferredTo: undefined,
+    transferNote: undefined,
+  };
+}
+
 function getNextPushTime(hour: number, minute: number) {
   const now = new Date();
   const bjNow = new Date(now.getTime() + 8 * 3600 * 1000);
@@ -339,7 +421,7 @@ function TopNav({ view, onChangeView, credits, unreadCount, onBack }: {
   credits: number; unreadCount: number; onBack: () => void;
 }) {
   const [, navigate] = useLocation();
-  const pendingCount = mockLeads.filter(l => l.status === "unread" || l.status === "unquoted").length;
+  const pendingCount = unreadCount;
   return (
     <div className="px-4 pt-1 pb-3 flex-shrink-0">
       <div className="flex items-center justify-between mb-3">
@@ -387,6 +469,8 @@ function TopNav({ view, onChangeView, credits, unreadCount, onBack }: {
 // ─── 今日状态视图 ─────────────────────────────────────────────
 
 function StatusView({ onGoInquiries, isEnterprise = false }: { onGoInquiries: () => void; isEnterprise?: boolean }) {
+  const { inquiries: rawInquiries, stats } = useInquiries();
+  const { status: clawStatus, simulateLead } = useOpenClawStatus();
   const { pushHour, pushMinute } = useNotifSettings();
   const [nextPush, setNextPush] = useState(() => getNextPushTime(pushHour, pushMinute));
   const [showLaunch, setShowLaunch] = useState(false);
@@ -402,8 +486,9 @@ function StatusView({ onGoInquiries, isEnterprise = false }: { onGoInquiries: ()
     { id:"oc-002", name:"张总 · 佛山顺达五金", status:"running" as const, todayOps:12, pendingMsgs:0, lastAction:"完成每日连接配额 (25/25)" },
   ];
 
-  const pending = mockLeads.filter(l => l.status === "unread" || l.status === "unquoted");
-  const following = mockLeads.filter(l => l.status === "quoted" || l.status === "no_reply");
+  const allLeads = rawInquiries.map(inq => apiInquiryToLead(inq));
+  const pending = allLeads.filter(l => l.status === "unread" || l.status === "unquoted");
+  const following = allLeads.filter(l => l.status === "quoted" || l.status === "no_reply");
 
   return (
     <div className="flex-1 overflow-y-auto pb-28" style={{scrollbarWidth:"none"}}>
@@ -816,11 +901,22 @@ function LeadDetailFlow({ lead: initialLead, onBack, onUpdate }: {
 
   const sc = statusConfig[lead.status];
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!price) { toast.error("请填写报价金额"); return; }
     setSending(true);
-    setTimeout(() => {
-      setSending(false);
+    try {
+      // 先发送报价到后端
+      await inquiriesApi.quote(lead.id, {
+        unitPrice: parseFloat(price),
+        unit: priceUnit.split(" ")[0] || "件",
+        priceTerm: priceUnit.includes("FOB") ? "FOB" : "EXW",
+        followupStyle: selectedStyle,
+      });
+      // 再发送回复（AI草稿）
+      await inquiriesApi.reply(lead.id, {
+        contentZh: draftCn,
+        useAiDraft: true,
+      });
       const updated: Lead = {
         ...lead, status: "quoted",
         quotedPrice: `$${price}`, quotedUnit: priceUnit, quotedAt: "刚刚",
@@ -835,16 +931,25 @@ function LeadDetailFlow({ lead: initialLead, onBack, onUpdate }: {
       onUpdate(updated);
       setStep("overview");
       toast.success("报价已发送", { description: `24小时后将自动以【${followUpStyles[selectedStyle].label}】风格跟进` });
-    }, 1800);
+    } catch (err: any) {
+      toast.error(err.message ?? "发送失败，请重试");
+    } finally {
+      setSending(false);
+    }
   };
 
-  const handleTransfer = () => {
+  const handleTransfer = async () => {
     if (!transferTo) { toast.error("请填写业务员姓名"); return; }
-    const updated: Lead = { ...lead, status: "transferred", transferredTo: transferTo, transferNote };
-    setLead(updated);
-    onUpdate(updated);
-    setStep("overview");
-    toast.success(`已转交给 ${transferTo}`, { description: "系统将通知业务员跟进" });
+    try {
+      await inquiriesApi.transfer(lead.id, transferTo, transferNote);
+      const updated: Lead = { ...lead, status: "transferred", transferredTo: transferTo, transferNote };
+      setLead(updated);
+      onUpdate(updated);
+      setStep("overview");
+      toast.success(`已转交给 ${transferTo}`, { description: "系统将通知业务员跟进" });
+    } catch (err: any) {
+      toast.error(err.message ?? "转交失败");
+    }
   };
 
   const handleExpire = () => {
@@ -1290,13 +1395,18 @@ function LeadDetailFlow({ lead: initialLead, onBack, onUpdate }: {
 // ─── 询盘管理视图 ─────────────────────────────────────────────
 
 function InquiriesView() {
-  const [leads, setLeads] = useState(mockLeads);
+  const { inquiries: rawInquiries, loading: inquiriesLoading, refresh: refreshInquiries } = useInquiries();
+  const [localUpdates, setLocalUpdates] = useState<Record<string, Partial<Lead>>>({});
+  const leads: Lead[] = rawInquiries.map(inq => {
+    const base = apiInquiryToLead(inq);
+    return localUpdates[inq.id] ? { ...base, ...localUpdates[inq.id] } : base;
+  });
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [activeTab, setActiveTab] = useState<InquiryTab>("pending");
   const [filterChannel, setFilterChannel] = useState<string>("all");
-
   const handleUpdate = (updated: Lead) => {
-    setLeads(prev => prev.map(l => l.id === updated.id ? updated : l));
+    setLocalUpdates(prev => ({ ...prev, [updated.id]: updated }));
+    refreshInquiries();
     setSelectedLead(null);
   };
 
@@ -1558,6 +1668,8 @@ export default function CommanderPhone() {
   const [view, setView] = useState<MainView>("status");
   const [, navigate] = useLocation();
   const { isEnterprise, plan, setPlan } = useUserPlan();
+  const { user } = useAuth();
+  const { stats } = useInquiries();
 
   return (
     <div className="min-h-screen flex items-start justify-center sm:py-8" style={{background:"oklch(0.10 0.02 250)"}}>
@@ -1565,7 +1677,7 @@ export default function CommanderPhone() {
         style={{background:"oklch(0.14 0.02 250)", border:"1px solid oklch(1 0 0 / 10%)", maxWidth:"390px", height:"100dvh"}}>
 
         <StatusBar />
-        <TopNav view={view} onChangeView={setView} credits={2840} unreadCount={2} onBack={() => navigate("/")} />
+        <TopNav view={view} onChangeView={setView} credits={stats?.credits.balance ?? user?.creditsBalance ?? 2840} unreadCount={stats?.pipeline.unread ?? 0} onBack={() => navigate("/")} />
 
         {/* Demo 模式切换器（原型演示用）*/}
         <div className="flex items-center justify-center gap-2 px-4 py-1.5 flex-shrink-0"
