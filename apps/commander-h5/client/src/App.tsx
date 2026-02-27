@@ -21,6 +21,8 @@ import { useState, createContext, useContext } from "react";
 import { AuthContext, useAuthState } from "./hooks/useAuth";
 import { isLoggedIn } from "./lib/api";
 import Login from "./pages/Login";
+import StyleTraining from "./pages/StyleTraining";
+import TaskQueue from "./pages/TaskQueue";
 
 // ─── 受保护路由 ───────────────────────────────────────────────
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -120,9 +122,30 @@ function Router() {
       <Route path="/market">{() => <ProtectedRoute component={MarketExpansion} />}</Route>
       <Route path="/product-launch">{() => <ProtectedRoute component={ProductLaunch} />}</Route>
       <Route path="/geo">{() => <ProtectedRoute component={GeoOptimizer} />}</Route>
+      <Route path="/style-training">{() => <ProtectedRoute component={StyleTrainingPage} />}</Route>
+      <Route path="/task-queue">{() => <ProtectedRoute component={TaskQueuePage} />}</Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
+  );
+}
+
+// ─── StyleTraining 和 TaskQueue 页面包装器 ─────────────────────────────
+function StyleTrainingPage() {
+  const [, navigate] = useLocation();
+  return (
+    <div className="min-h-screen" style={{ background: "oklch(0.14 0.02 250)" }}>
+      <StyleTraining onBack={() => navigate("/phone")} />
+    </div>
+  );
+}
+
+function TaskQueuePage() {
+  const [, navigate] = useLocation();
+  return (
+    <div className="min-h-screen" style={{ background: "oklch(0.14 0.02 250)" }}>
+      <TaskQueue onBack={() => navigate("/phone")} />
+    </div>
   );
 }
 

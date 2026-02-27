@@ -179,10 +179,33 @@ export const inquiriesApi = {
   },
 
   async create(data: Partial<Inquiry>) {
-    return request<{ success: boolean; id: string }>(
+    return request<{ success: boolean; id: string; aiAnalyzed?: boolean }>(
       "/inquiries",
       { method: "POST", body: JSON.stringify(data) }
     );
+  },
+
+  async regenerateDraft(id: string, opts?: { priceHint?: string }) {
+    const res = await request<{
+      success: boolean;
+      creditsUsed: number;
+      styleUsed: boolean;
+      draft: {
+        summary: string;
+        draftCn: string;
+        draftEn: string;
+        analysis: string;
+        confidenceScore: number;
+        urgency: string;
+        tags: string[];
+        estimatedValue: number;
+      };
+    }>(`/inquiries/${id}/ai-draft`, {
+      method: "POST",
+      body: JSON.stringify({ priceHint: opts?.priceHint }),
+    });
+    // Flatten for convenience
+    return { ...res, draftCn: res.draft.draftCn, draftEn: res.draft.draftEn };
   },
 };
 
@@ -205,6 +228,66 @@ export const openclawApi = {
       "/openclaw/simulate-lead",
       { method: "POST" }
     );
+  },
+};
+
+// ─── Training API ────────────────────────────────────────────
+export const trainingApi = {
+  async getSamples() {
+    return request<{ items: TrainingSample[]; total: number }>("/training/samples");
+  },
+
+  async addSamples(samples: Array<{ content: string; label?: string }>) {
+    return request<{ success: boolean; inserted: number; ids: string[] }>(
+      "/training/samples",
+      { method: "POST", body: JSON.stringify({ samples }) }
+    );
+  },
+
+  async deleteSample(id: string) {
+    return request<{ success: boolean }>(`/training/samples/${id}`, { method: "DELETE" });
+  },
+
+  async extractProfile() {
+    return request<{ success: boolean; profile: StyleProfile; sampleCount: number }>(
+      "/training/extract",
+      { method: "POST" }
+    );
+  },
+
+  async getProfile() {
+    return request<{ hasProfile: boolean; profile: StyleProfile | null }>("/training/profile");
+  },
+
+  async resetProfile() {
+    return request<{ success: boolean }>("/training/profile", { method: "DELETE" });
+  },
+};
+
+// ─── Tasks API ────────────────────────────────────────────────
+export const tasksApi = {
+  async list(status?: string) {
+    const qs = status ? `?status=${status}` : "";
+    return request<{ items: Task[]; stats: TaskStats }>(`/tasks${qs}`);
+  },
+
+  async getTypes() {
+    return request<{ types: Record<string, { label: string; platform: string; creditCost: number }> }>("/tasks/types");
+  },
+
+  async create(data: { taskType: string; platform?: string; targetInfo: string; context?: Record<string, any> }) {
+    return request<{ success: boolean; taskId: string; task: Task }>(
+      "/tasks",
+      { method: "POST", body: JSON.stringify(data) }
+    );
+  },
+
+  async get(id: string) {
+    return request<Task>(`/tasks/${id}`);
+  },
+
+  async cancel(id: string) {
+    return request<{ success: boolean }>(`/tasks/${id}/cancel`, { method: "POST" });
   },
 };
 
@@ -422,6 +505,55 @@ export interface CreditRecord {
   balance_after: number;
   description?: string;
   created_at: string;
+}
+
+export interface TrainingSample {
+  id: string;
+  label: string;
+  preview: string;
+  created_at: string;
+}
+
+export interface StyleProfile {
+  id?: string;
+  tone: string;
+  greeting: string;
+  closing: string;
+  key_phrases?: string;
+  keyPhrases?: string[];
+  pricing_approach: string;
+  followup_style: string;
+  summary: string;
+  sample_count?: number;
+  updated_at?: string;
+}
+
+export interface Task {
+  id: string;
+  task_type: string;
+  platform: string;
+  target_info: string;
+  steps: string[];
+  current_step: number;
+  total_steps: number;
+  status: "pending" | "running" | "completed" | "failed" | "cancelled";
+  progress: number;
+  result?: any;
+  error_msg?: string;
+  estimated_ops: number;
+  estimated_credits: number;
+  actual_credits: number;
+  created_at: string;
+  started_at?: string;
+  completed_at?: string;
+}
+
+export interface TaskStats {
+  total: number;
+  pending: number;
+  running: number;
+  completed: number;
+  failed: number;
 }
 
 export interface DailyReport {

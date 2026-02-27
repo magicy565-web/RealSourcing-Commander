@@ -650,8 +650,37 @@ function StatusView({ onGoInquiries, isEnterprise = false }: { onGoInquiries: ()
         </div>
       </div>
 
-      {/* 发起任务 */}
-      <div className="px-4">
+      {/* 快捷功能入口 */}
+      <div className="px-4 space-y-2">
+        {/* OpenClaw 任务队列 */}
+        <button onClick={() => navigate("/task-queue")}
+          className="w-full text-left rounded-xl p-3.5 flex items-center gap-3 active:scale-95 transition-all"
+          style={{background:"oklch(0.19 0.02 250)", border:"1px solid oklch(1 0 0 / 10%)"}}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{background:"linear-gradient(135deg, #6366f1, #8b5cf6)"}}>
+            <span className="text-base">🤖</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white">OpenClaw 任务队列</p>
+            <p className="text-xs text-slate-400">人工触发 · AI 规划 · 自动执行</p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-slate-600 flex-shrink-0" />
+        </button>
+        {/* AI 风格训练 */}
+        <button onClick={() => navigate("/style-training")}
+          className="w-full text-left rounded-xl p-3.5 flex items-center gap-3 active:scale-95 transition-all"
+          style={{background:"oklch(0.19 0.02 250)", border:"1px solid oklch(1 0 0 / 10%)"}}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{background:"linear-gradient(135deg, #a855f7, #ec4899)"}}>
+            <span className="text-base">✨</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white">AI 风格训练</p>
+            <p className="text-xs text-slate-400">上传历史报价 · 学习你的风格 · 个性化草稿</p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-slate-600 flex-shrink-0" />
+        </button>
+        {/* 更多任务 */}
         <button onClick={() => setShowLaunch(true)}
           className="w-full py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-semibold text-slate-400 border border-dashed border-white/15 hover:border-white/25 hover:text-white transition-all active:scale-98">
           <Plus className="w-4 h-4" />发起新任务
@@ -1198,9 +1227,26 @@ function LeadDetailFlow({ lead: initialLead, onBack, onUpdate }: {
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs text-slate-400">中文草稿 <span className="text-slate-600">（AI 生成，可修改）</span></label>
-              <button onClick={() => setDraftCn(lead.aiDraftCn)} className="text-xs text-blue-400 flex items-center gap-0.5">
-                <RefreshCw className="w-3 h-3" />重置
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    try {
+                      toast.info("🤖 AI 正在重新生成草稿...");
+                      const res = await inquiriesApi.regenerateDraft(lead.id, { priceHint: price ? `$${price}/${priceUnit}` : undefined });
+                      setDraftCn(res.draftCn);
+                      toast.success("✨ AI 草稿已更新！");
+                    } catch (e: any) {
+                      toast.error(e.message ?? "生成失败");
+                    }
+                  }}
+                  className="text-xs text-purple-400 flex items-center gap-0.5 hover:text-purple-300 transition-colors"
+                >
+                  <Sparkles className="w-3 h-3" />AI 重生成
+                </button>
+                <button onClick={() => setDraftCn(lead.aiDraftCn)} className="text-xs text-blue-400 flex items-center gap-0.5">
+                  <RefreshCw className="w-3 h-3" />重置
+                </button>
+              </div>
             </div>
             <textarea value={draftCn} onChange={e => setDraftCn(e.target.value)} rows={7}
               className="w-full p-3 rounded-xl text-sm text-white leading-relaxed resize-none outline-none"

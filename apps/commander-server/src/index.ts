@@ -1,7 +1,7 @@
 /**
  * RealSourcing Commander 5.0 — 后端服务入口
  *
- * 技术栈：Hono + SQLite (better-sqlite3) + JWT
+ * 技术栈：Hono + SQLite (better-sqlite3) + JWT + 阿里云百炼 AI
  *
  * 路由结构：
  *   GET  /health                          健康检查
@@ -15,14 +15,23 @@
  *   POST /api/v1/inquiries/:id/quote      提交报价
  *   POST /api/v1/inquiries/:id/reply      提交回复（AI 翻译）
  *   POST /api/v1/inquiries/:id/transfer   转人工
- *   POST /api/v1/inquiries                手动创建询盘
+ *   POST /api/v1/inquiries                手动创建询盘（AI 分析）
+ *   POST /api/v1/inquiries/ai-draft       AI 重新生成草稿
  *   GET  /api/v1/openclaw/status          OpenClaw 实例状态
  *   GET  /api/v1/openclaw/logs            操作日志
- *   POST /api/v1/openclaw/heartbeat       心跳上报（OpenClaw 调用）
  *   POST /api/v1/openclaw/simulate-lead   模拟新询盘（演示用）
  *   GET  /api/v1/dashboard/overview       Web 管理端总览
  *   GET  /api/v1/dashboard/credits        积分流水
  *   GET  /api/v1/dashboard/report         每日战报
+ *   GET  /api/v1/training/samples         获取训练样本
+ *   POST /api/v1/training/samples         上传训练样本
+ *   POST /api/v1/training/extract         触发风格提取
+ *   GET  /api/v1/training/profile         获取风格档案
+ *   DELETE /api/v1/training/profile       重置风格档案
+ *   GET  /api/v1/tasks                    任务队列列表
+ *   POST /api/v1/tasks                    创建新任务
+ *   GET  /api/v1/tasks/:id                任务详情
+ *   POST /api/v1/tasks/:id/cancel         取消任务
  */
 import "dotenv/config";
 import { serve } from "@hono/node-server";
@@ -38,6 +47,8 @@ import authRouter from "./routes/auth.js";
 import inquiriesRouter from "./routes/inquiries.js";
 import openclawRouter from "./routes/openclaw.js";
 import dashboardRouter from "./routes/dashboard.js";
+import trainingRouter from "./routes/training.js";
+import tasksRouter from "./routes/tasks.js";
 
 const app = new Hono();
 
@@ -57,10 +68,12 @@ app.use(
 app.get("/health", (c) =>
   c.json({
     status: "ok",
-    version: "5.0.0",
+    version: "5.0.1",
     service: "RealSourcing Commander Server",
     timestamp: new Date().toISOString(),
     database: "SQLite (local)",
+    ai: "阿里云百炼 Qwen-Plus",
+    features: ["ai-draft", "style-training", "task-queue"],
   })
 );
 
@@ -69,6 +82,8 @@ app.route("/api/v1/auth", authRouter);
 app.route("/api/v1/inquiries", inquiriesRouter);
 app.route("/api/v1/openclaw", openclawRouter);
 app.route("/api/v1/dashboard", dashboardRouter);
+app.route("/api/v1/training", trainingRouter);
+app.route("/api/v1/tasks", tasksRouter);
 
 // ─── 404 ──────────────────────────────────────────────────────
 app.notFound((c) => c.json({ error: "接口不存在" }, 404));
@@ -82,11 +97,9 @@ app.onError((err, c) => {
 // ─── 启动服务 ─────────────────────────────────────────────────
 const PORT = Number(process.env.PORT ?? 4000);
 serve({ fetch: app.fetch, port: PORT }, () => {
-  console.log(`🚀 Commander Server 已启动 → http://localhost:${PORT}`);
-  console.log(`📋 健康检查 → http://localhost:${PORT}/health`);
-  console.log(`🔐 登录接口 → POST http://localhost:${PORT}/api/v1/auth/login`);
-  console.log(`📊 询盘列表 → GET  http://localhost:${PORT}/api/v1/inquiries`);
-  console.log(`\n📌 演示账号: admin@minghui.com / admin123`);
+  console.log(`🚀 Commander Server v5.0.1 已启动 → http://localhost:${PORT}`);
+  console.log(`🤖 AI 引擎：阿里云百炼 Qwen-Plus`);
+  console.log(`📌 演示账号: admin@minghui.com / admin123`);
 });
 
 export default app;

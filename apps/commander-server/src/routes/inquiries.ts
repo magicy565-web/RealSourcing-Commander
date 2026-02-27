@@ -1,27 +1,23 @@
 /**
- * Commander 5.0 — 询盘管理路由
+ * Commander 5.0 — 询盘管理路由（接入真实 AI）
  *
  * GET    /api/v1/inquiries              列表（支持状态/渠道/分页筛选）
  * GET    /api/v1/inquiries/stats        统计数据（今日战报）
  * GET    /api/v1/inquiries/:id          详情
  * PATCH  /api/v1/inquiries/:id/status   更新状态
  * POST   /api/v1/inquiries/:id/quote    提交报价
- * POST   /api/v1/inquiries/:id/reply    提交回复（触发 AI 翻译）
+ * POST   /api/v1/inquiries/:id/reply    提交回复（AI 翻译）
  * POST   /api/v1/inquiries/:id/transfer 转人工
- * POST   /api/v1/inquiries              手动创建询盘（测试用）
+ * POST   /api/v1/inquiries/:id/ai-draft 重新生成 AI 草稿（真实 AI）
+ * POST   /api/v1/inquiries              手动创建询盘（AI 自动分析）
  */
 import { Hono } from "hono";
 import db from "../db/index.js";
 import { authMiddleware } from "../middleware/auth.js";
-import OpenAI from "openai";
+import { generateInquiryDraft, generateFollowupDraft } from "../services/ai.js";
 
 const inquiries = new Hono();
 inquiries.use("*", authMiddleware);
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  baseURL: process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1",
-});
 
 // ─── 列表 ─────────────────────────────────────────────────────
 inquiries.get("/", (c) => {
@@ -42,11 +38,8 @@ inquiries.get("/", (c) => {
   sql += ` LIMIT ${limitNum} OFFSET ${(pageNum - 1) * limitNum}`;
 
   const rows = db.prepare(sql).all(...params) as any[];
-
-  // 解析 JSON 字段
   const items = rows.map(parseInquiry);
 
-  // 总数
   let countSql = "SELECT COUNT(*) as total FROM inquiries WHERE tenant_id = ?";
   const countParams: any[] = [user.tenantId];
   if (status) { countSql += " AND status = ?"; countParams.push(status); }
@@ -93,12 +86,10 @@ inquiries.get("/stats", (c) => {
     "SELECT COALESCE(SUM(estimated_value), 0) as v FROM inquiries WHERE tenant_id = ?"
   ).get(tenantId) as any).v;
 
-  // 渠道分布
   const channelDist = db.prepare(
     "SELECT source_platform, COUNT(*) as count FROM inquiries WHERE tenant_id = ? GROUP BY source_platform"
   ).all(tenantId) as any[];
 
-  // OpenClaw 今日操作
   const tenant = db.prepare("SELECT * FROM tenants WHERE id = ?").get(tenantId) as any;
   const instance = db.prepare("SELECT * FROM openclaw_instances WHERE tenant_id = ?").get(tenantId) as any;
   const agentLogsToday = (db.prepare(
@@ -108,6 +99,25 @@ inquiries.get("/stats", (c) => {
   const creditsUsedToday = (db.prepare(
     "SELECT COALESCE(SUM(credits_used), 0) as v FROM agent_logs WHERE tenant_id = ? AND created_at >= ?"
   ).get(tenantId, todayStr) as any).v;
+
+  // 任务队列统计
+  let taskStats = { pending: 0, running: 0, completed: 0 };
+  try {
+    taskStats = db.prepare(`
+      SELECT
+        SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END) as pending,
+        SUM(CASE WHEN status='running' THEN 1 ELSE 0 END) as running,
+        SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) as completed
+      FROM task_queue WHERE tenant_id=?
+    `).get(tenantId) as any ?? taskStats;
+  } catch { /* task_queue 表可能还未创建 */ }
+
+  // 风格档案状态
+  let hasStyleProfile = false;
+  try {
+    const profile = db.prepare("SELECT id FROM style_profiles WHERE tenant_id=?").get(tenantId);
+    hasStyleProfile = !!profile;
+  } catch { /* style_profiles 表可能还未创建 */ }
 
   return c.json({
     today: {
@@ -138,6 +148,11 @@ inquiries.get("/stats", (c) => {
       opsLimit: instance.ops_limit,
       lastHeartbeat: instance.last_heartbeat,
     } : null,
+    taskQueue: taskStats,
+    ai: {
+      hasStyleProfile,
+      model: process.env.DASHSCOPE_MODEL ?? "qwen-plus",
+    },
   });
 });
 
@@ -152,19 +167,16 @@ inquiries.get("/:id", (c) => {
 
   if (!row) return c.json({ error: "询盘不存在" }, 404);
 
-  // 标记为已读
   if (row.status === "unread") {
     db.prepare("UPDATE inquiries SET status = 'unquoted', updated_at = ? WHERE id = ?")
       .run(new Date().toISOString(), id);
     row.status = "unquoted";
   }
 
-  // 获取报价记录
   const quotation = db.prepare(
     "SELECT * FROM quotations WHERE inquiry_id = ? ORDER BY created_at DESC LIMIT 1"
   ).get(id) as any;
 
-  // 获取回复记录
   const replies = db.prepare(
     "SELECT * FROM inquiry_replies WHERE inquiry_id = ? ORDER BY created_at ASC"
   ).all(id) as any[];
@@ -174,6 +186,77 @@ inquiries.get("/:id", (c) => {
     quotation: quotation ?? null,
     replies,
   });
+});
+
+// ─── 重新生成 AI 草稿（真实 AI）──────────────────────────────
+inquiries.post("/:id/ai-draft", async (c) => {
+  const user = c.get("user");
+  const { id } = c.req.param();
+
+  const row = db.prepare(
+    "SELECT * FROM inquiries WHERE id = ? AND tenant_id = ?"
+  ).get(id, user.tenantId) as any;
+  if (!row) return c.json({ error: "询盘不存在" }, 404);
+
+  // 获取用户风格档案
+  let styleProfile: string | undefined;
+  try {
+    const profile = db.prepare(
+      "SELECT summary FROM style_profiles WHERE tenant_id=?"
+    ).get(user.tenantId) as any;
+    styleProfile = profile?.summary;
+  } catch { /* 忽略 */ }
+
+  // 获取租户信息
+  const tenant = db.prepare("SELECT name FROM tenants WHERE id=?").get(user.tenantId) as any;
+
+  try {
+    const result = await generateInquiryDraft({
+      rawContent: row.raw_content ?? "",
+      buyerName: row.buyer_name ?? "",
+      buyerCompany: row.buyer_company ?? "",
+      buyerCountry: row.buyer_country ?? "",
+      productName: row.product_name ?? "",
+      quantity: row.quantity ?? undefined,
+      platform: row.source_platform ?? "custom",
+      styleProfile,
+      tenantName: tenant?.name,
+    });
+
+    // 更新数据库
+    db.prepare(`
+      UPDATE inquiries SET
+        ai_summary=?, ai_draft_cn=?, ai_draft_en=?, ai_analysis=?,
+        confidence_score=?, confidence_breakdown=?, urgency=?, tags=?,
+        estimated_value=?, updated_at=?
+      WHERE id=?
+    `).run(
+      result.summary, result.draftCn, result.draftEn, result.analysis,
+      result.confidenceScore, JSON.stringify(result.confidenceBreakdown),
+      result.urgency, JSON.stringify(result.tags),
+      result.estimatedValue, new Date().toISOString(), id
+    );
+
+    // 扣积分（AI 生成消耗 3 积分）
+    const creditsUsed = 3;
+    db.prepare("UPDATE tenants SET credits_balance = credits_balance - ? WHERE id = ?")
+      .run(creditsUsed, user.tenantId);
+    const updatedTenant = db.prepare("SELECT credits_balance FROM tenants WHERE id = ?").get(user.tenantId) as any;
+    db.prepare(`
+      INSERT INTO credit_ledger (id, tenant_id, type, amount, balance_after, description, task_id)
+      VALUES (lower(hex(randomblob(16))), ?, 'ai_draft', ?, ?, ?, ?)
+    `).run(user.tenantId, -creditsUsed, updatedTenant.credits_balance, `AI 重新生成草稿 - ${row.product_name}`, id);
+
+    return c.json({
+      success: true,
+      creditsUsed,
+      draft: result,
+      styleUsed: !!styleProfile,
+    });
+  } catch (err: any) {
+    console.error("AI 草稿生成失败:", err);
+    return c.json({ error: "AI 草稿生成失败，请稍后重试", detail: err.message }, 500);
+  }
 });
 
 // ─── 更新状态 ─────────────────────────────────────────────────
@@ -211,22 +294,21 @@ inquiries.post("/:id/quote", async (c) => {
 
   const quotationId = `quot-${Date.now()}`;
   db.prepare(`
-    INSERT INTO quotations (id, inquiry_id, tenant_id, product_name, unit_price, currency, unit, price_term, min_order, delivery_days, validity_days, followup_style, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')
+    INSERT INTO quotations (id, inquiry_id, tenant_id, product_name, unit_price, currency, unit, price_term, min_order, delivery_days, validity_days, followup_style, status, sent_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'sent', ?)
   `).run(
     quotationId, id, user.tenantId,
     body.productName ?? row.product_name,
     body.unitPrice, body.currency ?? "USD",
     body.unit ?? "件", body.priceTerm ?? "FOB",
     body.minOrder ?? 1, body.deliveryDays ?? 30,
-    body.validityDays ?? 30, body.followupStyle ?? "business"
+    body.validityDays ?? 30, body.followupStyle ?? "business",
+    new Date().toISOString()
   );
 
-  // 更新询盘状态为已报价
   db.prepare("UPDATE inquiries SET status = 'quoted', updated_at = ? WHERE id = ?")
     .run(new Date().toISOString(), id);
 
-  // 扣减积分
   const creditsUsed = 5;
   db.prepare("UPDATE tenants SET credits_balance = credits_balance - ? WHERE id = ?")
     .run(creditsUsed, user.tenantId);
@@ -236,14 +318,14 @@ inquiries.post("/:id/quote", async (c) => {
     VALUES (lower(hex(randomblob(16))), ?, 'task_deduct', ?, ?, ?, ?)
   `).run(user.tenantId, -creditsUsed, tenant.credits_balance, `报价发送 - ${row.product_name}`, id);
 
-  return c.json({ success: true, quotationId });
+  return c.json({ success: true, quotationId, creditsUsed, newBalance: tenant.credits_balance });
 });
 
-// ─── 提交回复（AI 翻译 + 模拟 OpenClaw 发送）────────────────────
+// ─── 提交回复（AI 翻译）──────────────────────────────────────
 inquiries.post("/:id/reply", async (c) => {
   const user = c.get("user");
   const { id } = c.req.param();
-  const { contentZh, quotationId, useAiDraft } = await c.req.json();
+  const { contentZh, quotationId, useAiDraft, followupStyle } = await c.req.json();
 
   const row = db.prepare(
     "SELECT * FROM inquiries WHERE id = ? AND tenant_id = ?"
@@ -251,31 +333,61 @@ inquiries.post("/:id/reply", async (c) => {
   if (!row) return c.json({ error: "询盘不存在" }, 404);
 
   let contentEn = "";
+  let creditsUsed = 3;
 
   if (useAiDraft) {
-    // 直接使用 AI 预生成的英文草稿
     contentEn = row.ai_draft_en ?? "";
+    creditsUsed = 0;
   } else {
-    // 调用 AI 翻译中文回复
+    // 使用阿里云百炼翻译
     try {
-      const completion = await openai.chat.completions.create({
-        model: process.env.OPENAI_MODEL ?? "gpt-4.1-mini",
-        messages: [
-          {
-            role: "system",
-            content: "你是一个专业的外贸回复翻译助手。将中文外贸回复翻译成专业的英文商务邮件格式。保持语气专业、友好，符合国际贸易习惯。只返回翻译后的英文内容，不要加任何解释。",
-          },
-          {
-            role: "user",
-            content: `买家来自 ${row.buyer_country}，询盘产品：${row.product_name}。\n\n请翻译以下中文回复：\n\n${contentZh}`,
-          },
-        ],
-        max_tokens: 800,
-      });
-      contentEn = completion.choices[0].message.content ?? "";
+      const { generateFollowupDraft: genFollowup } = await import("../services/ai.js");
+      const quotation = quotationId
+        ? db.prepare("SELECT * FROM quotations WHERE id=?").get(quotationId) as any
+        : null;
+
+      if (quotation) {
+        // 有报价时生成跟进草稿
+        const tenant = db.prepare("SELECT name FROM tenants WHERE id=?").get(user.tenantId) as any;
+        let styleProfile: string | undefined;
+        try {
+          const profile = db.prepare("SELECT summary FROM style_profiles WHERE tenant_id=?").get(user.tenantId) as any;
+          styleProfile = profile?.summary;
+        } catch { /* 忽略 */ }
+
+        const draft = await genFollowup({
+          buyerName: row.buyer_name ?? "",
+          buyerCompany: row.buyer_company ?? "",
+          productName: row.product_name ?? "",
+          unitPrice: quotation.unit_price,
+          currency: quotation.currency ?? "USD",
+          unit: quotation.unit ?? "件",
+          priceTerm: quotation.price_term ?? "FOB",
+          style: (followupStyle ?? "business") as any,
+          styleProfile,
+          tenantName: tenant?.name,
+        });
+        contentEn = draft.draftEn;
+      } else {
+        // 纯翻译
+        const OpenAI = (await import("openai")).default;
+        const dashscope = new OpenAI({
+          apiKey: process.env.DASHSCOPE_API_KEY ?? "",
+          baseURL: process.env.DASHSCOPE_BASE_URL ?? "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        });
+        const resp = await dashscope.chat.completions.create({
+          model: process.env.DASHSCOPE_MODEL ?? "qwen-plus",
+          messages: [
+            { role: "system", content: "你是专业外贸翻译助手。将中文外贸回复翻译成专业英文商务邮件。只返回翻译内容，不加解释。" },
+            { role: "user", content: `买家来自 ${row.buyer_country}，产品：${row.product_name}。\n\n翻译：\n${contentZh}` },
+          ],
+          max_tokens: 600,
+        });
+        contentEn = resp.choices[0]?.message?.content ?? "";
+      }
     } catch (err) {
-      // AI 翻译失败时使用预设草稿
-      contentEn = row.ai_draft_en ?? "[翻译失败，请手动填写英文内容]";
+      contentEn = row.ai_draft_en ?? "[翻译失败，请手动填写]";
+      creditsUsed = 0;
     }
   }
 
@@ -285,43 +397,36 @@ inquiries.post("/:id/reply", async (c) => {
     VALUES (?, ?, ?, 'human_confirmed', ?, ?, 'sent', ?)
   `).run(replyId, id, quotationId ?? null, contentZh, contentEn, new Date().toISOString());
 
-  // 更新询盘状态
   db.prepare("UPDATE inquiries SET status = 'quoted', updated_at = ? WHERE id = ?")
     .run(new Date().toISOString(), id);
 
-  // 模拟 OpenClaw 发送记录
+  // 记录 OpenClaw 操作
   const instance = db.prepare("SELECT * FROM openclaw_instances WHERE tenant_id = ?").get(user.tenantId) as any;
   if (instance) {
     db.prepare(`
       INSERT INTO agent_logs (id, tenant_id, instance_id, action_type, platform, status, credits_used, detail, created_at)
-      VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, 'success', 5, ?, ?)
+      VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, 'success', ?, ?, ?)
     `).run(
       user.tenantId, instance.id,
       `${row.source_platform}_message_sent`,
-      row.source_platform,
+      row.source_platform, creditsUsed,
       JSON.stringify({ to: row.buyer_name, preview: contentEn.slice(0, 100) }),
       new Date().toISOString()
     );
-    db.prepare("UPDATE openclaw_instances SET ops_today = ops_today + 1 WHERE id = ?")
-      .run(instance.id);
+    db.prepare("UPDATE openclaw_instances SET ops_today = ops_today + 1 WHERE id = ?").run(instance.id);
   }
 
-  // 扣减积分
-  const creditsUsed = 5;
-  db.prepare("UPDATE tenants SET credits_balance = credits_balance - ? WHERE id = ?")
-    .run(creditsUsed, user.tenantId);
-  const tenant = db.prepare("SELECT credits_balance FROM tenants WHERE id = ?").get(user.tenantId) as any;
-  db.prepare(`
-    INSERT INTO credit_ledger (id, tenant_id, type, amount, balance_after, description)
-    VALUES (lower(hex(randomblob(16))), ?, 'task_deduct', ?, ?, ?)
-  `).run(user.tenantId, -creditsUsed, tenant.credits_balance, `回复发送 - ${row.buyer_name}`);
+  if (creditsUsed > 0) {
+    db.prepare("UPDATE tenants SET credits_balance = credits_balance - ? WHERE id = ?")
+      .run(creditsUsed, user.tenantId);
+    const tenant = db.prepare("SELECT credits_balance FROM tenants WHERE id = ?").get(user.tenantId) as any;
+    db.prepare(`
+      INSERT INTO credit_ledger (id, tenant_id, type, amount, balance_after, description)
+      VALUES (lower(hex(randomblob(16))), ?, 'task_deduct', ?, ?, ?)
+    `).run(user.tenantId, -creditsUsed, tenant.credits_balance, `AI 翻译发送 - ${row.buyer_name}`);
+  }
 
-  return c.json({
-    success: true,
-    replyId,
-    contentEn,
-    creditsUsed,
-  });
+  return c.json({ success: true, replyId, contentEn, creditsUsed });
 });
 
 // ─── 转人工 ───────────────────────────────────────────────────
@@ -337,18 +442,48 @@ inquiries.post("/:id/transfer", async (c) => {
   return c.json({ success: true });
 });
 
-// ─── 手动创建询盘（测试/演示用）──────────────────────────────────
+// ─── 手动创建询盘（AI 自动分析）──────────────────────────────
 inquiries.post("/", async (c) => {
   const user = c.get("user");
   const body = await c.req.json();
 
   const id = `inq-${Date.now()}`;
+
+  // 尝试用 AI 分析
+  let aiResult: any = null;
+  if (body.rawContent && body.buyerName) {
+    try {
+      let styleProfile: string | undefined;
+      try {
+        const profile = db.prepare("SELECT summary FROM style_profiles WHERE tenant_id=?").get(user.tenantId) as any;
+        styleProfile = profile?.summary;
+      } catch { /* 忽略 */ }
+
+      const tenant = db.prepare("SELECT name FROM tenants WHERE id=?").get(user.tenantId) as any;
+      aiResult = await generateInquiryDraft({
+        rawContent: body.rawContent,
+        buyerName: body.buyerName ?? "",
+        buyerCompany: body.buyerCompany ?? "",
+        buyerCountry: body.buyerCountry ?? "",
+        productName: body.productName ?? "",
+        quantity: body.quantity,
+        platform: body.sourcePlatform ?? "custom",
+        styleProfile,
+        tenantName: tenant?.name,
+      });
+    } catch (err) {
+      console.error("创建询盘时 AI 分析失败:", err);
+    }
+  }
+
   db.prepare(`
     INSERT INTO inquiries (
       id, tenant_id, source_platform, buyer_name, buyer_company, buyer_country,
-      buyer_contact, product_name, quantity, raw_content, estimated_value,
-      confidence_score, status, urgency, tags, received_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unread', ?, '[]', ?)
+      buyer_contact, product_name, quantity, raw_content,
+      ai_summary, ai_draft_cn, ai_draft_en, ai_analysis,
+      estimated_value, confidence_score, confidence_breakdown,
+      status, urgency, tags, received_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unread', ?, ?, ?)
   `).run(
     id, user.tenantId,
     body.sourcePlatform ?? "custom",
@@ -359,13 +494,19 @@ inquiries.post("/", async (c) => {
     body.productName ?? "未知产品",
     body.quantity ?? null,
     body.rawContent ?? "",
-    body.estimatedValue ?? 0,
-    body.confidenceScore ?? 50,
-    body.urgency ?? "normal",
+    aiResult?.summary ?? null,
+    aiResult?.draftCn ?? null,
+    aiResult?.draftEn ?? null,
+    aiResult?.analysis ?? null,
+    aiResult?.estimatedValue ?? body.estimatedValue ?? 0,
+    aiResult?.confidenceScore ?? body.confidenceScore ?? 50,
+    aiResult ? JSON.stringify(aiResult.confidenceBreakdown) : "{}",
+    aiResult?.urgency ?? body.urgency ?? "normal",
+    aiResult ? JSON.stringify(aiResult.tags) : "[]",
     new Date().toISOString()
   );
 
-  return c.json({ success: true, id }, 201);
+  return c.json({ success: true, id, aiAnalyzed: !!aiResult }, 201);
 });
 
 // ─── 工具函数 ─────────────────────────────────────────────────
