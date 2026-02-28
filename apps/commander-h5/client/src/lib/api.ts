@@ -229,6 +229,15 @@ export const openclawApi = {
       { method: "POST" }
     );
   },
+  async pause() {
+    return request<{ success: boolean }>("/openclaw/pause", { method: "POST" });
+  },
+  async resume() {
+    return request<{ success: boolean }>("/openclaw/resume", { method: "POST" });
+  },
+  async selfHealStatus() {
+    return request<{ consecutiveFailures: number; isSleeping: boolean; sleepUntil: string | null; sleepCount: number }>("/openclaw/self-heal-status");
+  },
 };
 
 // ─── Training API ────────────────────────────────────────────
@@ -458,31 +467,51 @@ export interface UserInfo {
 
 export interface Inquiry {
   id: string;
-  tenant_id: string;
-  source_platform: string;
-  buyer_name: string;
-  buyer_company: string;
-  buyer_country: string;
-  buyer_contact?: string;
-  product_name: string;
+  tenantId?: string;
+  tenant_id?: string;
+  sourcePlatform: string;
+  source_platform?: string;
+  buyerName: string;
+  buyer_name?: string;
+  buyerCompany: string;
+  buyer_company?: string;
+  buyerCountry: string;
+  buyer_country?: string;
+  buyerContact?: string;
+  productName: string;
+  product_name?: string;
   quantity?: string;
+  rawContent?: string;
   raw_content?: string;
+  estimatedValue?: number;
   estimated_value?: number;
-  confidence_score: number;
-  confidence_breakdown: {
+  confidenceScore: number;
+  confidence_score?: number;
+  confidenceBreakdown: {
     channelWeight: number;
     contentQuality: number;
     buyerCompleteness: number;
   };
+  confidence_breakdown?: {
+    channelWeight: number;
+    contentQuality: number;
+    buyerCompleteness: number;
+  };
+  aiSummary?: string;
   ai_summary?: string;
+  aiDraftCn?: string;
   ai_draft_cn?: string;
+  aiDraftEn?: string;
   ai_draft_en?: string;
+  aiAnalysis?: string;
   ai_analysis?: string;
   tags: string[];
   status: string;
   urgency: string;
-  received_at: string;
-  updated_at: string;
+  receivedAt: string;
+  received_at?: string;
+  updatedAt: string;
+  updated_at?: string;
 }
 
 export interface InquiryDetail extends Inquiry {
