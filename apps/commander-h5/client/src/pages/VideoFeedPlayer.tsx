@@ -45,7 +45,28 @@ function VideoCard({
     if (!v) return;
     if (isActive) {
       v.currentTime = 0;
-      v.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
+      const tryPlay = () => {
+        const p = v.play();
+        if (p !== undefined) {
+          p.then(() => setPlaying(true)).catch((err) => {
+            if (err?.name !== 'NotAllowedError') {
+              console.warn('[VideoCard] play failed:', err?.message);
+            }
+            setPlaying(false);
+          });
+        }
+      };
+      if (v.readyState >= 3) {
+        tryPlay();
+      } else {
+        const onCanPlay = () => {
+          tryPlay();
+          v.removeEventListener('canplay', onCanPlay);
+        };
+        v.addEventListener('canplay', onCanPlay);
+        v.load();
+        return () => v.removeEventListener('canplay', onCanPlay);
+      }
     } else {
       v.pause();
       setPlaying(false);
