@@ -49,6 +49,7 @@ import openclawRouter from "./routes/openclaw.js";
 import dashboardRouter from "./routes/dashboard.js";
 import trainingRouter from "./routes/training.js";
 import tasksRouter from "./routes/tasks.js";
+import { scanAndPushFollowupReminders } from "./services/followup.js";
 
 const app = new Hono();
 
@@ -100,6 +101,14 @@ serve({ fetch: app.fetch, port: PORT }, () => {
   console.log(`🚀 Commander Server v5.0.1 已启动 → http://localhost:${PORT}`);
   console.log(`🤖 AI 引擎：阿里云百炼 Qwen-Plus`);
   console.log(`📌 演示账号: admin@minghui.com / admin123`);
+
+  // 启动 24 小时跟进扫描（每小时执行一次）
+  setInterval(() => {
+    scanAndPushFollowupReminders().catch(err => console.error("Followup scan failed:", err));
+  }, 60 * 60 * 1000);
+  
+  // 启动时立即执行一次
+  scanAndPushFollowupReminders().catch(err => console.error("Initial followup scan failed:", err));
 });
 
 export default app;

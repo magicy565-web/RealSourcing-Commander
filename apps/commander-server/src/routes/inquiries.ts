@@ -16,6 +16,7 @@ import db from "../db/index.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { generateInquiryDraft, generateFollowupDraft } from "../services/ai.js";
 import { addBitableRecord, createQuotationNotificationCard, sendFeishuCard, pushQuotationNotification } from "../services/feishu.js";
+import { executeAiFollowup } from "../services/followup.js";
 
 const inquiries = new Hono();
 inquiries.use("*", authMiddleware);
@@ -392,6 +393,21 @@ inquiries.post("/:id/reply", async (c) => {
   `).run(user.tenantId, -creditsUsed, updatedTenant.credits_balance, `回复发送 - ${row.product_name}`, id);
 
   return c.json({ success: true, replyId, creditsUsed, newBalance: updatedTenant.credits_balance });
+});
+
+// ─── 执行 AI 跟进 ─────────────────────────────────────────────
+inquiries.post("/:id/ai-followup", async (c) => {
+  const user = c.get("user");
+  const { id } = c.req.param();
+  const { quotationId } = await c.req.json();
+
+  try {
+    const result = await executeAiFollowup(quotationId);
+    return c.json(result);
+  } catch (err: any) {
+    console.error("AI 跟进执行失败:", err);
+    return c.json({ error: "AI 跟进执行失败", detail: err.message }, 500);
+  }
 });
 
 // ─── 转人工 ───────────────────────────────────────────────────

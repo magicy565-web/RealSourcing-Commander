@@ -9,6 +9,7 @@ import { Hono } from "hono";
 import { db } from "../db/index.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { planAgentTask } from "../services/ai.js";
+import { pushTaskNotification, sendFeishuCard } from "../services/feishu.js";
 
 const tasks = new Hono();
 tasks.use("*", authMiddleware);
@@ -275,6 +276,18 @@ function simulateTaskExecution(taskId: string, tenantId: string, steps: string[]
       currentStep++;
       const progress = Math.round((currentStep / totalSteps) * 100);
 
+      // 子任务完成发送通知
+      const taskRow = db.prepare("SELECT * FROM task_queue WHERE id=?").get(taskId) as any;
+      if (taskRow) {
+        pushTaskNotification({
+          id: taskId,
+          task_type: `${TASK_TYPES[taskRow.task_type]?.label || taskRow.task_type} (步骤 ${currentStep}/${totalSteps})`,
+          status: "completed",
+          target_info: taskRow.target_info,
+          credits_used: 0, // 子步骤不重复计费
+        }).catch(() => {});
+      }
+
       if (currentStep >= totalSteps) {
         clearInterval(stepInterval);
 
@@ -295,6 +308,31 @@ function simulateTaskExecution(taskId: string, tenantId: string, steps: string[]
               `cl-${Date.now()}`, tenantId, -credits, newBalance,
               `OpenClaw 任务执行：${taskId}`, taskId, now
             );
+
+            // 积分预警：低于 50 分推送通知
+            if (newBalance < 50) {
+              const webhookUrl = process.env.FEISHU_WEBHOOK_URL;
+              if (webhookUrl) {
+                sendFeishuCard(webhookUrl, {
+                  msg_type: "interactive",
+                  card: {
+                    header: {
+                      title: { content: "⚠️ 积分余额不足预警", tag: "plain_text" },
+                      template: "orange",
+                    },
+                    elements: [
+                      {
+                        tag: "div",
+                        text: {
+                          content: `您的账户积分余额已低于 **50** 分（当前余额：**${newBalance}**）。\n为了不影响自动化任务的正常运行，请及时充值。`,
+                          tag: "lark_md",
+                        },
+                      },
+                    ],
+                  },
+                }).catch(() => {});
+              }
+            }
           }
 
           db.prepare(`
@@ -307,6 +345,16 @@ function simulateTaskExecution(taskId: string, tenantId: string, steps: string[]
             JSON.stringify({ message: "任务执行成功", completedAt: now }),
             now, now, taskId
           );
+
+          // 任务完毕发送通知
+          const finalTask = db.prepare("SELECT * FROM task_queue WHERE id=?").get(taskId) as any;
+          pushTaskNotification({
+            id: taskId,
+            task_type: `${TASK_TYPES[finalTask.task_type]?.label || finalTask.task_type} (已全部完成)`,
+            status: "completed",
+            target_info: finalTask.target_info,
+            credits_used: credits,
+          }).catch(() => {});
         } else {
           db.prepare(`
             UPDATE task_queue SET
@@ -318,6 +366,16 @@ function simulateTaskExecution(taskId: string, tenantId: string, steps: string[]
             "账号触发风控，任务已暂停。建议稍后重试。",
             now, now, taskId
           );
+
+          // 任务失败发送通知
+          const failedTask = db.prepare("SELECT * FROM task_queue WHERE id=?").get(taskId) as any;
+          pushTaskNotification({
+            id: taskId,
+            task_type: TASK_TYPES[failedTask.task_type]?.label || failedTask.task_type,
+            status: "failed",
+            target_info: failedTask.target_info,
+            credits_used: 0,
+          }).catch(() => {});
         }
       } else {
         db.prepare(`

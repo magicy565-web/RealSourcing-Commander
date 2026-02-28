@@ -114,12 +114,13 @@ CREATE TABLE IF NOT EXISTS quotations (
   price_term      TEXT DEFAULT 'FOB',
   min_order       INTEGER,
   delivery_days   INTEGER,
-  validity_days   INTEGER DEFAULT 30,
-  followup_style  TEXT DEFAULT 'business',
-  status          TEXT DEFAULT 'draft',
-  sent_at         TEXT,
-  created_at      TEXT DEFAULT (datetime('now'))
-);
+	  validity_days   INTEGER DEFAULT 30,
+	  followup_style  TEXT DEFAULT 'business',
+	  status          TEXT DEFAULT 'draft',
+	  sent_at         TEXT,
+	  followup_reminder_sent INTEGER DEFAULT 0,
+	  created_at      TEXT DEFAULT (datetime('now'))
+	);
 
 -- 回复记录
 CREATE TABLE IF NOT EXISTS inquiry_replies (
