@@ -381,9 +381,70 @@ openclaw.put("/work-hours", async (c) => {
   return c.json({ success: true, workHours: newConfig.workHours, message: "工作时间段已更新" });
 });
 
+// ─── M6 随机延迟配置 GET/PUT ─────────────────────────────────
+const DEFAULT_DELAY_CONFIG = {
+  linkedin: { min: 3000, max: 8000 },
+  whatsapp: { min: 2000, max: 5000 },
+  facebook: { min: 4000, max: 10000 },
+  email: { min: 1000, max: 3000 },
+  readingPauseProbability: 0.05,
+  readingPauseDuration: { min: 5000, max: 15000 },
+};
+
+openclaw.get("/delay-config", (c) => {
+  const user = c.get("user");
+  const instance = db.prepare("SELECT * FROM openclaw_instances WHERE tenant_id = ?").get(user.tenantId) as any;
+  if (!instance) return c.json({ delayConfig: DEFAULT_DELAY_CONFIG });
+  const cfg = safeParseJson(instance.config, {});
+  return c.json({ delayConfig: cfg.delayConfig ?? DEFAULT_DELAY_CONFIG });
+});
+
+openclaw.put("/delay-config", async (c) => {
+  const user = c.get("user");
+  const body = await c.req.json();
+  const { linkedin, whatsapp, facebook, email, readingPauseProbability, readingPauseDuration } = body;
+
+  // 校验延迟范围
+  for (const [platform, range] of Object.entries({ linkedin, whatsapp, facebook, email })) {
+    if (range && typeof range === "object") {
+      const r = range as any;
+      if (r.min < 500 || r.max > 60000 || r.min > r.max) {
+        return c.json({ error: `${platform} 延迟范围无效（min>=500ms, max<=60s, min<=max）` }, 400);
+      }
+    }
+  }
+  if (readingPauseProbability !== undefined && (readingPauseProbability < 0 || readingPauseProbability > 0.5)) {
+    return c.json({ error: "阅读停顿概率范围 0-0.5" }, 400);
+  }
+
+  const instance = db.prepare("SELECT * FROM openclaw_instances WHERE tenant_id = ?").get(user.tenantId) as any;
+  if (!instance) return c.json({ error: "实例不存在" }, 404);
+
+  const existingConfig = safeParseJson(instance.config, {});
+  const newDelayConfig = {
+    ...DEFAULT_DELAY_CONFIG,
+    ...(existingConfig.delayConfig ?? {}),
+    ...(linkedin ? { linkedin } : {}),
+    ...(whatsapp ? { whatsapp } : {}),
+    ...(facebook ? { facebook } : {}),
+    ...(email ? { email } : {}),
+    ...(readingPauseProbability !== undefined ? { readingPauseProbability } : {}),
+    ...(readingPauseDuration ? { readingPauseDuration } : {}),
+  };
+  const newConfig = { ...existingConfig, delayConfig: newDelayConfig };
+  db.prepare("UPDATE openclaw_instances SET config = ? WHERE id = ?").run(JSON.stringify(newConfig), instance.id);
+
+  // 记录安全审计日志
+  db.prepare(`
+    INSERT INTO openclaw_logs (id, tenant_id, instance_id, action, target, result, ops_count, payload, created_at)
+    VALUES (lower(hex(randomblob(16))), ?, ?, 'delay_config_update', 'system', 'success', 0, ?, ?)
+  `).run(user.tenantId, instance.id, JSON.stringify({ operator: user.userId, newDelayConfig }), new Date().toISOString());
+
+  return c.json({ success: true, delayConfig: newDelayConfig, message: "随机延迟配置已更新" });
+});
+
 function safeParseJson(str: string | null, fallback: any) {
   if (!str) return fallback;
   try { return JSON.parse(str); } catch { return fallback; }
 }
-
 export default openclaw;

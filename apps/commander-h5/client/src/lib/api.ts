@@ -316,7 +316,14 @@ export const dashboardApi = {
 
 // ─── Phase 3: 信息流 API ──────────────────────────────────────
 export const feedApi = {
-  getFeed: () => request<FeedResponse>("/feed"),
+  getFeed: (params?: { sort?: string; limit?: number; industry?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.sort) q.set("sort", params.sort);
+    if (params?.limit) q.set("limit", String(params.limit));
+    if (params?.industry) q.set("industry", params.industry);
+    const qs = q.toString();
+    return request<FeedResponse>(qs ? `/feed?${qs}` : "/feed");
+  },
   getQuota: () => request<FeedQuota>("/feed/quota"),
   bookmark: (id: string) =>
     request<{ bookmarkId: string; inquiryId: string; message: string }>(

@@ -75,7 +75,7 @@ const HEALTH_STYLE: Record<string, { label: string; color: string; bg: string }>
 
 const WEEKDAY_LABELS = ["日", "一", "二", "三", "四", "五", "六"];
 
-export default function OpenClawSecurityPanel() {
+export default function OpenClawSecurityPanel({ instanceId: _instanceId }: { instanceId?: string } = {}) {
   const [status, setStatus] = useState<OpenClawStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);

@@ -17,7 +17,7 @@
      → 24h 自动跟进启动
    ============================================================ */
 import { useState, useEffect, useRef, useCallback } from "react";
-import { inquiriesApi, type Inquiry } from "@/lib/api";
+import { inquiriesApi, feedApi, type Inquiry, type FeedItem, type FeedQuota } from "@/lib/api";
 import { useInquiries, useOpenClawStatus } from "@/hooks/useInquiries";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocation } from "wouter";
@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useNotifSettings, useUserPlan } from "../App";
+import AIThinkingPanel, { useAIThinking } from "../components/AIThinkingPanel";
 
 // ─── 类型定义 ─────────────────────────────────────────────────
 
@@ -53,7 +54,7 @@ type InquiryStatus =
   | "expired";      // 询盘失效
 
 type FollowUpStyle = "aggressive" | "friendly" | "business";
-type MainView = "status" | "inquiries";
+type MainView = "status" | "feed" | "inquiries";
 type InquiryTab = "pending" | "following" | "closed";
 
 interface ConfidenceScore {
@@ -416,12 +417,11 @@ function StatusBar() {
 
 // ─── 顶部导航 ─────────────────────────────────────────────────
 
-function TopNav({ view, onChangeView, credits, unreadCount, onBack }: {
+function TopNav({ view, onChangeView, credits, unreadCount, feedCount, onBack }: {
   view: MainView; onChangeView: (v: MainView) => void;
-  credits: number; unreadCount: number; onBack: () => void;
+  credits: number; unreadCount: number; feedCount: number; onBack: () => void;
 }) {
   const [, navigate] = useLocation();
-  const pendingCount = unreadCount;
   return (
     <div className="px-4 pt-1 pb-3 flex-shrink-0">
       <div className="flex items-center justify-between mb-3">
@@ -447,17 +447,27 @@ function TopNav({ view, onChangeView, credits, unreadCount, onBack }: {
           </button>
         </div>
       </div>
+      {/* 三 Tab 导航：今日状态 | 信息流 | 我的询盘 */}
       <div className="flex rounded-xl p-0.5" style={{background:"oklch(0.20 0.02 250)"}}>
         <button onClick={() => onChangeView("status")}
-          className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${view==="status"?"bg-white text-slate-900 shadow-sm":"text-slate-400 hover:text-white"}`}>
+          className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${view==="status"?"bg-white text-slate-900 shadow-sm":"text-slate-400 hover:text-white"}`}>
           今日状态
         </button>
+        <button onClick={() => onChangeView("feed")}
+          className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all duration-200 relative ${view==="feed"?"bg-white text-slate-900 shadow-sm":"text-slate-400 hover:text-white"}`}>
+          信息流
+          {feedCount > 0 && (
+            <span className="absolute top-1.5 right-1 min-w-[14px] h-3.5 px-0.5 rounded-full bg-sky-500 flex items-center justify-center">
+              <span className="text-white font-bold" style={{fontSize:"8px"}}>{feedCount}</span>
+            </span>
+          )}
+        </button>
         <button onClick={() => onChangeView("inquiries")}
-          className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all duration-200 relative ${view==="inquiries"?"bg-white text-slate-900 shadow-sm":"text-slate-400 hover:text-white"}`}>
-          询盘管理
-          {pendingCount > 0 && (
-            <span className="absolute top-1.5 right-3 min-w-[16px] h-4 px-1 rounded-full bg-orange-500 flex items-center justify-center">
-              <span className="text-white font-bold" style={{fontSize:"9px"}}>{pendingCount}</span>
+          className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all duration-200 relative ${view==="inquiries"?"bg-white text-slate-900 shadow-sm":"text-slate-400 hover:text-white"}`}>
+          我的询盘
+          {unreadCount > 0 && (
+            <span className="absolute top-1.5 right-1 min-w-[14px] h-3.5 px-0.5 rounded-full bg-orange-500 flex items-center justify-center">
+              <span className="text-white font-bold" style={{fontSize:"8px"}}>{unreadCount}</span>
             </span>
           )}
         </button>
@@ -468,7 +478,7 @@ function TopNav({ view, onChangeView, credits, unreadCount, onBack }: {
 
 // ─── 今日状态视图 ─────────────────────────────────────────────
 
-function StatusView({ onGoInquiries, isEnterprise = false }: { onGoInquiries: () => void; isEnterprise?: boolean }) {
+function StatusView({ onGoFeed, onGoInquiries, isEnterprise = false }: { onGoFeed: () => void; onGoInquiries: () => void; isEnterprise?: boolean }) {
   const { inquiries: rawInquiries, stats } = useInquiries();
   const { status: clawStatus, simulateLead } = useOpenClawStatus();
   const { pushHour, pushMinute } = useNotifSettings();
@@ -681,7 +691,7 @@ function StatusView({ onGoInquiries, isEnterprise = false }: { onGoInquiries: ()
           <ChevronRight className="w-4 h-4 text-slate-600 flex-shrink-0" />
         </button>
         {/* Phase 3: 买家信息流 */}
-        <button onClick={() => navigate("/feed")}
+        <button onClick={onGoFeed}
           className="w-full text-left rounded-xl p-3.5 flex items-center gap-3 active:scale-95 transition-all"
           style={{background:"oklch(0.19 0.02 250)", border:"1px solid oklch(1 0 0 / 10%)"}}>
           <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
@@ -953,6 +963,9 @@ function LeadDetailFlow({ lead: initialLead, onBack, onUpdate }: {
   const [selectedStyle, setSelectedStyle] = useState<FollowUpStyle>(lead.followUpStyle || "business");
   const [sending, setSending] = useState(false);
   const [showConfidence, setShowConfidence] = useState(false);
+  const [showAIThinking, setShowAIThinking] = useState(false);
+  const [aiThinkingTriggered, setAiThinkingTriggered] = useState(false);
+  const { steps: thinkingSteps, isRunning: thinkingRunning, totalDuration: thinkingDuration } = useAIThinking(aiThinkingTriggered);
   const [transferTo, setTransferTo] = useState("");
   const [transferNote, setTransferNote] = useState("");
 
@@ -1063,6 +1076,38 @@ function LeadDetailFlow({ lead: initialLead, onBack, onUpdate }: {
                 </div>
               ))}
               <p className="text-xs text-slate-500 pt-1 leading-relaxed">{lead.aiAnalysis}</p>
+            </div>
+          )}
+          {/* M4: AI 思考过程可视化 */}
+          <button
+            onClick={() => {
+              setShowAIThinking(!showAIThinking);
+              if (!aiThinkingTriggered) setAiThinkingTriggered(true);
+            }}
+            className="w-full flex items-center justify-between px-4 py-3 border-b border-white/8">
+            <div className="flex items-center gap-2">
+              <span className="text-base">🧠</span>
+              <span className="text-xs text-slate-400">AI 思考过程</span>
+              {thinkingRunning && (
+                <span className="flex items-center gap-1 text-xs text-indigo-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />分析中
+                </span>
+              )}
+              {!thinkingRunning && thinkingSteps.length > 0 && (
+                <span className="text-xs text-green-400">✓ 已完成</span>
+              )}
+            </div>
+            {showAIThinking ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
+          </button>
+          {showAIThinking && (
+            <div className="px-4 py-3 border-b border-white/8">
+              <AIThinkingPanel
+                steps={thinkingSteps}
+                isRunning={thinkingRunning}
+                totalDuration={thinkingDuration}
+                creditsUsed={thinkingRunning ? undefined : 3}
+                styleUsed={false}
+              />
             </div>
           )}
 
@@ -1736,6 +1781,277 @@ function VoiceAssistant() {
   );
 }
 
+// ─── 内嵌信息流视图（M1 三 Tab 版）────────────────────────────
+
+const FEED_FLAG_MAP: Record<string, string> = {
+  瑞典: "🇸🇪", 德国: "🇩🇪", 美国: "🇺🇸", 日本: "🇯🇵",
+  阿联酋: "🇦🇪", 韩国: "🇰🇷", 英国: "🇬🇧", 澳大利亚: "🇦🇺",
+  加拿大: "🇨🇦", 荷兰: "🇳🇱", 法国: "🇫🇷", 意大利: "🇮🇹",
+  西班牙: "🇪🇸", 巴西: "🇧🇷", 印度: "🇮🇳", 墨西哥: "🇲🇽",
+};
+const FEED_INDUSTRY: Record<string, { bg: string; text: string; label: string }> = {
+  furniture: { bg: "bg-amber-100", text: "text-amber-700", label: "家具" },
+  textile: { bg: "bg-purple-100", text: "text-purple-700", label: "纺织" },
+  electronics: { bg: "bg-blue-100", text: "text-blue-700", label: "电子" },
+  other: { bg: "bg-gray-100", text: "text-gray-600", label: "其他" },
+};
+function getFeedConfColor(score: number) {
+  if (score >= 80) return { ring: "ring-green-400", badge: "bg-green-500", label: "高意向" };
+  if (score >= 60) return { ring: "ring-yellow-400", badge: "bg-yellow-500", label: "中意向" };
+  return { ring: "ring-gray-300", badge: "bg-gray-400", label: "待评估" };
+}
+
+function EmbeddedFeedCard({
+  item, onBookmark, isBookmarking, isBookmarked, isLocked,
+}: {
+  item: FeedItem; onBookmark: (id: string) => void;
+  isBookmarking: boolean; isBookmarked: boolean; isLocked: boolean;
+}) {
+  const [videoPlaying, setVideoPlaying] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const flag = FEED_FLAG_MAP[item.buyer_country] ?? "🌍";
+  const industry = FEED_INDUSTRY[item.industry] ?? FEED_INDUSTRY.other;
+  const conf = getFeedConfColor(item.confidence_score);
+
+  const toggleVideo = () => {
+    if (!videoRef.current) return;
+    if (videoPlaying) { videoRef.current.pause(); setVideoPlaying(false); }
+    else { videoRef.current.play(); setVideoPlaying(true); }
+  };
+
+  return (
+    <div className={`relative bg-white rounded-2xl shadow-md overflow-hidden mx-3 mb-3 ring-2 ${conf.ring} ${isLocked ? "opacity-50 pointer-events-none" : ""}`}>
+      {/* 图片卡片 */}
+      {item.media_type === "image" && item.media_url && (
+        <div className="relative w-full h-40 bg-gray-100 overflow-hidden">
+          <img src={item.media_url} alt={item.product_name} className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+          <span className={`absolute top-2 left-2 text-xs font-semibold px-2 py-0.5 rounded-full ${industry.bg} ${industry.text}`}>
+            {industry.label}
+          </span>
+        </div>
+      )}
+      {/* 视频卡片 */}
+      {item.media_type === "video" && item.media_url && (
+        <div className="relative w-full h-44 bg-black overflow-hidden cursor-pointer" onClick={toggleVideo}>
+          <video ref={videoRef} src={item.media_url} className="w-full h-full object-cover" loop playsInline />
+          <div className="absolute inset-0 flex items-center justify-center">
+            {!videoPlaying && (
+              <div className="w-12 h-12 rounded-full bg-white/80 flex items-center justify-center shadow-lg">
+                <PlayCircle className="w-7 h-7 text-indigo-600" />
+              </div>
+            )}
+          </div>
+          <span className={`absolute top-2 left-2 text-xs font-semibold px-2 py-0.5 rounded-full ${industry.bg} ${industry.text}`}>
+            {industry.label}
+          </span>
+          <span className="absolute top-2 right-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-black/60 text-white">
+            🎬 视频
+          </span>
+        </div>
+      )}
+      {/* 顶部标签行（纯文字卡片时显示） */}
+      {item.media_type === "text" && (
+        <div className="flex items-center justify-between px-3 pt-3 pb-1">
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${industry.bg} ${industry.text}`}>
+            {industry.label}
+          </span>
+          <span className={`text-xs text-white font-bold px-2 py-0.5 rounded-full ${conf.badge}`}>
+            {conf.label} {item.confidence_score}分
+          </span>
+        </div>
+      )}
+      {/* 买家信息 */}
+      <div className="px-3 pt-2 pb-1">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white font-bold text-sm shrink-0">
+            {item.buyer_company.charAt(0)}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className="font-semibold text-gray-900 text-sm truncate">{item.buyer_company}</span>
+              <span>{flag}</span>
+              <span className="text-xs text-gray-400">{item.buyer_country}</span>
+            </div>
+            {item.buyer_name && <p className="text-xs text-gray-400">{item.buyer_name}</p>}
+          </div>
+          {(item.media_type !== "text") && (
+            <span className={`text-xs text-white font-bold px-2 py-0.5 rounded-full ${conf.badge} shrink-0`}>
+              {item.confidence_score}分
+            </span>
+          )}
+        </div>
+      </div>
+      {/* 产品 */}
+      <div className="px-3 pb-2">
+        <div className="bg-gray-50 rounded-xl p-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold text-gray-800 truncate">{item.product_name}</span>
+            {item.quantity && (
+              <span className="text-xs text-indigo-600 font-medium bg-indigo-50 px-2 py-0.5 rounded-full ml-2 shrink-0">{item.quantity}</span>
+            )}
+          </div>
+          {item.estimated_value > 0 && (
+            <span className="text-xs font-bold text-green-600">预估 ${item.estimated_value.toLocaleString()}</span>
+          )}
+        </div>
+      </div>
+      {/* AI 摘要 */}
+      {item.ai_summary && (
+        <div className="px-3 pb-2 flex items-start gap-1.5">
+          <span className="text-indigo-500 text-xs shrink-0">✦</span>
+          <p className="text-xs text-gray-500 leading-relaxed line-clamp-2">{item.ai_summary}</p>
+        </div>
+      )}
+      {/* 标签 */}
+      {item.ai_tags.length > 0 && (
+        <div className="px-3 pb-2 flex flex-wrap gap-1">
+          {item.ai_tags.slice(0, 4).map((tag) => (
+            <span key={tag} className="text-xs bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded-full">#{tag}</span>
+          ))}
+        </div>
+      )}
+      {/* 操作按钮 */}
+      <div className="px-3 pb-3">
+        <button
+          onClick={() => !isBookmarked && !isBookmarking && onBookmark(item.id)}
+          disabled={isBookmarking || isBookmarked}
+          className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2
+            ${isBookmarked ? "bg-green-100 text-green-600 cursor-default"
+              : isBookmarking ? "bg-indigo-100 text-indigo-400 cursor-wait"
+              : "bg-indigo-600 text-white active:scale-95"}`}
+        >
+          {isBookmarked ? "✓ 已加入询盘" : isBookmarking ? "处理中..." : "⚡ 一键加入询盘"}
+        </button>
+      </div>
+      {/* 锁定遮罩 */}
+      {isLocked && (
+        <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex flex-col items-center justify-center gap-1">
+          <span className="text-2xl">🔒</span>
+          <p className="text-xs font-semibold text-gray-600">今日配额已用完</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EmbeddedFeedView({ onBookmark }: { onBookmark: () => void }) {
+  const [items, setItems] = useState<FeedItem[]>([]);
+  const [quota, setQuota] = useState<FeedQuota | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [bookmarkingId, setBookmarkingId] = useState<string | null>(null);
+  const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
+  const [sortBy, setSortBy] = useState<"recommendation" | "latest" | "value">("recommendation");
+  const [toast2, setToast2] = useState<string | null>(null);
+
+  const showToast2 = useCallback((msg: string) => {
+    setToast2(msg);
+    setTimeout(() => setToast2(null), 2500);
+  }, []);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [feedRes, quotaRes] = await Promise.all([
+        feedApi.getFeed({ sort: sortBy, limit: 20 }),
+        feedApi.getQuota(),
+      ]);
+      setItems(feedRes.items);
+      setQuota(quotaRes);
+    } catch {
+      showToast2("加载失败，请重试");
+    } finally {
+      setLoading(false);
+    }
+  }, [sortBy, showToast2]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleBookmark = useCallback(async (id: string) => {
+    if (bookmarkingId) return;
+    setBookmarkingId(id);
+    try {
+      await feedApi.bookmark(id);
+      setBookmarkedIds((prev) => new Set(Array.from(prev).concat(id)));
+      showToast2("✓ 已加入询盘");
+      onBookmark();
+      const q = await feedApi.getQuota();
+      setQuota(q);
+    } catch (e: any) {
+      showToast2(e.message ?? "操作失败");
+    } finally {
+      setBookmarkingId(null);
+    }
+  }, [bookmarkingId, showToast2, onBookmark]);
+
+  const quotaExhausted = quota ? quota.remaining <= 0 : false;
+  const pct = quota ? Math.round((quota.used / quota.total) * 100) : 0;
+  const barColor = pct >= 100 ? "bg-red-500" : pct >= 70 ? "bg-yellow-500" : "bg-sky-500";
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* 配额条 */}
+      {quota && (
+        <div className="px-3 py-2 flex-shrink-0" style={{background:"oklch(0.17 0.02 250)", borderBottom:"1px solid oklch(1 0 0 / 6%)"}}>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs text-slate-400">今日配额</span>
+            <span className="text-xs font-semibold text-slate-300">{quota.used}/{quota.total}</span>
+          </div>
+          <div className="h-1 bg-white/10 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full transition-all ${barColor}`} style={{width:`${pct}%`}} />
+          </div>
+        </div>
+      )}
+      {/* 排序筛选 */}
+      <div className="px-3 py-2 flex gap-2 flex-shrink-0" style={{background:"oklch(0.16 0.02 250)", borderBottom:"1px solid oklch(1 0 0 / 6%)"}}>
+        {(["recommendation", "latest", "value"] as const).map((s) => (
+          <button key={s} onClick={() => setSortBy(s)}
+            className={`text-xs px-3 py-1 rounded-full font-medium transition-all ${
+              sortBy === s ? "bg-sky-500 text-white" : "bg-white/8 text-slate-400 hover:text-white"
+            }`}>
+            {s === "recommendation" ? "🎯 推荐" : s === "latest" ? "🕐 最新" : "💰 价值"}
+          </button>
+        ))}
+      </div>
+      {/* 列表 */}
+      <div className="flex-1 overflow-y-auto pt-3">
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="w-6 h-6 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 px-8 text-center">
+            <span className="text-4xl mb-3">{quotaExhausted ? "🔒" : "🎉"}</span>
+            <p className="text-sm font-semibold text-slate-300">
+              {quotaExhausted ? "今日配额已用完" : "暂无更多询盘"}
+            </p>
+            <p className="text-xs text-slate-500 mt-1">
+              {quotaExhausted ? "明日 00:00 重置" : "已看完所有推荐"}
+            </p>
+          </div>
+        ) : (
+          items.map((item, idx) => (
+            <EmbeddedFeedCard
+              key={item.id}
+              item={item}
+              onBookmark={handleBookmark}
+              isBookmarking={bookmarkingId === item.id}
+              isBookmarked={bookmarkedIds.has(item.id)}
+              isLocked={quotaExhausted && !bookmarkedIds.has(item.id) && idx >= (quota?.remaining ?? 0)}
+            />
+          ))
+        )}
+      </div>
+      {/* Toast */}
+      {toast2 && (
+        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs font-medium px-4 py-2 rounded-full shadow-lg z-50 whitespace-nowrap">
+          {toast2}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── 主组件 ───────────────────────────────────────────────────
 
 export default function CommanderPhone() {
@@ -1744,6 +2060,14 @@ export default function CommanderPhone() {
   const { isEnterprise, plan, setPlan } = useUserPlan();
   const { user } = useAuth();
   const { stats } = useInquiries();
+  const [feedQuota, setFeedQuota] = useState<FeedQuota | null>(null);
+
+  // 加载信息流配额，用于 Tab 徽标显示
+  useEffect(() => {
+    feedApi.getQuota().then(setFeedQuota).catch(() => {});
+  }, []);
+
+  const feedRemaining = feedQuota ? Math.max(0, feedQuota.remaining) : 0;
 
   return (
     <div className="min-h-screen flex items-start justify-center sm:py-8" style={{background:"oklch(0.10 0.02 250)"}}>
@@ -1751,7 +2075,14 @@ export default function CommanderPhone() {
         style={{background:"oklch(0.14 0.02 250)", border:"1px solid oklch(1 0 0 / 10%)", maxWidth:"390px", height:"100dvh"}}>
 
         <StatusBar />
-        <TopNav view={view} onChangeView={setView} credits={stats?.credits?.balance ?? user?.creditsBalance ?? 2840} unreadCount={stats?.pipeline?.unread ?? 0} onBack={() => navigate("/")} />
+        <TopNav
+          view={view}
+          onChangeView={setView}
+          credits={stats?.credits?.balance ?? user?.creditsBalance ?? 2840}
+          unreadCount={stats?.pipeline?.unread ?? 0}
+          feedCount={feedRemaining}
+          onBack={() => navigate("/")}
+        />
 
         {/* Demo 模式切换器（原型演示用）*/}
         <div className="flex items-center justify-center gap-2 px-4 py-1.5 flex-shrink-0"
@@ -1773,7 +2104,8 @@ export default function CommanderPhone() {
           </button>
         </div>
 
-        {view === "status" && <StatusView onGoInquiries={() => setView("inquiries")} isEnterprise={isEnterprise} />}
+        {view === "status" && <StatusView onGoFeed={() => setView("feed")} onGoInquiries={() => setView("inquiries")} isEnterprise={isEnterprise} />}
+        {view === "feed" && <EmbeddedFeedView onBookmark={() => feedApi.getQuota().then(setFeedQuota).catch(() => {})} />}
         {view === "inquiries" && <InquiriesView />}
 
         <VoiceAssistant />

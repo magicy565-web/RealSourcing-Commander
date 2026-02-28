@@ -190,6 +190,8 @@ function FeedUploadPanel() {
     raw_content: "",
     industry: "furniture",
     estimated_value: "",
+    media_type: "text" as "text" | "image" | "video",
+    media_url: "",
   });
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
@@ -210,6 +212,8 @@ function FeedUploadPanel() {
         buyer_company: "", buyer_country: "", buyer_name: "",
         product_name: "", quantity: "", raw_content: "",
         industry: "furniture", estimated_value: "",
+        media_type: "text",
+        media_url: "",
       });
     } catch (err: any) {
       setError(err.message ?? "上传失败");
@@ -260,6 +264,34 @@ function FeedUploadPanel() {
             placeholder="200套/月"
           />
         </div>
+        {/* 媒体类型选择（M2 缺口#6） */}
+        <div>
+          <label className="text-xs font-medium text-gray-600 block mb-1">卡片类型</label>
+          <div className="flex gap-2">
+            {(["text", "image", "video"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setForm({ ...form, media_type: t, media_url: "" })}
+                className={`flex-1 py-2 rounded-lg text-xs font-semibold border transition-all ${
+                  form.media_type === t
+                    ? "bg-indigo-600 text-white border-indigo-600"
+                    : "bg-white text-gray-500 border-gray-200 hover:border-indigo-300"
+                }`}
+              >
+                {t === "text" ? "📝 纯文字" : t === "image" ? "🖼️ 图片" : "🎬 视频"}
+              </button>
+            ))}
+          </div>
+        </div>
+        {form.media_type !== "text" && (
+          <FormField
+            label={form.media_type === "image" ? "图片 URL" : "视频 URL"}
+            value={form.media_url}
+            onChange={(v) => setForm({ ...form, media_url: v })}
+            placeholder={form.media_type === "image" ? "https://example.com/product.jpg" : "https://example.com/video.mp4"}
+          />
+        )}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs font-medium text-gray-600 block mb-1">行业</label>

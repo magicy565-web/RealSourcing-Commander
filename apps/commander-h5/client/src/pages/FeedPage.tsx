@@ -259,7 +259,7 @@ export default function FeedPage() {
       setBookmarkingId(id);
       try {
         const res = await feedApi.bookmark(id);
-        setBookmarkedIds((prev) => new Set([...prev, id]));
+        setBookmarkedIds((prev) => new Set(Array.from(prev).concat(id)));
         setQuota((prev) =>
           prev
             ? { ...prev, used: prev.used + 1, remaining: Math.max(0, prev.remaining - 1) }

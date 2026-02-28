@@ -14,6 +14,7 @@ import {
   RefreshCw, Settings, ExternalLink, Info
 } from "lucide-react";
 import { toast } from "sonner";
+import OpenClawSecurityPanel from "../components/OpenClawSecurityPanel";
 
 // ─── 类型 ─────────────────────────────────────────────────────
 
@@ -308,7 +309,7 @@ function PlatformCard({ p }: { p: PlatformStat }) {
 export default function OpenClawDetail() {
   const [, navigate] = useLocation();
   const [instanceIdx, setInstanceIdx] = useState(0);
-  const [activeSection, setActiveSection] = useState<"platforms" | "tasks" | "logs">("platforms");
+  const [activeSection, setActiveSection] = useState<"platforms" | "tasks" | "logs" | "security">("platforms");
 
   const inst = mockInstances[instanceIdx];
   const creditPct = Math.round((inst.creditsUsed / inst.creditsTotal) * 100);
@@ -406,8 +407,8 @@ export default function OpenClawDetail() {
 
         {/* Section Tabs */}
         <div className="flex-shrink-0 flex gap-1 px-4 py-3" style={{borderBottom:"1px solid oklch(1 0 0 / 8%)"}}>
-          {(["platforms", "tasks", "logs"] as const).map(s => {
-            const labels = { platforms: "平台状态", tasks: "任务队列", logs: "操作日志" };
+          {(["platforms", "tasks", "logs", "security"] as const).map(s => {
+            const labels = { platforms: "平台状态", tasks: "任务队列", logs: "操作日志", security: "🔒 安全" };
             return (
               <button key={s} onClick={() => setActiveSection(s)}
                 className="flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all"
@@ -472,6 +473,11 @@ export default function OpenClawDetail() {
                 </div>
               ))}
             </div>
+          )}
+
+          {/* 安全控制面板 M6 */}
+          {activeSection === "security" && (
+            <OpenClawSecurityPanel instanceId={inst.id} />
           )}
 
           {/* 操作日志 */}
