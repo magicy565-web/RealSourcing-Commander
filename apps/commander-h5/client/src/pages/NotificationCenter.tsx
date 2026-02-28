@@ -7,14 +7,16 @@
 import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import {
-  Bell, BellRing, BellOff, CheckCircle2, AlertCircle,
-  TrendingUp, MessageSquare, Globe, Zap, Target,
+  Bell, BellOff, CheckCircle2,
+  TrendingUp, MessageSquare, Globe, Zap,
   Clock, Settings, ChevronRight, ArrowLeft,
-  Coins, RefreshCw, Smartphone, Shield,
-  Calendar, Filter, MoreHorizontal, Eye, EyeOff,
-  Wifi, WifiOff, Star
+  Coins, RefreshCw, Shield,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  inquiriesApi, dashboardApi, openclawApi,
+  type Inquiry, type DashboardOverview, type OpenClawStatus,
+} from "../lib/api";
 
 // ─── 类型定义 ─────────────────────────────────────────────────
 
@@ -37,92 +39,10 @@ interface Notification {
   data?: Record<string, string | number>;
 }
 
-// ─── Mock 数据 ────────────────────────────────────────────────
-
-const mockNotifications: Notification[] = [
-  {
-    id: "n1", type: "daily_report", priority: "normal",
-    title: "📊 今日战报已生成",
-    body: "今日共收到 4 条新询盘，OpenClaw 执行了 28 次操作，AI 可见度指数 +3",
-    detail: "• RFQ 询盘：3 条（Alibaba 2 条 + Global Sources 1 条）\n• AI 引流：1 条（Perplexity 搜索越南太阳能板）\n• OpenClaw 操作：LinkedIn 连接 12 次、消息回复 8 次、Facebook 互动 8 次\n• 积分消耗：180 分（剩余 2,840 分）",
-    time: "今天 08:00", timestamp: Date.now() - 2 * 3600 * 1000,
-    read: true, channel: "both",
-    actionLabel: "查看完整战报",
-    data: { leads: 4, operations: 28, creditsUsed: 180 }
-  },
-  {
-    id: "n2", type: "new_lead", priority: "urgent",
-    title: "🔥 紧急询盘：越南买家 $120K",
-    body: "SunPower Solutions（越南）通过 LinkedIn 发来询盘，询价太阳能板 5000 件",
-    detail: "买家：Nguyen Van A\n公司：SunPower Solutions\n国家：越南 🇻🇳\n产品：太阳能板 5000 件\n预估金额：$120,000\n来源：LinkedIn（OpenClaw 监控发现）\n\n原文：Hi, I'm interested in your solar panel products. Could you provide a quotation?",
-    time: "今天 10:42", timestamp: Date.now() - 20 * 60 * 1000,
-    read: false, channel: "wechat",
-    actionLabel: "立即回复",
-    data: { value: 120000, company: "SunPower Solutions", country: "越南" }
-  },
-  {
-    id: "n3", type: "new_lead", priority: "urgent",
-    title: "🔥 AI 引流：德国买家主动搜索",
-    body: "EcoHome Trading（德国）通过 Perplexity AI 搜索找到您的工厂，正在浏览产品页",
-    detail: "买家：Klaus Weber\n公司：EcoHome Trading\n国家：德国 🇩🇪\n搜索词：outdoor furniture supplier China\nAI 引擎：Perplexity AI\n行为：访问了您的数字工厂孪生页面 3 次",
-    time: "今天 10:18", timestamp: Date.now() - 44 * 60 * 1000,
-    read: false, channel: "wechat",
-    actionLabel: "查看买家详情",
-    data: { company: "EcoHome Trading", country: "德国", source: "Perplexity AI" }
-  },
-  {
-    id: "n4", type: "task_done", priority: "normal",
-    title: "✅ 任务完成：德国家具 GEO 优化",
-    body: "GEO 建造者 Agent 已完成德国家具买家市场优化，发现 8 条高意向线索",
-    detail: "任务：德国家具买家 GEO 优化\nAgent：GEO 建造者 Agent\n执行时长：2小时 15分钟\n\n成果：\n• 创建数字工厂孪生页面 1 个\n• 同步至 8 个商业目录\n• 部署 Schema 结构化数据\n• 发现高意向买家 8 家\n\n积分消耗：120 分",
-    time: "昨天 16:30", timestamp: Date.now() - 18 * 3600 * 1000,
-    read: true, channel: "both",
-    actionLabel: "查看战报",
-    data: { leads: 8, creditsUsed: 120 }
-  },
-  {
-    id: "n5", type: "geo_alert", priority: "normal",
-    title: "📈 GEO 可见度提升",
-    body: "您在 ChatGPT Search 中的可见度指数从 66 提升至 71，本周增长 +5",
-    detail: "AI 引擎：ChatGPT Search\n上周指数：66\n本周指数：71\n增长：+5（+7.6%）\n\n触发关键词：\n• China outdoor furniture manufacturer\n• LED lighting factory China\n• Solar panel OEM supplier",
-    time: "昨天 08:00", timestamp: Date.now() - 26 * 3600 * 1000,
-    read: true, channel: "app",
-    data: { engine: "ChatGPT Search", score: 71, growth: 5 }
-  },
-  {
-    id: "n6", type: "daily_report", priority: "normal",
-    title: "📊 昨日战报",
-    body: "昨日收到 2 条询盘，OpenClaw 执行 22 次操作，一切正常运行",
-    detail: "• RFQ 询盘：2 条\n• AI 引流：0 条\n• OpenClaw 操作：22 次\n• 积分消耗：95 分",
-    time: "昨天 08:00", timestamp: Date.now() - 26 * 3600 * 1000,
-    read: true, channel: "both",
-    data: { leads: 2, operations: 22, creditsUsed: 95 }
-  },
-  {
-    id: "n7", type: "credit_low", priority: "urgent",
-    title: "⚠️ 积分余额提醒",
-    body: "您的积分余额为 2,840 分，预计可用 14 天，建议提前充值",
-    detail: "当前余额：2,840 分\n日均消耗：约 200 分\n预计耗尽：14 天后\n\n建议充值套餐：\n• 5,000 分 ¥499（¥0.10/分）\n• 20,000 分 ¥1,599（¥0.08/分）",
-    time: "2天前 08:00", timestamp: Date.now() - 50 * 3600 * 1000,
-    read: true, channel: "wechat",
-    actionLabel: "立即充值",
-    data: { balance: 2840, daysLeft: 14 }
-  },
-  {
-    id: "n8", type: "system", priority: "info",
-    title: "🔧 系统维护完成",
-    body: "OpenClaw 实例 oc-001 已完成例行维护，所有功能恢复正常",
-    time: "3天前 03:00", timestamp: Date.now() - 75 * 3600 * 1000,
-    read: true, channel: "app",
-    data: { instance: "oc-001" }
-  },
-];
-
 // ─── 工具函数 ─────────────────────────────────────────────────
 
 function getNextPushTime(hour: number, minute: number): { label: string; secondsLeft: number } {
   const now = new Date();
-  // 北京时间 = UTC+8
   const bjNow = new Date(now.getTime() + 8 * 3600 * 1000);
   const bjHour = bjNow.getUTCHours();
   const bjMinute = bjNow.getUTCMinutes();
@@ -155,6 +75,12 @@ function formatRelativeTime(timestamp: number): string {
   return `${days}天前`;
 }
 
+function formatCurrency(value: number): string {
+  if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
+  if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
+  return `$${value}`;
+}
+
 const typeConfig: Record<NotifType, { icon: React.ReactNode; color: string; bg: string; label: string }> = {
   daily_report: { icon: <TrendingUp className="w-4 h-4" />, color: "text-blue-400", bg: "bg-blue-500/15", label: "日报" },
   new_lead: { icon: <MessageSquare className="w-4 h-4" />, color: "text-orange-400", bg: "bg-orange-500/15", label: "新询盘" },
@@ -170,9 +96,143 @@ const priorityConfig: Record<NotifPriority, { dot: string; border: string }> = {
   info: { dot: "bg-slate-500", border: "border-white/5" },
 };
 
+// ─── 从真实数据生成通知 ───────────────────────────────────────
+
+function buildNotifications(
+  inquiries: Inquiry[],
+  overview: DashboardOverview | null,
+  report: { date: string; newInquiries: number; replied: number; totalValue: number; agentOps: number; creditsUsed: number; platformBreakdown: { platform: string; count: number }[] } | null,
+  clawStatus: OpenClawStatus | null,
+): Notification[] {
+  const notifs: Notification[] = [];
+
+  // 1. 今日战报（来自 dashboard/report）
+  if (report) {
+    const platformSummary = report.platformBreakdown
+      .map(p => `${p.platform} ${p.count} 条`)
+      .join("、");
+    notifs.push({
+      id: `report-${report.date}`,
+      type: "daily_report",
+      priority: "normal",
+      title: "📊 今日战报已生成",
+      body: `今日共收到 ${report.newInquiries} 条新询盘，OpenClaw 执行了 ${report.agentOps} 次操作，积分消耗 ${report.creditsUsed} 分`,
+      detail: `• 询盘来源：${platformSummary || "暂无"}\n• OpenClaw 操作：${report.agentOps} 次\n• 积分消耗：${report.creditsUsed} 分（剩余 ${overview?.tenant.creditsBalance ?? "—"} 分）\n• 询盘总价值：${formatCurrency(report.totalValue)}`,
+      time: `今天 08:00`,
+      timestamp: Date.now() - 2 * 3600 * 1000,
+      read: true,
+      channel: "both",
+      actionLabel: "查看完整战报",
+      data: { leads: report.newInquiries, operations: report.agentOps, creditsUsed: report.creditsUsed },
+    });
+  }
+
+  // 2. 未读询盘通知（来自 inquiries API）
+  const unreadInquiries = inquiries.filter(i => i.status === "unread" || i.status === "no_reply");
+  unreadInquiries.slice(0, 5).forEach((inq, idx) => {
+    const isUrgent = (inq.urgency === "high" || inq.urgency === "urgent") || (inq.estimatedValue ?? 0) > 50000;
+    notifs.push({
+      id: `lead-${inq.id}`,
+      type: "new_lead",
+      priority: isUrgent ? "urgent" : "normal",
+      title: isUrgent
+        ? `🔥 紧急询盘：${inq.buyerCompany ?? inq.buyerName} ${inq.estimatedValue ? formatCurrency(inq.estimatedValue) : ""}`
+        : `📩 新询盘：${inq.buyerCompany ?? inq.buyerName}`,
+      body: `${inq.buyerCompany ?? inq.buyerName}（${inq.buyerCountry ?? "未知"}）通过 ${inq.sourcePlatform} 发来询盘，询价 ${inq.productName ?? "产品"}`,
+      detail: `买家：${inq.buyerName ?? "—"}\n公司：${inq.buyerCompany ?? "—"}\n国家：${inq.buyerCountry ?? "—"}\n产品：${inq.productName ?? "—"}\n预估金额：${inq.estimatedValue ? formatCurrency(inq.estimatedValue) : "—"}\n来源：${inq.sourcePlatform}\n\n${inq.aiSummary ?? ""}`,
+      time: inq.receivedAt ? new Date(inq.receivedAt).toLocaleString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "—",
+      timestamp: inq.receivedAt ? new Date(inq.receivedAt).getTime() : Date.now() - (idx + 1) * 3600 * 1000,
+      read: false,
+      channel: "wechat",
+      actionLabel: "立即回复",
+      data: { value: inq.estimatedValue ?? 0, company: inq.buyerCompany ?? "", country: inq.buyerCountry ?? "" },
+    });
+  });
+
+  // 3. OpenClaw 自愈告警（来自 openclaw/status）
+  if (clawStatus?.instance) {
+    const inst = clawStatus.instance;
+    if (inst.sleeping) {
+      const remainMin = Math.ceil(inst.sleepRemainingMs / 60000);
+      notifs.push({
+        id: `claw-sleep-${Date.now()}`,
+        type: "system",
+        priority: "urgent",
+        title: "⚠️ OpenClaw 自动休眠中",
+        body: `OpenClaw 因连续失败 ${inst.consecutiveFailures} 次触发自愈机制，预计 ${remainMin} 分钟后自动恢复`,
+        detail: `实例：${inst.name}\n状态：休眠中（自愈模式）\n连续失败次数：${inst.consecutiveFailures} 次\n失败阈值：${inst.failureThreshold} 次\n预计恢复：${remainMin} 分钟后\n\n系统将在休眠结束后自动恢复运行，无需手动干预。`,
+        time: "刚刚",
+        timestamp: Date.now() - 5 * 60 * 1000,
+        read: false,
+        channel: "wechat",
+        data: { failures: inst.consecutiveFailures, remainMin },
+      });
+    } else if (inst.consecutiveFailures > 0) {
+      notifs.push({
+        id: `claw-warn-${inst.consecutiveFailures}`,
+        type: "system",
+        priority: "normal",
+        title: `⚡ OpenClaw 连续失败 ${inst.consecutiveFailures} 次`,
+        body: `OpenClaw 近期出现 ${inst.consecutiveFailures} 次连续失败，距自愈阈值还有 ${inst.failureThreshold - inst.consecutiveFailures} 次`,
+        detail: `实例：${inst.name}\n连续失败次数：${inst.consecutiveFailures} 次\n自愈阈值：${inst.failureThreshold} 次\n当前状态：${inst.status}\n\n如持续失败将自动进入休眠模式并发送告警。`,
+        time: "最近",
+        timestamp: Date.now() - 30 * 60 * 1000,
+        read: false,
+        channel: "app",
+        data: { failures: inst.consecutiveFailures },
+      });
+    }
+  }
+
+  // 4. 积分余额提醒（来自 dashboard/overview）
+  if (overview) {
+    const balance = overview.tenant.creditsBalance;
+    const daysLeft = Math.floor(balance / 200); // 假设日均消耗 200
+    if (balance < 5000) {
+      notifs.push({
+        id: `credit-low-${balance}`,
+        type: "credit_low",
+        priority: balance < 1000 ? "urgent" : "normal",
+        title: balance < 1000 ? "🚨 积分余额严重不足" : "⚠️ 积分余额提醒",
+        body: `您的积分余额为 ${balance.toLocaleString()} 分，预计可用约 ${daysLeft} 天，建议提前充值`,
+        detail: `当前余额：${balance.toLocaleString()} 分\n日均消耗：约 200 分\n预计耗尽：${daysLeft} 天后\n\n建议充值套餐：\n• 5,000 分 ¥499（¥0.10/分）\n• 20,000 分 ¥1,599（¥0.08/分）`,
+        time: "今天 08:00",
+        timestamp: Date.now() - 3 * 3600 * 1000,
+        read: balance >= 2000,
+        channel: "wechat",
+        actionLabel: "立即充值",
+        data: { balance, daysLeft },
+      });
+    }
+  }
+
+  // 5. 已报价询盘通知
+  const quotedInquiries = inquiries.filter(i => i.status === "quoted");
+  if (quotedInquiries.length > 0) {
+    notifs.push({
+      id: `quoted-summary`,
+      type: "task_done",
+      priority: "normal",
+      title: `✅ ${quotedInquiries.length} 条询盘已完成报价`,
+      body: `${quotedInquiries.map(i => i.buyerCompany ?? i.buyerName).slice(0, 3).join("、")} 等询盘已发送报价，等待买家回复`,
+      time: "今天",
+      timestamp: Date.now() - 4 * 3600 * 1000,
+      read: true,
+      channel: "app",
+      data: { count: quotedInquiries.length },
+    });
+  }
+
+  // 按时间排序（未读优先，然后按时间倒序）
+  return notifs.sort((a, b) => {
+    if (a.read !== b.read) return a.read ? 1 : -1;
+    return b.timestamp - a.timestamp;
+  });
+}
+
 // ─── 子组件 ───────────────────────────────────────────────────
 
-function CountdownCard({ pushHour, pushMinute }: { pushHour: number; pushMinute: number }) {
+function CountdownCard({ pushHour, pushMinute, todayPushCount }: { pushHour: number; pushMinute: number; todayPushCount: number }) {
   const [countdown, setCountdown] = useState(() => getNextPushTime(pushHour, pushMinute));
 
   useEffect(() => {
@@ -188,12 +248,10 @@ function CountdownCard({ pushHour, pushMinute }: { pushHour: number; pushMinute:
   return (
     <div className="rounded-2xl p-5 relative overflow-hidden"
       style={{ background: "linear-gradient(135deg, oklch(0.20 0.04 250) 0%, oklch(0.17 0.03 250) 100%)", border: "1px solid oklch(0.50 0.10 250 / 30%)" }}>
-      {/* Glow */}
       <div className="absolute top-0 right-0 w-40 h-40 rounded-full opacity-10 pointer-events-none"
         style={{ background: "radial-gradient(circle, oklch(0.60 0.15 250) 0%, transparent 70%)", transform: "translate(30%,-30%)" }} />
 
       <div className="flex items-center gap-5">
-        {/* Circular Progress */}
         <div className="relative flex-shrink-0">
           <svg width="72" height="72" viewBox="0 0 72 72" className="-rotate-90">
             <circle cx="36" cy="36" r="28" fill="none" stroke="oklch(1 0 0 / 8%)" strokeWidth="4" />
@@ -221,7 +279,7 @@ function CountdownCard({ pushHour, pushMinute }: { pushHour: number; pushMinute:
             <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />
             <span className="text-xs text-teal-400">定时已开启</span>
           </div>
-          <p className="text-xs text-slate-500">今日已推送 1 次</p>
+          <p className="text-xs text-slate-500">今日已推送 {todayPushCount} 次</p>
           <p className="text-xs text-slate-500">微信 + App 双渠道</p>
         </div>
       </div>
@@ -240,15 +298,13 @@ function NotifCard({ notif, onExpand }: { notif: Notification; onExpand: (id: st
       onClick={() => onExpand(notif.id)}>
       <div className="p-4">
         <div className="flex items-start gap-3">
-          {/* Icon */}
           <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${tc.bg} ${tc.color}`}>
             {tc.icon}
           </div>
 
-          {/* Content */}
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2 mb-1">
-              <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="flex items-center gap-1.5">
                 {!notif.read && <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${pc.dot}`} />}
                 <span className="text-sm font-semibold text-white leading-tight">{notif.title}</span>
               </div>
@@ -285,7 +341,6 @@ function NotifDetail({ notif, onClose }: { notif: Notification; onClose: () => v
           <div className="w-10 h-1 rounded-full bg-white/20" />
         </div>
         <div className="overflow-y-auto px-5 pb-8">
-          {/* Header */}
           <div className="flex items-center gap-3 py-4 border-b border-white/8 mb-4">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tc.bg} ${tc.color}`}>
               {tc.icon}
@@ -296,10 +351,8 @@ function NotifDetail({ notif, onClose }: { notif: Notification; onClose: () => v
             </div>
           </div>
 
-          {/* Body */}
           <p className="text-sm text-slate-300 leading-relaxed mb-4">{notif.body}</p>
 
-          {/* Detail */}
           {notif.detail && (
             <div className="rounded-xl p-4 mb-4" style={{ background: "oklch(0.20 0.02 250)" }}>
               <p className="text-xs text-slate-500 mb-2">详细信息</p>
@@ -307,7 +360,6 @@ function NotifDetail({ notif, onClose }: { notif: Notification; onClose: () => v
             </div>
           )}
 
-          {/* Channel */}
           <div className="flex items-center gap-2 mb-4">
             <span className="text-xs text-slate-500">推送渠道：</span>
             <span className="text-xs text-slate-300">
@@ -315,7 +367,6 @@ function NotifDetail({ notif, onClose }: { notif: Notification; onClose: () => v
             </span>
           </div>
 
-          {/* Action */}
           {notif.actionLabel && (
             <button onClick={() => { toast.success(`${notif.actionLabel}功能即将上线`); onClose(); }}
               className="w-full py-3 rounded-xl font-semibold text-sm text-white flex items-center justify-center gap-2 active:scale-95 transition-transform"
@@ -345,11 +396,49 @@ export default function NotificationCenter({
   onBack,
 }: NotificationCenterProps) {
   const [, navigate] = useLocation();
-  const [notifications, setNotifications] = useState(mockNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "unread" | NotifType>("all");
+  const [lastRefresh, setLastRefresh] = useState(Date.now());
+
+  // ─── 加载真实数据 ───────────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    async function loadData() {
+      setLoading(true);
+      try {
+        const [inquiriesRes, overviewRes, reportRes, clawRes] = await Promise.allSettled([
+          inquiriesApi.list({ limit: 20 }),
+          dashboardApi.overview(),
+          dashboardApi.report(),
+          openclawApi.status(),
+        ]);
+
+        if (cancelled) return;
+
+        const inquiries = inquiriesRes.status === "fulfilled" ? inquiriesRes.value.items : [];
+        const overview = overviewRes.status === "fulfilled" ? overviewRes.value : null;
+        const report = reportRes.status === "fulfilled" ? reportRes.value as any : null;
+        const clawStatus = clawRes.status === "fulfilled" ? clawRes.value : null;
+
+        const built = buildNotifications(inquiries, overview, report, clawStatus);
+        setNotifications(built);
+      } catch (e) {
+        console.error("Failed to load notifications:", e);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    loadData();
+    return () => { cancelled = true; };
+  }, [lastRefresh]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
+  const todayPushCount = notifications.filter(n => {
+    const diff = Date.now() - n.timestamp;
+    return diff < 24 * 3600 * 1000;
+  }).length;
 
   const filtered = notifications.filter(n => {
     if (filter === "all") return true;
@@ -367,6 +456,11 @@ export default function NotificationCenter({
     toast.success("已全部标为已读");
   };
 
+  const handleRefresh = () => {
+    setLastRefresh(Date.now());
+    toast.success("正在刷新通知...");
+  };
+
   const expandedNotif = notifications.find(n => n.id === expandedId);
 
   const filterTabs = [
@@ -374,7 +468,7 @@ export default function NotificationCenter({
     { id: "unread" as const, label: `未读 ${unreadCount > 0 ? `(${unreadCount})` : ""}` },
     { id: "new_lead" as const, label: "询盘" },
     { id: "daily_report" as const, label: "日报" },
-    { id: "task_done" as const, label: "任务" },
+    { id: "system" as const, label: "系统" },
   ];
 
   return (
@@ -397,6 +491,10 @@ export default function NotificationCenter({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={handleRefresh}
+            className={`w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/15 transition-colors ${loading ? "animate-spin" : ""}`}>
+            <RefreshCw className="w-4 h-4 text-slate-300" />
+          </button>
           {unreadCount > 0 && (
             <button onClick={handleMarkAllRead}
               className="text-xs text-slate-400 hover:text-white px-2 py-1 rounded-lg bg-white/5 transition-colors">
@@ -412,7 +510,7 @@ export default function NotificationCenter({
 
       {/* Countdown Card */}
       <div className="px-4 mb-4 flex-shrink-0">
-        <CountdownCard pushHour={pushHour} pushMinute={pushMinute} />
+        <CountdownCard pushHour={pushHour} pushMinute={pushMinute} todayPushCount={todayPushCount} />
       </div>
 
       {/* Filter Tabs */}
@@ -433,7 +531,14 @@ export default function NotificationCenter({
 
       {/* Notification List */}
       <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-2.5" style={{ scrollbarWidth: "none" }}>
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center">
+              <RefreshCw className="w-7 h-7 text-slate-600 animate-spin" />
+            </div>
+            <p className="text-sm text-slate-500">加载通知中...</p>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
             <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center">
               <BellOff className="w-7 h-7 text-slate-600" />

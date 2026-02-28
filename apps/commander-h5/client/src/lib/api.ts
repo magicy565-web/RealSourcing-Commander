@@ -215,11 +215,12 @@ export const openclawApi = {
     return request<OpenClawStatus>("/openclaw/status");
   },
 
-  async logs(params?: { platform?: string; status?: string; page?: number }) {
+  async logs(params?: { platform?: string; status?: string; page?: number; limit?: number }) {
     const qs = new URLSearchParams();
     if (params?.platform) qs.set("platform", params.platform);
     if (params?.status) qs.set("status", params.status);
     if (params?.page) qs.set("page", String(params.page));
+    if (params?.limit) qs.set("limit", String(params.limit));
     return request<{ items: AgentLog[] }>(`/openclaw/logs?${qs.toString()}`);
   },
 
@@ -600,6 +601,11 @@ export interface OpenClawStatus {
     opsToday: number;
     opsLimit: number;
     opsPercent: number;
+    consecutiveFailures: number;
+    failureThreshold: number;
+    sleeping: boolean;
+    sleepUntil?: string | null;
+    sleepRemainingMs: number;
   } | null;
   accounts: {
     id: string;
