@@ -229,8 +229,39 @@ CREATE TABLE IF NOT EXISTS user_preferences (
 );
 `;
 
-// 执行建表
+/// 执行建表
 db.exec(INIT_SQL);
+
+// ─── Phase 3 Sprint 3.1: 故障自愈字段迁移 ─────────────────────────────────
+// 使用 ALTER TABLE ... ADD COLUMN IF NOT EXISTS（SQLite 3.37+）
+// 若列已存在则静默忽略
+try {
+  db.exec(`ALTER TABLE openclaw_instances ADD COLUMN consecutive_failures INTEGER DEFAULT 0`);
+} catch { /* 列已存在，忽略 */ }
+try {
+  db.exec(`ALTER TABLE openclaw_instances ADD COLUMN sleep_until TEXT`);
+} catch { /* 列已存在，忽略 */ }
+try {
+  db.exec(`ALTER TABLE openclaw_instances ADD COLUMN last_failure_at TEXT`);
+} catch { /* 列已存在，忽略 */ }
+
+// Phase 3 Sprint 3.2: 产品概念图字段迁移
+try {
+  db.exec(`ALTER TABLE inquiries ADD COLUMN concept_image_url TEXT`);
+} catch { /* 列已存在，忽略 */ }
+try {
+  db.exec(`ALTER TABLE inquiries ADD COLUMN concept_image_status TEXT DEFAULT 'none'`);
+  // 'none' | 'generating' | 'done' | 'failed'
+} catch { /* 列已存在，忽略 */ }
+
+// Phase 3 Sprint 3.2: Whisper 转录字段迁移
+try {
+  db.exec(`ALTER TABLE feed_items ADD COLUMN transcript TEXT`);
+} catch { /* 列已存在，忽略 */ }
+try {
+  db.exec(`ALTER TABLE feed_items ADD COLUMN transcript_status TEXT DEFAULT 'none'`);
+  // 'none' | 'pending' | 'processing' | 'done' | 'failed'
+} catch { /* 列已存在，忽略 */ }
 
 // ─── 种子数据（首次启动时插入）──────────────────────────────────
 const tenantCount = (db.prepare("SELECT COUNT(*) as c FROM tenants").get() as any).c;

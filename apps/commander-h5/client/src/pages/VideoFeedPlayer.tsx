@@ -1,12 +1,13 @@
 /**
- * VideoFeedPlayer.tsx
- * TikTok 风格全屏竖版视频信息流（火山引擎 VOD 接入）
- * - 上下滑动切换视频（touch + wheel 手势）
- * - 自动播放（进入视口时）
- * - 右侧操作栏（点赞/收藏）
- * - 底部视频信息（公司名、描述、标签）
- * - 收藏后才能报价
- * - 行业过滤（默认只看自己行业）
+ * VideoFeedPlayer.tsx — Phase 3 Sprint 3.1 手势优化版
+ *
+ * 原生 App 级滑动体验：
+ *   ① 实时跟手 (touchMove → translateY)
+ *   ② 边界阻尼 (超出首/尾时阻力系数 0.25)
+ *   ③ 速度感知切换 (velocity > 0.3px/ms 或位移 > 30% 视口高度)
+ *   ④ 弹性回弹 (spring cubic-bezier)
+ *   ⑤ 动画锁 (isAnimating.current 防止快速连击)
+ *   ⑥ 鼠标滚轮防抖 (100ms 节流)
  */
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { videoFeedApi, VideoFeedItem } from '../lib/api';
@@ -15,6 +16,13 @@ import { toast } from 'sonner';
 interface Props {
   onBack: () => void;
 }
+
+// ─── 常量 ─────────────────────────────────────────────────────────────────────
+const SWITCH_THRESHOLD = 0.30;   // 位移超过视口高度 30% 触发切换
+const VELOCITY_THRESHOLD = 0.30; // px/ms 速度阈值
+const DAMPING = 0.25;            // 边界阻尼系数
+const ANIM_DURATION_MS = 320;    // 切换动画时长 (ms)
+const WHEEL_THROTTLE_MS = 100;   // 滚轮节流时长 (ms)
 
 // ─── 单个视频卡片 ─────────────────────────────────────────────────────────────
 function VideoCard({
@@ -198,11 +206,24 @@ export default function VideoFeedPlayer({ onBack }: Props) {
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(1);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const touchStartY = useRef(0);
-  const isAnimating = useRef(false);
 
-  // 加载视频列表
+  const containerRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+
+  // ─── 手势状态 (ref 避免 re-render 开销) ──────────────────────────────────
+  const isAnimating = useRef(false);
+  const touchStartY = useRef(0);
+  const touchStartTime = useRef(0);
+  const lastTouchY = useRef(0);
+  const dragOffset = useRef(0);       // 当前拖拽偏移量 (px)
+  const currentIndexRef = useRef(0);  // 与 state 同步的 ref，供手势回调使用
+
+  // 同步 currentIndex → ref
+  useEffect(() => {
+    currentIndexRef.current = currentIndex;
+  }, [currentIndex]);
+
+  // ─── 加载视频列表 ─────────────────────────────────────────────────────────
   const loadVideos = useCallback(async (pageNum: number, append = false) => {
     try {
       if (!append) setLoading(true);
@@ -213,7 +234,7 @@ export default function VideoFeedPlayer({ onBack }: Props) {
         setItems(res.items);
       }
       setHasMore(res.items.length === 10);
-    } catch (err) {
+    } catch {
       toast.error('加载视频失败');
     } finally {
       setLoading(false);
@@ -224,45 +245,126 @@ export default function VideoFeedPlayer({ onBack }: Props) {
     loadVideos(1);
   }, [loadVideos]);
 
-  // 切换到下一个视频
-  const goNext = useCallback(() => {
-    if (isAnimating.current) return;
-    setCurrentIndex((prev) => {
-      const next = prev + 1;
-      if (next >= items.length - 2 && hasMore) {
-        const nextPage = page + 1;
-        setPage(nextPage);
-        loadVideos(nextPage, true);
-      }
-      return Math.min(next, items.length - 1);
-    });
-  }, [items.length, hasMore, page, loadVideos]);
-
-  // 切换到上一个视频
-  const goPrev = useCallback(() => {
-    if (isAnimating.current) return;
-    setCurrentIndex((prev) => Math.max(prev - 1, 0));
+  // ─── 设置轨道 transform（无动画，实时跟手）────────────────────────────────
+  const setTrackOffset = useCallback((offset: number, animated = false) => {
+    const track = trackRef.current;
+    if (!track) return;
+    const baseY = -(currentIndexRef.current * 100);
+    const totalY = baseY + (offset / (window.innerHeight || 812)) * 100;
+    if (animated) {
+      track.style.transition = `transform ${ANIM_DURATION_MS}ms cubic-bezier(0.25, 0.46, 0.45, 0.94)`;
+    } else {
+      track.style.transition = 'none';
+    }
+    track.style.transform = `translateY(${totalY}%)`;
   }, []);
 
-  // 触摸手势
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartY.current = e.touches[0].clientY;
-  };
+  // ─── 切换到指定 index（带动画锁）────────────────────────────────────────
+  const goToIndex = useCallback((nextIndex: number, itemCount: number) => {
+    if (isAnimating.current) return;
+    const clamped = Math.max(0, Math.min(nextIndex, itemCount - 1));
+    isAnimating.current = true;
+    dragOffset.current = 0;
 
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    const dy = touchStartY.current - e.changedTouches[0].clientY;
-    if (Math.abs(dy) > 50) {
-      if (dy > 0) goNext();
-      else goPrev();
+    // 预加载下一页
+    if (clamped >= itemCount - 2 && hasMore) {
+      setPage((p) => {
+        const np = p + 1;
+        loadVideos(np, true);
+        return np;
+      });
     }
-  };
 
-  // 鼠标滚轮
+    setCurrentIndex(clamped);
+    currentIndexRef.current = clamped;
+
+    // 应用动画
+    const track = trackRef.current;
+    if (track) {
+      track.style.transition = `transform ${ANIM_DURATION_MS}ms cubic-bezier(0.25, 0.46, 0.45, 0.94)`;
+      track.style.transform = `translateY(-${clamped * 100}%)`;
+    }
+
+    setTimeout(() => {
+      isAnimating.current = false;
+    }, ANIM_DURATION_MS + 20);
+  }, [hasMore, loadVideos]);
+
+  // ─── Touch 事件处理 ───────────────────────────────────────────────────────
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (isAnimating.current) return;
+    touchStartY.current = e.touches[0].clientY;
+    lastTouchY.current = e.touches[0].clientY;
+    touchStartTime.current = Date.now();
+    dragOffset.current = 0;
+    // 立即取消过渡，准备跟手
+    const track = trackRef.current;
+    if (track) track.style.transition = 'none';
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (isAnimating.current) return;
+    const dy = e.touches[0].clientY - touchStartY.current;
+    lastTouchY.current = e.touches[0].clientY;
+    const viewH = window.innerHeight || 812;
+    const idx = currentIndexRef.current;
+    const total = items.length;
+
+    // 边界阻尼：首帧上滑 or 末帧下滑 时施加阻力
+    let offset = dy;
+    if ((idx === 0 && dy > 0) || (idx === total - 1 && dy < 0)) {
+      offset = dy * DAMPING;
+    }
+
+    dragOffset.current = offset;
+    setTrackOffset(offset, false);
+
+    // 阻止页面滚动
+    e.preventDefault();
+  }, [items.length, setTrackOffset]);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (isAnimating.current) return;
+    const dy = touchStartY.current - e.changedTouches[0].clientY; // 正 = 上滑
+    const dt = Date.now() - touchStartTime.current;
+    const velocity = Math.abs(dy) / Math.max(dt, 1); // px/ms
+    const viewH = window.innerHeight || 812;
+    const ratio = Math.abs(dy) / viewH;
+    const idx = currentIndexRef.current;
+
+    const shouldSwitch = ratio > SWITCH_THRESHOLD || velocity > VELOCITY_THRESHOLD;
+
+    if (shouldSwitch && dy > 0 && idx < items.length - 1) {
+      goToIndex(idx + 1, items.length);
+    } else if (shouldSwitch && dy < 0 && idx > 0) {
+      goToIndex(idx - 1, items.length);
+    } else {
+      // 回弹到当前位置
+      isAnimating.current = true;
+      dragOffset.current = 0;
+      const track = trackRef.current;
+      if (track) {
+        track.style.transition = `transform ${ANIM_DURATION_MS}ms cubic-bezier(0.34, 1.56, 0.64, 1)`;
+        track.style.transform = `translateY(-${idx * 100}%)`;
+      }
+      setTimeout(() => { isAnimating.current = false; }, ANIM_DURATION_MS + 20);
+    }
+  }, [items.length, goToIndex]);
+
+  // ─── 鼠标滚轮（节流）────────────────────────────────────────────────────
+  const wheelLastTime = useRef(0);
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
-    if (e.deltaY > 0) goNext();
-    else goPrev();
-  }, [goNext, goPrev]);
+    const now = Date.now();
+    if (now - wheelLastTime.current < WHEEL_THROTTLE_MS) return;
+    wheelLastTime.current = now;
+    const idx = currentIndexRef.current;
+    if (e.deltaY > 0) {
+      goToIndex(idx + 1, items.length);
+    } else {
+      goToIndex(idx - 1, items.length);
+    }
+  }, [items.length, goToIndex]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -271,7 +373,7 @@ export default function VideoFeedPlayer({ onBack }: Props) {
     return () => el.removeEventListener('wheel', handleWheel);
   }, [handleWheel]);
 
-  // 点赞
+  // ─── 点赞 ─────────────────────────────────────────────────────────────────
   const handleLike = useCallback(async (id: string) => {
     try {
       const res = await videoFeedApi.like(id);
@@ -287,7 +389,7 @@ export default function VideoFeedPlayer({ onBack }: Props) {
     }
   }, []);
 
-  // 收藏
+  // ─── 收藏 ─────────────────────────────────────────────────────────────────
   const handleBookmark = useCallback(async (id: string) => {
     const item = items.find((i) => i.id === id);
     if (item?.is_bookmarked) {
@@ -297,8 +399,8 @@ export default function VideoFeedPlayer({ onBack }: Props) {
     try {
       await videoFeedApi.bookmark(id);
       setItems((prev) =>
-        prev.map((item) =>
-          item.id === id ? { ...item, is_bookmarked: true } : item
+        prev.map((it) =>
+          it.id === id ? { ...it, is_bookmarked: true } : it
         )
       );
       toast.success('✓ 已加入询盘，可在「我的询盘」中报价');
@@ -307,6 +409,7 @@ export default function VideoFeedPlayer({ onBack }: Props) {
     }
   }, [items]);
 
+  // ─── 渲染 ─────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black flex items-center justify-center z-50">
@@ -336,8 +439,9 @@ export default function VideoFeedPlayer({ onBack }: Props) {
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 bg-black z-50 overflow-hidden"
+      className="fixed inset-0 bg-black z-50 overflow-hidden touch-none"
       onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
       {/* 返回按钮 */}
@@ -360,13 +464,18 @@ export default function VideoFeedPlayer({ onBack }: Props) {
         <span className="text-white/60 text-xs">{currentIndex + 1} / {items.length}</span>
       </div>
 
-      {/* 视频列表（CSS transform 切换） */}
+      {/* 视频轨道（CSS transform 实时跟手） */}
       <div
-        className="w-full h-full transition-transform duration-300 ease-out"
-        style={{ transform: `translateY(-${currentIndex * 100}%)` }}
+        ref={trackRef}
+        className="w-full"
+        style={{
+          height: `${items.length * 100}dvh`,
+          transform: `translateY(-${currentIndex * 100}%)`,
+          willChange: 'transform',
+        }}
       >
         {items.map((item, idx) => (
-          <div key={item.id} className="w-full h-full" style={{ height: '100dvh' }}>
+          <div key={item.id} className="w-full" style={{ height: '100dvh' }}>
             <VideoCard
               item={item}
               isActive={idx === currentIndex}
@@ -377,7 +486,7 @@ export default function VideoFeedPlayer({ onBack }: Props) {
         ))}
       </div>
 
-      {/* 上下滑动提示（首次进入） */}
+      {/* 上滑提示（首次进入，首屏且有下一个） */}
       {currentIndex === 0 && items.length > 1 && (
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-1 animate-bounce pointer-events-none">
           <svg className="w-5 h-5 text-white/50" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">

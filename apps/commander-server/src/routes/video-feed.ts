@@ -1,16 +1,18 @@
 /**
- * 视频信息流路由 (Phase 3 - 火山引擎 VOD)
+ * 视频信息流路由 (Phase 3 - 火山引擎 VOD 官方 SDK 版)
  * GET  /video-feed                获取视频信息流（行业过滤 + 分页）
  * GET  /video-feed/:id/play       获取单个视频播放信息
  * POST /video-feed/:id/like       点赞
  * POST /video-feed/:id/bookmark   收藏（收藏后才能报价）
  * GET  /video-feed/upload/token   获取上传凭证（管理员）
  * POST /video-feed/upload/commit  提交上传完成（管理员）
+ * POST /video-feed/:id/transcript 触发 Whisper 视频转录（Sprint 3.2）
  */
 import { Hono } from 'hono';
 import db from '../db/index.js';
 import { authMiddleware } from '../middleware/auth.js';
 import vodService from '../lib/volcengine-vod.js';
+import { transcribeVideo } from '../services/whisper.js';
 
 const router = new Hono();
 
@@ -25,16 +27,16 @@ router.get('/upload/token', authMiddleware, async (c) => {
 
   try {
     const tokenData = await vodService.getUploadAuthToken(VOLC_SPACE_NAME);
-    // 解析火山引擎响应结构： Result.Data.UploadAddress
+    // 官方 SDK 兼容层：Result.Data.UploadAddress
     const uploadAddress = tokenData?.Result?.Data?.UploadAddress || {};
-    const storeInfos = uploadAddress.StoreInfos || [];
-    const uploadHosts = uploadAddress.UploadHosts || [];
-    const sessionKey = uploadAddress.SessionKey || '';
-    
+    const storeInfos = (uploadAddress as any).StoreInfos || [];
+    const uploadHosts = (uploadAddress as any).UploadHosts || [];
+    const sessionKey = (uploadAddress as any).SessionKey || '';
+
     const uploadHost = uploadHosts[0] || 'tob-upload-y.volcvod.com';
     const storeUri = storeInfos[0]?.StoreUri || '';
-    return c.json({ 
-      success: true, 
+    return c.json({
+      success: true,
       data: {
         sessionKey,
         uploadHost,
@@ -42,13 +44,13 @@ router.get('/upload/token', authMiddleware, async (c) => {
         uploadUrl: `https://${uploadHost}`,
         auth: storeInfos[0]?.Auth || '',
         spaceName: VOLC_SPACE_NAME,
-      }
+      },
     });
   } catch (err: any) {
-    console.error('VOD getUploadAuthToken error:', err?.response?.data || err.message);
-    return c.json({ 
+    console.error('VOD getUploadAuthToken error:', err?.message || err);
+    return c.json({
       error: '获取上传凭证失败',
-      detail: err?.response?.data || err.message,
+      detail: err?.message || String(err),
     }, 500);
   }
 });
@@ -68,14 +70,20 @@ router.post('/upload/commit', authMiddleware, async (c) => {
   }
 
   try {
-    // 获取视频信息（封面图、时长等）
+    // 获取视频元数据（封面图、时长）— 官方 SDK 版
     let coverUrl = '';
     let duration = 0;
     try {
-      const mediaInfo = await vodService.getMediaInfo(vid, VOLC_SPACE_NAME);
-      const basicInfo = mediaInfo?.Result?.MediaBasicInfo;
-      coverUrl = basicInfo?.CoverUrl || '';
-      duration = basicInfo?.Duration || 0;
+      const mediaResult = await vodService.getMediaInfo(vid, VOLC_SPACE_NAME);
+      // 官方 SDK: Result.MediaInfoList[0].BasicInfo
+      const basicInfo = (mediaResult as any)?.MediaInfoList?.[0]?.BasicInfo;
+      // PosterUri 是相对路径，需拼接 CDN 域名；若为空则留空
+      coverUrl = basicInfo?.PosterUri
+        ? `https://vod.volccdn.com/${basicInfo.PosterUri}`
+        : '';
+      // 时长从 SourceInfo 或 TranscodeInfos 获取
+      const sourceInfo = (mediaResult as any)?.MediaInfoList?.[0]?.SourceInfo;
+      duration = sourceInfo?.VideoStreamMeta?.Duration || 0;
     } catch (e) {
       console.warn('获取媒资信息失败，继续保存:', e);
     }
@@ -103,12 +111,12 @@ router.post('/upload/commit', authMiddleware, async (c) => {
       new Date().toISOString()
     );
 
-    return c.json({ 
-      success: true, 
+    return c.json({
+      success: true,
       item_id: itemId,
       vid,
       cover_url: coverUrl,
-      message: '视频已提交，等待审核后发布' 
+      message: '视频已提交，等待审核后发布',
     });
   } catch (err: any) {
     console.error('commit upload error:', err);
@@ -141,7 +149,7 @@ router.get('/', authMiddleware, (c) => {
 
   // 查询视频类型的 feed_items
   let query = `
-    SELECT 
+    SELECT
       fi.*,
       CASE WHEN b.id IS NOT NULL THEN 1 ELSE 0 END as is_bookmarked,
       COALESCE(fi.likes_count, 0) as likes_count,
@@ -209,13 +217,30 @@ router.get('/:id/play', authMiddleware, async (c) => {
   }
 
   try {
-    const playInfo = await vodService.getPlayInfo(vid, VOLC_SPACE_NAME);
-    return c.json({ item, vid, play_info: playInfo });
+    // 官方 SDK: getPlayInfo 返回 Result（VodGetPlayInfoResult）
+    const playResult = await vodService.getPlayInfo(vid, VOLC_SPACE_NAME);
+    // 提取最佳播放地址（优先 HLS，降级 MP4）
+    const playInfoList = (playResult as any)?.PlayInfoList || [];
+    const hlsPlay = playInfoList.find((p: any) => p.Format === 'hls' || p.Format === 'm3u8');
+    const mp4Play = playInfoList.find((p: any) => p.Format === 'mp4');
+    const bestPlay = hlsPlay || mp4Play || playInfoList[0];
+    const playUrl = bestPlay?.MainPlayUrl || '';
+    const posterUrl = (playResult as any)?.PosterUrl || item.cover_url || '';
+    const duration = (playResult as any)?.Duration || item.duration || 0;
+
+    return c.json({
+      item,
+      vid,
+      play_url: playUrl,
+      poster_url: posterUrl,
+      duration,
+      play_info: playResult,
+    });
   } catch (err: any) {
-    console.error('VOD getPlayInfo error:', err?.response?.data || err.message);
-    return c.json({ 
-      error: '获取播放信息失败', 
-      detail: err?.response?.data || err.message,
+    console.error('VOD getPlayInfo error:', err?.message || err);
+    return c.json({
+      error: '获取播放信息失败',
+      detail: err?.message || String(err),
       item,
       vid,
     }, 500);
@@ -225,12 +250,12 @@ router.get('/:id/play', authMiddleware, async (c) => {
 // ─── 点赞 ──────────────────────────────────────────────────────────────────
 router.post('/:id/like', authMiddleware, (c) => {
   const { id } = c.req.param();
-  
+
   const item = db.prepare(`SELECT id, likes_count FROM feed_items WHERE id = ?`).get(id) as any;
   if (!item) return c.json({ error: '不存在' }, 404);
 
   db.prepare(`UPDATE feed_items SET likes_count = COALESCE(likes_count, 0) + 1 WHERE id = ?`).run(id);
-  
+
   return c.json({ success: true, likes_count: (item.likes_count || 0) + 1 });
 });
 
@@ -261,6 +286,62 @@ router.post('/:id/bookmark', authMiddleware, (c) => {
     );
     return c.json({ success: true, is_bookmarked: true, message: '已收藏，现在可以发起报价' });
   }
+});
+
+// ─── Whisper 视频转录（Sprint 3.2）────────────────────────────────────────────
+// POST /video-feed/:id/transcript
+// 触发异步转录，立即返回 202 Accepted；转录完成后可通过 GET /:id/transcript 查询
+router.post('/:id/transcript', authMiddleware, async (c) => {
+  const { id } = c.req.param();
+
+  const item = db.prepare(`
+    SELECT id, media_type, transcript_status, transcript FROM feed_items WHERE id = ?
+  `).get(id) as any;
+
+  if (!item) return c.json({ error: '视频不存在' }, 404);
+  if (item.media_type !== 'video') return c.json({ error: '仅支持视频类型转录' }, 400);
+  if (item.transcript_status === 'processing') {
+    return c.json({ status: 'processing', message: '转录正在进行中，请稍后查询' });
+  }
+  if (item.transcript_status === 'done') {
+    return c.json({
+      status: 'done',
+      transcript: item.transcript,
+      message: '转录已完成',
+    });
+  }
+
+  // 标记为 pending，立即返回 202
+  db.prepare(`UPDATE feed_items SET transcript_status = 'pending' WHERE id = ?`).run(id);
+
+  // 异步执行转录（不 await，后台运行）
+  transcribeVideo(id).catch((err) => {
+    console.error(`[Whisper] 后台转录失败 ${id}:`, err?.message || err);
+  });
+
+  return c.json({
+    status: 'pending',
+    message: '转录任务已提交，通常需要 1-3 分钟，请稍后查询结果',
+  }, 202);
+});
+
+// ─── 查询转录结果 ──────────────────────────────────────────────────────────────
+// GET /video-feed/:id/transcript
+router.get('/:id/transcript', authMiddleware, (c) => {
+  const { id } = c.req.param();
+
+  const item = db.prepare(`
+    SELECT id, title, transcript_status, transcript FROM feed_items WHERE id = ?
+  `).get(id) as any;
+
+  if (!item) return c.json({ error: '视频不存在' }, 404);
+
+  return c.json({
+    id: item.id,
+    title: item.title,
+    transcript_status: item.transcript_status || 'none',
+    transcript: item.transcript || null,
+  });
 });
 
 export default router;

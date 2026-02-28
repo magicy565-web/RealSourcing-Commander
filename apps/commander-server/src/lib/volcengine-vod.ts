@@ -1,177 +1,98 @@
 /**
- * 火山引擎视频点播 (VOD) 服务封装
- * 使用 HMAC-SHA256 签名机制直接调用 REST API
- * 
- * API 版本说明：
- * - 上传相关 (ApplyUploadInfo / CommitUploadInfo): Version=2020-08-01
- * - 播放相关 (GetPlayInfo): Version=2020-08-01
- * - 媒资管理 (GetMediaInfos): Version=2022-12-01
+ * 火山引擎 VOD 服务封装 — 官方 SDK 版本 (Phase 3 重构)
+ *
+ * 从手动 HMAC-SHA256 签名方案迁移至 @volcengine/openapi 官方 SDK，
+ * 降低维护成本，获得完整 API 覆盖和官方错误处理支持。
+ *
+ * 环境变量：
+ *   VOLC_ACCESS_KEY_ID     火山引擎 Access Key ID
+ *   VOLC_SECRET_ACCESS_KEY 火山引擎 Secret Access Key
+ *   VOLC_SPACE_NAME        VOD 空间名称（默认 realsourcing-commander）
+ *
+ * 官方文档：https://www.volcengine.com/docs/4/83012
  */
-import crypto from 'crypto';
-import axios from 'axios';
-
-const VOD_HOST = 'vod.volcengineapi.com';
-const VOD_REGION = 'cn-north-1';
-const VOD_SERVICE = 'vod';
+import { vodOpenapi } from '@volcengine/openapi';
 
 const AK = process.env.VOLC_ACCESS_KEY_ID || '';
 const SK = process.env.VOLC_SECRET_ACCESS_KEY || '';
 
-// ─── 签名工具 ───────────────────────────────────────────────────────────────
+// 初始化 VodService 实例，通过构造函数传入凭证（推荐方式）
+// serviceName 由 VodService 内部默认设置为 'vod'，无需手动传入
+const vodService = new vodOpenapi.VodService();
+vodService.setAccessKeyId(AK);
+vodService.setSecretKey(SK);
 
-function hmacSHA256(key: Buffer | string, data: string): Buffer {
-  return crypto.createHmac('sha256', key).update(data).digest();
-}
-
-function sha256Hex(data: string): string {
-  return crypto.createHash('sha256').update(data).digest('hex');
-}
-
-function getSigningKey(secretKey: string, date: string, region: string, service: string): Buffer {
-  const kDate = hmacSHA256(secretKey, date);
-  const kRegion = hmacSHA256(kDate, region);
-  const kService = hmacSHA256(kRegion, service);
-  const kSigning = hmacSHA256(kService, 'request');
-  return kSigning;
-}
-
-function buildSignedRequest(action: string, version: string, params: Record<string, string | number>, body: string = '') {
-  const now = new Date();
-  const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
-  const timeStr = now.toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
-
-  // Query string
-  const queryParams: Record<string, string> = {
-    Action: action,
-    Version: version,
-    ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])),
-  };
-  const sortedKeys = Object.keys(queryParams).sort();
-  const canonicalQueryString = sortedKeys
-    .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(queryParams[k])}`)
-    .join('&');
-
-  // Headers
-  const contentHash = sha256Hex(body);
-  const headers: Record<string, string> = {
-    'content-type': 'application/json',
-    'host': VOD_HOST,
-    'x-content-sha256': contentHash,
-    'x-date': timeStr,
-  };
-  const signedHeaderKeys = Object.keys(headers).sort();
-  const canonicalHeaders = signedHeaderKeys.map(k => `${k}:${headers[k]}`).join('\n') + '\n';
-  const signedHeaders = signedHeaderKeys.join(';');
-
-  // Canonical request
-  const canonicalRequest = [
-    'GET',
-    '/',
-    canonicalQueryString,
-    canonicalHeaders,
-    signedHeaders,
-    contentHash,
-  ].join('\n');
-
-  // String to sign
-  const credentialScope = `${dateStr}/${VOD_REGION}/${VOD_SERVICE}/request`;
-  const stringToSign = [
-    'HMAC-SHA256',
-    timeStr,
-    credentialScope,
-    sha256Hex(canonicalRequest),
-  ].join('\n');
-
-  // Signature
-  const signingKey = getSigningKey(SK, dateStr, VOD_REGION, VOD_SERVICE);
-  const signature = hmacSHA256(signingKey, stringToSign).toString('hex');
-
-  // Authorization header
-  const authorization = `HMAC-SHA256 Credential=${AK}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
-
-  return {
-    url: `https://${VOD_HOST}/?${canonicalQueryString}`,
-    headers: {
-      ...headers,
-      Authorization: authorization,
-    },
-  };
-}
-
-// ─── VOD API 封装 ─────────────────────────────────────────────────────────────
-
+// ─── 获取上传凭证（ApplyUploadInfo）────────────────────────────────────────────
 /**
- * 获取视频上传地址和凭证（ApplyUploadInfo，版本 2020-08-01）
- * 返回 UploadAddress 和 UploadAuth，前端用这两个字段直传 TOS
+ * 申请 TOS 直传凭证。
+ * 前端使用 StoreUri + Auth 直接 PUT 到 TOS，无需经过后端中转。
  */
 export async function applyUploadInfo(spaceName: string) {
-  // FileType 默认为 media，上传音视频时无需传入
-  const { url, headers } = buildSignedRequest('ApplyUploadInfo', '2020-08-01', {
-    SpaceName: spaceName,
-  });
-  const res = await axios.get(url, { headers });
-  return res.data;
+  const res = await vodService.ApplyUploadInfo({ SpaceName: spaceName });
+  return res.Result;
 }
 
+// ─── 确认上传完成（CommitUploadInfo）──────────────────────────────────────────
 /**
- * 确认上传完成（CommitUploadInfo，版本 2020-08-01）
- * 前端上传完成后，调用此接口通知 VOD 服务端完成上传
+ * 前端上传完成后，通知 VOD 服务端完成上传流程，获取 Vid。
  */
 export async function commitUploadInfo(spaceName: string, sessionKey: string) {
-  const { url, headers } = buildSignedRequest('CommitUploadInfo', '2020-08-01', {
+  const res = await vodService.CommitUploadInfo({
     SpaceName: spaceName,
     SessionKey: sessionKey,
   });
-  const res = await axios.get(url, { headers });
-  return res.data;
+  return res.Result;
 }
 
+// ─── 获取视频播放信息（GetPlayInfo）───────────────────────────────────────────
 /**
- * 获取视频播放信息（GetPlayInfo，版本 2020-08-01）
- * 通过 Vid 获取真实播放地址（HLS/MP4）
+ * 通过 Vid 获取真实播放地址（HLS/MP4）及封面图。
+ * spaceName 参数保留以兼容旧调用签名，SDK 版本无需传入。
  */
-export async function getPlayInfo(vid: string, spaceName: string) {
-  const { url, headers } = buildSignedRequest('GetPlayInfo', '2020-08-01', {
-    Vid: vid,
-    SpaceName: spaceName,
-    Ssl: 1,
-    NeedThumbs: 1,
-  });
-  const res = await axios.get(url, { headers });
-  return res.data;
+export async function getPlayInfo(vid: string, _spaceName?: string) {
+  const res = await vodService.GetPlayInfo({ Vid: vid });
+  return res.Result;
 }
 
+// ─── 查询媒资信息（GetMediaInfos）─────────────────────────────────────────────
 /**
- * 查询媒资信息（GetMediaInfos，版本 2022-12-01）
- * 获取视频封面图、时长等元数据
+ * 获取视频封面图、时长等元数据。
+ * spaceName 参数保留以兼容旧调用签名，SDK 版本通过 Vids 查询。
  */
-export async function getMediaInfo(vid: string, spaceName: string) {
-  const { url, headers } = buildSignedRequest('GetMediaInfos', '2022-12-01', {
-    Vids: vid,
-    SpaceName: spaceName,
-  });
-  const res = await axios.get(url, { headers });
-  return res.data;
+export async function getMediaInfo(vid: string, _spaceName?: string) {
+  const res = await vodService.GetMediaInfos({ Vids: vid });
+  return res.Result;
 }
 
+// ─── 获取媒资列表（GetMediaList）──────────────────────────────────────────────
 /**
- * 获取媒资列表（GetMediaList，版本 2022-12-01）
+ * 分页获取 VOD 空间内的媒资列表。
  */
-export async function listMediaInfos(spaceName: string, pageNum: number = 1, pageSize: number = 20) {
-  const { url, headers } = buildSignedRequest('GetMediaList', '2022-12-01', {
+export async function listMediaInfos(spaceName: string, pageNum = 1, pageSize = 20) {
+  const offset = ((pageNum - 1) * pageSize).toString();
+  const res = await vodService.GetMediaList({
     SpaceName: spaceName,
-    Offset: (pageNum - 1) * pageSize,
-    PageSize: pageSize,
+    Offset: offset,
+    PageSize: pageSize.toString(),
   });
-  const res = await axios.get(url, { headers });
-  return res.data;
+  return res.Result;
 }
 
+// ─── 获取上传凭证（兼容旧接口名称）──────────────────────────────────────────
 /**
- * 获取上传凭证（用于管理员后台，返回 ApplyUploadInfo 的结果）
+ * 兼容旧版 getUploadAuthToken 调用，内部委托给 applyUploadInfo。
+ * 将官方 SDK 返回结构适配为旧版格式，保持 video-feed.ts 路由的兼容性。
  */
 export async function getUploadAuthToken(spaceName: string) {
-  return applyUploadInfo(spaceName);
+  const result = await applyUploadInfo(spaceName);
+  return {
+    Result: {
+      Data: {
+        // 官方 SDK: VodApplyUploadInfoResult.Data.UploadAddress
+        UploadAddress: result?.Data?.UploadAddress ?? {},
+      },
+    },
+  };
 }
 
 export default {
@@ -181,4 +102,6 @@ export default {
   getMediaInfo,
   listMediaInfos,
   getUploadAuthToken,
+  // 暴露原始 VodService 实例，供高级用途（如 UploadMedia、StartWorkflow 等）
+  vodService,
 };

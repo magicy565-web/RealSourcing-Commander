@@ -1,28 +1,95 @@
 /**
- * Commander 5.0 — OpenClaw 管理路由
+ * Commander 5.0 — OpenClaw 管理路由 (Phase 3 Sprint 3.1 — 故障自愈版)
  *
- * GET  /api/v1/openclaw/status          实例状态 + 社媒账号
- * GET  /api/v1/openclaw/logs            操作日志
- * POST /api/v1/openclaw/heartbeat       心跳上报（OpenClaw 调用）
- * POST /api/v1/openclaw/simulate-lead   模拟新询盘到达（演示用）
+ * 新增功能（Sprint 3.1）：
+ *   POST /api/v1/openclaw/report-failure  上报操作失败（连续失败自动休眠 + 飞书告警）
+ *   POST /api/v1/openclaw/report-success  上报操作成功（重置失败计数）
+ *   GET  /api/v1/openclaw/self-heal-status  查看自愈状态
  *
- * Phase 3 M6 — 安全增强:
- * POST /api/v1/openclaw/pause           暂停实例
- * POST /api/v1/openclaw/resume          恢复实例
- * PUT  /api/v1/openclaw/ops-limit       更新每日操作上限
- * PUT  /api/v1/openclaw/account/:id/health  更新账号健康状态
- * GET  /api/v1/openclaw/security-logs   安全事件日志
- * GET  /api/v1/openclaw/work-hours      获取工作时间段
- * PUT  /api/v1/openclaw/work-hours      设置工作时间段
+ * 自愈逻辑：
+ *   连续失败 ≥ 3 次 → 进入 sleeping 状态，指数退避休眠
+ *   休眠时长：3次=5min, 6次=15min, 9次+=60min
+ *   心跳上报时自动检查 sleep_until，超时则恢复 online
+ *   进入休眠时推送飞书告警卡片
+ *
+ * 原有接口（保持不变）：
+ * GET  /api/v1/openclaw/status
+ * GET  /api/v1/openclaw/logs
+ * POST /api/v1/openclaw/heartbeat
+ * POST /api/v1/openclaw/simulate-lead
+ * POST /api/v1/openclaw/pause
+ * POST /api/v1/openclaw/resume
+ * PUT  /api/v1/openclaw/ops-limit
+ * PUT  /api/v1/openclaw/account/:id/health
+ * GET  /api/v1/openclaw/security-logs
+ * GET  /api/v1/openclaw/work-hours
+ * PUT  /api/v1/openclaw/work-hours
+ * GET  /api/v1/openclaw/delay-config
+ * PUT  /api/v1/openclaw/delay-config
  */
 import { Hono } from "hono";
 import db from "../db/index.js";
 import { authMiddleware } from "../middleware/auth.js";
-import { pushInquiryNotification } from "../services/feishu.js";
+import type { JWTPayload } from "../middleware/auth.js";
+import { pushInquiryNotification, sendFeishuCard } from "../services/feishu.js";
 
-const openclaw = new Hono();
+const openclaw = new Hono<{ Variables: { user: JWTPayload } }>();
 
-// 心跳接口不需要用户认证（OpenClaw 实例调用）
+// ─── 自愈常量 ─────────────────────────────────────────────────────────────────
+const FAILURE_THRESHOLD = 3;       // 连续失败次数阈值
+const SLEEP_DURATIONS_MS = [
+  5  * 60 * 1000,   // 3~5次：5 分钟
+  15 * 60 * 1000,   // 6~8次：15 分钟
+  60 * 60 * 1000,   // 9次+：60 分钟
+];
+
+function getSleepDuration(consecutiveFailures: number): number {
+  if (consecutiveFailures < 6) return SLEEP_DURATIONS_MS[0];
+  if (consecutiveFailures < 9) return SLEEP_DURATIONS_MS[1];
+  return SLEEP_DURATIONS_MS[2];
+}
+
+function formatDuration(ms: number): string {
+  const min = Math.round(ms / 60000);
+  return min >= 60 ? `${Math.round(min / 60)} 小时` : `${min} 分钟`;
+}
+
+// ─── 飞书自愈告警卡片 ─────────────────────────────────────────────────────────
+function createSelfHealAlertCard(params: {
+  instanceName: string;
+  consecutiveFailures: number;
+  sleepUntil: string;
+  sleepDurationMs: number;
+}) {
+  return {
+    msg_type: "interactive" as const,
+    card: {
+      config: { wide_screen_mode: { enable: true } },
+      header: {
+        title: { content: `⚠️ OpenClaw 故障自愈告警`, tag: "plain_text" as const },
+        template: "red" as const,
+      },
+      elements: [
+        {
+          tag: "div",
+          text: {
+            content: `**实例**：${params.instanceName}\n**连续失败**：${params.consecutiveFailures} 次\n**自动休眠**：${formatDuration(params.sleepDurationMs)}\n**恢复时间**：${new Date(params.sleepUntil).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}`,
+            tag: "lark_md",
+          },
+        },
+        {
+          tag: "div",
+          text: {
+            content: `> 系统已自动进入保护性休眠，避免账号被封禁。休眠结束后将自动恢复运行。如需立即恢复，请在 Commander 控制台手动点击「恢复」。`,
+            tag: "lark_md",
+          },
+        },
+      ],
+    },
+  };
+}
+
+// ─── 心跳接口（不需要用户认证，OpenClaw 实例调用）────────────────────────────
 openclaw.post("/heartbeat", async (c) => {
   const { instanceId, apiKey, status, opsToday } = await c.req.json();
 
@@ -34,19 +101,204 @@ openclaw.post("/heartbeat", async (c) => {
     return c.json({ error: "实例不存在或 API Key 无效" }, 401);
   }
 
+  const now = new Date().toISOString();
+
+  // ─── 自愈检查：若休眠期已过，自动恢复 online ─────────────────────────────
+  let resolvedStatus = status ?? "online";
+  if (instance.status === "sleeping" && instance.sleep_until) {
+    if (new Date(instance.sleep_until) <= new Date()) {
+      resolvedStatus = "online";
+      db.prepare(`
+        UPDATE openclaw_instances
+        SET status = 'online', sleep_until = NULL, consecutive_failures = 0
+        WHERE id = ?
+      `).run(instanceId);
+
+      // 记录自愈恢复日志
+      db.prepare(`
+        INSERT INTO agent_logs (id, tenant_id, instance_id, action_type, platform, status, credits_used, detail, created_at)
+        VALUES (lower(hex(randomblob(16))), ?, ?, 'self_heal_recovered', 'system', 'success', 0, ?, ?)
+      `).run(
+        instance.tenant_id, instanceId,
+        JSON.stringify({ message: "休眠期结束，自动恢复 online" }),
+        now
+      );
+    } else {
+      // 仍在休眠期，忽略心跳状态更新
+      return c.json({
+        success: true,
+        message: "实例正在休眠中",
+        sleeping: true,
+        sleep_until: instance.sleep_until,
+      });
+    }
+  }
+
   db.prepare(`
     UPDATE openclaw_instances
     SET status = ?, last_heartbeat = ?, ops_today = ?
     WHERE id = ?
-  `).run(status ?? "online", new Date().toISOString(), opsToday ?? instance.ops_today, instanceId);
+  `).run(resolvedStatus, now, opsToday ?? instance.ops_today, instanceId);
 
-  return c.json({ success: true, message: "心跳已记录" });
+  return c.json({
+    success: true,
+    message: "心跳已记录",
+    status: resolvedStatus,
+  });
 });
 
 // 以下接口需要认证
 openclaw.use("*", authMiddleware);
 
-// ─── 实例状态 ─────────────────────────────────────────────────
+// ─── 上报操作失败（自愈核心逻辑）────────────────────────────────────────────
+openclaw.post("/report-failure", async (c) => {
+  const user = c.get("user");
+  const { reason, platform } = await c.req.json().catch(() => ({}));
+
+  const instance = db.prepare(
+    "SELECT * FROM openclaw_instances WHERE tenant_id = ?"
+  ).get(user.tenantId) as any;
+
+  if (!instance) return c.json({ error: "实例不存在" }, 404);
+  if (instance.status === "sleeping") {
+    return c.json({
+      sleeping: true,
+      sleep_until: instance.sleep_until,
+      message: "实例正在休眠中，请等待自动恢复",
+    });
+  }
+
+  const now = new Date().toISOString();
+  const newFailures = (instance.consecutive_failures ?? 0) + 1;
+
+  db.prepare(`
+    UPDATE openclaw_instances
+    SET consecutive_failures = ?, last_failure_at = ?
+    WHERE id = ?
+  `).run(newFailures, now, instance.id);
+
+  // 记录失败日志
+  db.prepare(`
+    INSERT INTO agent_logs (id, tenant_id, instance_id, action_type, platform, status, credits_used, detail, created_at)
+    VALUES (lower(hex(randomblob(16))), ?, ?, 'operation_failed', ?, 'failed', 0, ?, ?)
+  `).run(
+    user.tenantId, instance.id,
+    platform ?? "system",
+    JSON.stringify({ reason: reason ?? "未知原因", consecutiveFailures: newFailures }),
+    now
+  );
+
+  // 达到阈值 → 进入休眠
+  if (newFailures >= FAILURE_THRESHOLD) {
+    const sleepMs = getSleepDuration(newFailures);
+    const sleepUntil = new Date(Date.now() + sleepMs).toISOString();
+
+    db.prepare(`
+      UPDATE openclaw_instances
+      SET status = 'sleeping', sleep_until = ?
+      WHERE id = ?
+    `).run(sleepUntil, instance.id);
+
+    // 记录休眠日志
+    db.prepare(`
+      INSERT INTO agent_logs (id, tenant_id, instance_id, action_type, platform, status, credits_used, detail, created_at)
+      VALUES (lower(hex(randomblob(16))), ?, ?, 'self_heal_sleeping', 'system', 'warning', 0, ?, ?)
+    `).run(
+      user.tenantId, instance.id,
+      JSON.stringify({
+        consecutiveFailures: newFailures,
+        sleepDurationMs: sleepMs,
+        sleepUntil,
+        reason: reason ?? "连续失败超过阈值",
+      }),
+      now
+    );
+
+    // 推送飞书告警（异步，不阻塞响应）
+    const tenant = db.prepare("SELECT feishu_webhook FROM tenants WHERE id = ?").get(user.tenantId) as any;
+    if (tenant?.feishu_webhook) {
+      const card = createSelfHealAlertCard({
+        instanceName: instance.name,
+        consecutiveFailures: newFailures,
+        sleepUntil,
+        sleepDurationMs: sleepMs,
+      });
+      sendFeishuCard(tenant.feishu_webhook, card).catch((e) =>
+        console.error("飞书自愈告警发送失败:", e)
+      );
+    }
+
+    return c.json({
+      sleeping: true,
+      consecutive_failures: newFailures,
+      sleep_until: sleepUntil,
+      sleep_duration: formatDuration(sleepMs),
+      message: `连续失败 ${newFailures} 次，已进入保护性休眠 ${formatDuration(sleepMs)}`,
+    });
+  }
+
+  return c.json({
+    sleeping: false,
+    consecutive_failures: newFailures,
+    remaining_before_sleep: FAILURE_THRESHOLD - newFailures,
+    message: `已记录失败（${newFailures}/${FAILURE_THRESHOLD}），再失败 ${FAILURE_THRESHOLD - newFailures} 次将触发休眠`,
+  });
+});
+
+// ─── 上报操作成功（重置失败计数）────────────────────────────────────────────
+openclaw.post("/report-success", (c) => {
+  const user = c.get("user");
+
+  const instance = db.prepare(
+    "SELECT * FROM openclaw_instances WHERE tenant_id = ?"
+  ).get(user.tenantId) as any;
+
+  if (!instance) return c.json({ error: "实例不存在" }, 404);
+
+  const prevFailures = instance.consecutive_failures ?? 0;
+  if (prevFailures > 0) {
+    db.prepare(`
+      UPDATE openclaw_instances SET consecutive_failures = 0 WHERE id = ?
+    `).run(instance.id);
+  }
+
+  return c.json({
+    success: true,
+    consecutive_failures: 0,
+    message: prevFailures > 0 ? `连续失败计数已重置（原为 ${prevFailures}）` : "运行正常",
+  });
+});
+
+// ─── 查看自愈状态 ─────────────────────────────────────────────────────────────
+openclaw.get("/self-heal-status", (c) => {
+  const user = c.get("user");
+
+  const instance = db.prepare(
+    "SELECT id, name, status, consecutive_failures, sleep_until, last_failure_at FROM openclaw_instances WHERE tenant_id = ?"
+  ).get(user.tenantId) as any;
+
+  if (!instance) return c.json({ error: "实例不存在" }, 404);
+
+  const isSleeping = instance.status === "sleeping" && instance.sleep_until;
+  const remainingMs = isSleeping
+    ? Math.max(0, new Date(instance.sleep_until).getTime() - Date.now())
+    : 0;
+
+  return c.json({
+    instanceId: instance.id,
+    instanceName: instance.name,
+    status: instance.status,
+    consecutiveFailures: instance.consecutive_failures ?? 0,
+    failureThreshold: FAILURE_THRESHOLD,
+    sleeping: isSleeping,
+    sleepUntil: instance.sleep_until ?? null,
+    remainingMs,
+    remainingFormatted: remainingMs > 0 ? formatDuration(remainingMs) : null,
+    lastFailureAt: instance.last_failure_at ?? null,
+  });
+});
+
+// ─── 实例状态 ─────────────────────────────────────────────────────────────────
 openclaw.get("/status", (c) => {
   const user = c.get("user");
 
@@ -69,7 +321,6 @@ openclaw.get("/status", (c) => {
     LIMIT 20
   `).all(user.tenantId) as any[];
 
-  // 今日操作统计
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const todayStr = today.toISOString();
@@ -84,8 +335,13 @@ openclaw.get("/status", (c) => {
     WHERE tenant_id = ? AND created_at >= ?
   `).get(user.tenantId, todayStr) as any;
 
-  // 读取工作时间段配置
   const config = safeParseJson(instance.config, {});
+
+  // 自愈状态
+  const isSleeping = instance.status === "sleeping" && instance.sleep_until;
+  const remainingMs = isSleeping
+    ? Math.max(0, new Date(instance.sleep_until).getTime() - Date.now())
+    : 0;
 
   return c.json({
     instance: {
@@ -97,8 +353,14 @@ openclaw.get("/status", (c) => {
       opsLimit: instance.ops_limit,
       opsPercent: Math.round((instance.ops_today / instance.ops_limit) * 100),
       workHours: config.workHours ?? null,
+      // 自愈字段
+      consecutiveFailures: instance.consecutive_failures ?? 0,
+      failureThreshold: FAILURE_THRESHOLD,
+      sleeping: isSleeping,
+      sleepUntil: instance.sleep_until ?? null,
+      sleepRemainingMs: remainingMs,
     },
-    accounts: accounts.map(a => ({
+    accounts: accounts.map((a) => ({
       id: a.id,
       platform: a.platform,
       accountName: a.account_name,
@@ -113,7 +375,7 @@ openclaw.get("/status", (c) => {
       successCount: todayStats.success_count,
       failCount: todayStats.fail_count,
     },
-    recentLogs: recentLogs.map(l => ({
+    recentLogs: recentLogs.map((l) => ({
       id: l.id,
       actionType: l.action_type,
       platform: l.platform,
@@ -125,7 +387,7 @@ openclaw.get("/status", (c) => {
   });
 });
 
-// ─── 操作日志 ─────────────────────────────────────────────────
+// ─── 操作日志 ─────────────────────────────────────────────────────────────────
 openclaw.get("/logs", (c) => {
   const user = c.get("user");
   const { platform, status, page = "1", limit = "30" } = c.req.query();
@@ -144,14 +406,14 @@ openclaw.get("/logs", (c) => {
   const rows = db.prepare(sql).all(...params) as any[];
 
   return c.json({
-    items: rows.map(l => ({
+    items: rows.map((l) => ({
       ...l,
       detail: safeParseJson(l.detail, {}),
     })),
   });
 });
 
-// ─── 模拟新询盘到达（演示用）──────────────────────────────────
+// ─── 模拟新询盘到达（演示用）─────────────────────────────────────────────────
 openclaw.post("/simulate-lead", async (c) => {
   const user = c.get("user");
 
@@ -198,7 +460,6 @@ openclaw.post("/simulate-lead", async (c) => {
     new Date().toISOString()
   );
 
-  // 记录 Agent 操作
   const instance = db.prepare("SELECT * FROM openclaw_instances WHERE tenant_id = ?").get(user.tenantId) as any;
   if (instance) {
     db.prepare(`
@@ -212,7 +473,6 @@ openclaw.post("/simulate-lead", async (c) => {
     );
   }
 
-  // 推送飞书通知
   pushInquiryNotification({
     id,
     buyer_name: `Test Buyer ${Math.floor(Math.random() * 1000)}`,
@@ -220,7 +480,7 @@ openclaw.post("/simulate-lead", async (c) => {
     product_name: product,
     estimated_value: Math.floor(Math.random() * 100000) + 5000,
     confidence_score: score,
-  }).catch(err => console.error("Failed to push Feishu inquiry notification:", err));
+  }).catch((err) => console.error("Failed to push Feishu inquiry notification:", err));
 
   return c.json({
     success: true,
@@ -230,7 +490,7 @@ openclaw.post("/simulate-lead", async (c) => {
   });
 });
 
-// ─── M6 安全增强: 暂停实例 ────────────────────────────────────
+// ─── M6 安全增强: 暂停实例 ────────────────────────────────────────────────────
 openclaw.post("/pause", (c) => {
   const user = c.get("user");
   const instance = db.prepare("SELECT * FROM openclaw_instances WHERE tenant_id = ?").get(user.tenantId) as any;
@@ -238,22 +498,26 @@ openclaw.post("/pause", (c) => {
 
   db.prepare("UPDATE openclaw_instances SET status = 'paused' WHERE id = ?").run(instance.id);
 
-  // 记录安全事件
   db.prepare(`
     INSERT INTO agent_logs (id, tenant_id, instance_id, action_type, platform, status, credits_used, detail, created_at)
     VALUES (lower(hex(randomblob(16))), ?, ?, 'security_pause', 'system', 'success', 0, ?, ?)
-  `).run(user.tenantId, instance.id, JSON.stringify({ reason: 'manual_pause', operator: user.userId }), new Date().toISOString());
+  `).run(user.tenantId, instance.id, JSON.stringify({ reason: "manual_pause", operator: user.userId }), new Date().toISOString());
 
   return c.json({ success: true, status: "paused", message: "OpenClaw 已暂停" });
 });
 
-// ─── M6 安全增强: 恢复实例 ────────────────────────────────────
+// ─── M6 安全增强: 恢复实例 ────────────────────────────────────────────────────
 openclaw.post("/resume", (c) => {
   const user = c.get("user");
   const instance = db.prepare("SELECT * FROM openclaw_instances WHERE tenant_id = ?").get(user.tenantId) as any;
   if (!instance) return c.json({ error: "实例不存在" }, 404);
 
-  db.prepare("UPDATE openclaw_instances SET status = 'online' WHERE id = ?").run(instance.id);
+  // 恢复时同时清除休眠状态和失败计数
+  db.prepare(`
+    UPDATE openclaw_instances
+    SET status = 'online', sleep_until = NULL, consecutive_failures = 0
+    WHERE id = ?
+  `).run(instance.id);
 
   db.prepare(`
     INSERT INTO agent_logs (id, tenant_id, instance_id, action_type, platform, status, credits_used, detail, created_at)
@@ -263,7 +527,7 @@ openclaw.post("/resume", (c) => {
   return c.json({ success: true, status: "online", message: "OpenClaw 已恢复" });
 });
 
-// ─── M6 安全增强: 更新每日操作上限 ───────────────────────────
+// ─── M6 安全增强: 更新每日操作上限 ───────────────────────────────────────────
 openclaw.put("/ops-limit", async (c) => {
   const user = c.get("user");
   const { opsLimit } = await c.req.json();
@@ -285,18 +549,17 @@ openclaw.put("/ops-limit", async (c) => {
   return c.json({ success: true, opsLimit, message: `每日操作上限已更新为 ${opsLimit}` });
 });
 
-// ─── M6 安全增强: 更新账号健康状态 ───────────────────────────
+// ─── M6 安全增强: 更新账号健康状态 ───────────────────────────────────────────
 openclaw.put("/account/:accountId/health", async (c) => {
   const user = c.get("user");
   const accountId = c.req.param("accountId");
   const { healthStatus } = await c.req.json();
 
-  const validStatuses = ["healthy", "warning", "suspended", "banned"];
+  const validStatuses = ["normal", "warning", "suspended", "banned"];
   if (!validStatuses.includes(healthStatus)) {
     return c.json({ error: `healthStatus 必须是: ${validStatuses.join(", ")}` }, 400);
   }
 
-  // 验证账号属于该租户
   const account = db.prepare(`
     SELECT sa.* FROM social_accounts sa
     JOIN openclaw_instances oi ON sa.instance_id = oi.id
@@ -307,7 +570,6 @@ openclaw.put("/account/:accountId/health", async (c) => {
 
   db.prepare("UPDATE social_accounts SET health_status = ? WHERE id = ?").run(healthStatus, accountId);
 
-  // 如果账号被封禁或暂停，自动停用
   if (healthStatus === "banned" || healthStatus === "suspended") {
     db.prepare("UPDATE social_accounts SET is_active = 0 WHERE id = ?").run(accountId);
   }
@@ -315,11 +577,14 @@ openclaw.put("/account/:accountId/health", async (c) => {
   return c.json({ success: true, healthStatus, message: `账号状态已更新为 ${healthStatus}` });
 });
 
-// ─── M6 安全增强: 安全事件日志 ───────────────────────────────
+// ─── M6 安全增强: 安全事件日志 ───────────────────────────────────────────────
 openclaw.get("/security-logs", (c) => {
   const user = c.get("user");
 
-  const securityActions = ["security_pause", "security_resume", "ops_limit_update", "account_suspended"];
+  const securityActions = [
+    "security_pause", "security_resume", "ops_limit_update", "account_suspended",
+    "self_heal_sleeping", "self_heal_recovered",
+  ];
   const placeholders = securityActions.map(() => "?").join(",");
 
   const rows = db.prepare(`
@@ -330,14 +595,14 @@ openclaw.get("/security-logs", (c) => {
   `).all(user.tenantId, ...securityActions) as any[];
 
   return c.json({
-    items: rows.map(l => ({
+    items: rows.map((l) => ({
       ...l,
       detail: safeParseJson(l.detail, {}),
     })),
   });
 });
 
-// ─── M6 安全增强: 工作时间段设置 ─────────────────────────────
+// ─── M6 安全增强: 工作时间段设置 ─────────────────────────────────────────────
 openclaw.get("/work-hours", (c) => {
   const user = c.get("user");
   const instance = db.prepare("SELECT * FROM openclaw_instances WHERE tenant_id = ?").get(user.tenantId) as any;
@@ -381,7 +646,7 @@ openclaw.put("/work-hours", async (c) => {
   return c.json({ success: true, workHours: newConfig.workHours, message: "工作时间段已更新" });
 });
 
-// ─── M6 随机延迟配置 GET/PUT ─────────────────────────────────
+// ─── M6 随机延迟配置 GET/PUT ──────────────────────────────────────────────────
 const DEFAULT_DELAY_CONFIG = {
   linkedin: { min: 3000, max: 8000 },
   whatsapp: { min: 2000, max: 5000 },
@@ -404,7 +669,6 @@ openclaw.put("/delay-config", async (c) => {
   const body = await c.req.json();
   const { linkedin, whatsapp, facebook, email, readingPauseProbability, readingPauseDuration } = body;
 
-  // 校验延迟范围
   for (const [platform, range] of Object.entries({ linkedin, whatsapp, facebook, email })) {
     if (range && typeof range === "object") {
       const r = range as any;
@@ -434,17 +698,22 @@ openclaw.put("/delay-config", async (c) => {
   const newConfig = { ...existingConfig, delayConfig: newDelayConfig };
   db.prepare("UPDATE openclaw_instances SET config = ? WHERE id = ?").run(JSON.stringify(newConfig), instance.id);
 
-  // 记录安全审计日志
   db.prepare(`
-    INSERT INTO openclaw_logs (id, tenant_id, instance_id, action, target, result, ops_count, payload, created_at)
+    INSERT INTO agent_logs (id, tenant_id, instance_id, action_type, platform, status, credits_used, detail, created_at)
     VALUES (lower(hex(randomblob(16))), ?, ?, 'delay_config_update', 'system', 'success', 0, ?, ?)
-  `).run(user.tenantId, instance.id, JSON.stringify({ operator: user.userId, newDelayConfig }), new Date().toISOString());
+  `).run(
+    user.tenantId, instance.id,
+    JSON.stringify({ operator: user.userId, newDelayConfig }),
+    new Date().toISOString()
+  );
 
   return c.json({ success: true, delayConfig: newDelayConfig, message: "随机延迟配置已更新" });
 });
 
+// ─── 工具函数 ─────────────────────────────────────────────────────────────────
 function safeParseJson(str: string | null, fallback: any) {
   if (!str) return fallback;
   try { return JSON.parse(str); } catch { return fallback; }
 }
+
 export default openclaw;

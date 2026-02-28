@@ -17,8 +17,10 @@ import { authMiddleware } from "../middleware/auth.js";
 import { generateInquiryDraft, generateFollowupDraft } from "../services/ai.js";
 import { addBitableRecord, createQuotationNotificationCard, sendFeishuCard, pushQuotationNotification } from "../services/feishu.js";
 import { executeAiFollowup } from "../services/followup.js";
+import { generateConceptImage } from "../services/conceptImage.js";
 
-const inquiries = new Hono();
+import type { JWTPayload } from "../middleware/auth.js";
+const inquiries = new Hono<{ Variables: { user: JWTPayload } }>();
 inquiries.use("*", authMiddleware);
 
 // ─── 列表 ─────────────────────────────────────────────────────
@@ -453,3 +455,59 @@ inquiries.post("/:id/transfer", async (c) => {
 });
 
 export default inquiries;
+
+// ─── AI 产品概念图 (Sprint 3.2) ───────────────────────────────────────────────
+// POST /api/v1/inquiries/:id/concept-image  触发异步生成，立即返回 202
+inquiries.post("/:id/concept-image", async (c) => {
+  const user = c.get("user");
+  const { id } = c.req.param();
+
+  const row = db.prepare(
+    "SELECT id, product_name, concept_image_status FROM inquiries WHERE id = ? AND tenant_id = ?"
+  ).get(id, user.tenantId) as any;
+
+  if (!row) return c.json({ error: "询盘不存在" }, 404);
+  if (!row.product_name) return c.json({ error: "询盘缺少产品名称，无法生成概念图" }, 400);
+
+  if (row.concept_image_status === "generating") {
+    return c.json({ status: "generating", message: "概念图正在生成中，请稍后查询" });
+  }
+  if (row.concept_image_status === "done") {
+    const done = db.prepare(
+      "SELECT concept_image_url FROM inquiries WHERE id = ?"
+    ).get(id) as any;
+    return c.json({ status: "done", image_url: done?.concept_image_url, message: "概念图已生成" });
+  }
+
+  // 标记为 generating，立即返回 202
+  db.prepare("UPDATE inquiries SET concept_image_status = 'generating' WHERE id = ?").run(id);
+
+  // 异步生成（不 await）
+  generateConceptImage(id).catch((err) => {
+    console.error(`[ConceptImage] 后台生成失败 ${id}:`, err?.message || err);
+  });
+
+  return c.json({
+    status: "generating",
+    message: "AI 概念图生成任务已提交，通常需要 30-60 秒，请稍后查询结果",
+  }, 202);
+});
+
+// GET /api/v1/inquiries/:id/concept-image  查询生成状态与结果
+inquiries.get("/:id/concept-image", async (c) => {
+  const user = c.get("user");
+  const { id } = c.req.param();
+
+  const row = db.prepare(
+    "SELECT id, product_name, concept_image_url, concept_image_status FROM inquiries WHERE id = ? AND tenant_id = ?"
+  ).get(id, user.tenantId) as any;
+
+  if (!row) return c.json({ error: "询盘不存在" }, 404);
+
+  return c.json({
+    id: row.id,
+    product_name: row.product_name,
+    status: row.concept_image_status || "none",
+    image_url: row.concept_image_url || null,
+  });
+});
