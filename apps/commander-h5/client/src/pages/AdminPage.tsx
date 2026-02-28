@@ -5,7 +5,7 @@
  * M8: Web 监控后台
  */
 import { useState, useEffect, useCallback } from "react";
-import { adminApi, feedApi, KnowledgeItem, MonitorData, FeedItem } from "../lib/api";
+import { adminApi, feedApi, videoFeedApi, KnowledgeItem, MonitorData, FeedItem, VideoUploadToken } from "../lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 
 type AdminTab = "monitor" | "feed-upload" | "knowledge" | "feed-manage";
@@ -196,6 +196,10 @@ function FeedUploadPanel() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // VOD 视频上传状态
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStage, setUploadStage] = useState<"idle" | "token" | "uploading" | "committing" | "done">("idle");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -203,8 +207,37 @@ function FeedUploadPanel() {
     setSuccess(null);
     setError(null);
     try {
+      let finalMediaUrl = form.media_url;
+
+      // 视频类型：接入火山引擎 VOD 上传流程
+      if (form.media_type === "video" && videoFile) {
+        // Step 1: 获取上传凭证
+        setUploadStage("token");
+        const token = await videoFeedApi.getUploadToken(videoFile.name);
+
+        // Step 2: 直传到 TOS
+        setUploadStage("uploading");
+        setUploadProgress(0);
+        await videoFeedApi.uploadToTOS(token, videoFile, (pct) => setUploadProgress(pct));
+
+        // Step 3: 确认上传，获取视频信息
+        setUploadStage("committing");
+        const videoItem = await videoFeedApi.commitUpload({
+          sessionKey: token.sessionKey,
+          title: form.product_name || form.buyer_company,
+          description: form.raw_content,
+          industry: form.industry,
+          tags: [form.buyer_country, form.industry].filter(Boolean),
+          company_name: form.buyer_company,
+        });
+        finalMediaUrl = videoItem.play_url || "";
+        setUploadStage("done");
+      }
+
+      // 上传询盘卡片到信息流
       const res = await feedApi.uploadItem({
         ...form,
+        media_url: finalMediaUrl,
         estimated_value: parseFloat(form.estimated_value) || 0,
       } as any);
       setSuccess(`✓ 已上传：${res.buyer_company} - ${res.product_name}（置信度 ${res.confidence_score} 分）`);
@@ -215,8 +248,12 @@ function FeedUploadPanel() {
         media_type: "text",
         media_url: "",
       });
+      setVideoFile(null);
+      setUploadProgress(0);
+      setUploadStage("idle");
     } catch (err: any) {
       setError(err.message ?? "上传失败");
+      setUploadStage("idle");
     } finally {
       setSubmitting(false);
     }
@@ -284,13 +321,70 @@ function FeedUploadPanel() {
             ))}
           </div>
         </div>
-        {form.media_type !== "text" && (
+        {form.media_type === "image" && (
           <FormField
-            label={form.media_type === "image" ? "图片 URL" : "视频 URL"}
+            label="图片 URL"
             value={form.media_url}
             onChange={(v) => setForm({ ...form, media_url: v })}
-            placeholder={form.media_type === "image" ? "https://example.com/product.jpg" : "https://example.com/video.mp4"}
+            placeholder="https://example.com/product.jpg"
           />
+        )}
+        {form.media_type === "video" && (
+          <div>
+            <label className="text-xs font-medium text-gray-600 block mb-1">
+              视频文件 <span className="text-gray-400">(支持 MP4/MOV/AVI，建议 30-60s)</span>
+            </label>
+            {!videoFile ? (
+              <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-indigo-300 rounded-xl cursor-pointer bg-indigo-50 hover:bg-indigo-100 transition-colors">
+                <span className="text-2xl mb-1">🎥</span>
+                <span className="text-xs text-indigo-600 font-medium">点击选择视频文件</span>
+                <input
+                  type="file"
+                  accept="video/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) setVideoFile(f);
+                  }}
+                />
+              </label>
+            ) : (
+              <div className="bg-indigo-50 rounded-xl p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-indigo-700 truncate max-w-[200px]">{videoFile.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => { setVideoFile(null); setUploadProgress(0); setUploadStage("idle"); }}
+                    className="text-xs text-red-500 hover:text-red-700"
+                  >
+                    × 移除
+                  </button>
+                </div>
+                <div className="text-xs text-gray-400">
+                  {(videoFile.size / 1024 / 1024).toFixed(1)} MB
+                </div>
+                {uploadStage !== "idle" && (
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-indigo-600">
+                        {uploadStage === "token" ? "获取上传凭证..."
+                          : uploadStage === "uploading" ? `上传中 ${uploadProgress}%`
+                          : uploadStage === "committing" ? "确认上传..."
+                          : "✓ 视频已就绪"}
+                      </span>
+                      <span className="text-gray-400">{uploadProgress}%</span>
+                    </div>
+                    <div className="h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-indigo-500 rounded-full transition-all duration-300"
+                        style={{ width: `${uploadStage === "done" ? 100 : uploadProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         )}
         <div className="grid grid-cols-2 gap-3">
           <div>

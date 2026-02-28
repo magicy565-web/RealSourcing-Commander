@@ -32,8 +32,10 @@ auth.post("/login", async (c) => {
 
   const tokenPayload = {
     sub: user.id,
+    userId: user.id,
     tenantId: user.tenant_id,
     name: user.name,
+    role: user.role || 'user',
   };
 
   const [accessToken, refreshToken] = await Promise.all([

@@ -63,6 +63,7 @@ import trainingRouter from "./routes/training.js";
 import tasksRouter from "./routes/tasks.js";
 import feedRouter from "./routes/feed.js";
 import adminRouter from "./routes/admin.js";
+import videoFeedRouter from "./routes/video-feed.js";
 import { scanAndPushFollowupReminders } from "./services/followup.js";
 
 const app = new Hono();
@@ -83,12 +84,12 @@ app.use(
 app.get("/health", (c) =>
   c.json({
     status: "ok",
-    version: "5.0.3-phase3",
+    version: "5.0.4-vod",
     service: "RealSourcing Commander Server",
     timestamp: new Date().toISOString(),
     database: "SQLite (local)",
     ai: "阿里云百炼 Qwen-Plus",
-    features: ["ai-draft", "style-training", "task-queue", "feed", "knowledge-base", "monitor"],
+    features: ["ai-draft", "style-training", "task-queue", "feed", "knowledge-base", "monitor", "video-feed-vod"],
   })
 );
 
@@ -102,6 +103,8 @@ app.route("/api/v1/tasks", tasksRouter);
 // Phase 3 新增路由
 app.route("/api/v1/feed", feedRouter);
 app.route("/api/v1/admin", adminRouter);
+// Phase 3 视频信息流（火山引擎 VOD）
+app.route("/api/v1/video-feed", videoFeedRouter);
 
 // ─── 404 ──────────────────────────────────────────────────────
 app.notFound((c) => c.json({ error: "接口不存在" }, 404));
@@ -118,7 +121,7 @@ serve({ fetch: app.fetch, port: PORT }, () => {
   console.log(`🚀 Commander Server v5.0.3-phase3 已启动 → http://localhost:${PORT}`);
   console.log(`🤖 AI 引擎：阿里云百炼 Qwen-Plus`);
   console.log(`📌 演示账号: admin@minghui.com / admin123`);
-  console.log(`📡 Phase 3 新增：信息流 API、行业知识库、系统监控`);
+  console.log(`📡 Phase 3 新增：信息流 API、行业知识库、系统监控、视频信息流(VOD)`);
 
   // 启动 24 小时跟进扫描（每小时执行一次）
   setInterval(() => {

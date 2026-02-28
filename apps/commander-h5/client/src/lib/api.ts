@@ -370,7 +370,79 @@ export const adminApi = {
     }),
 };
 
-// ─── 类型定义 ─────────────────────────────────────────────────
+// ─── Phase 3: 视频信息流 API (VOD) ────────────────────────────────────
+export interface VideoFeedItem {
+  id: string;
+  title: string;
+  description?: string;
+  company_name: string;
+  industry: string;
+  tags: string[];
+  cover_url?: string;
+  play_url?: string;
+  vid?: string;           // 火山引擎 VOD 视频 ID
+  duration?: number;      // 秒
+  views_count: number;
+  likes_count: number;
+  is_liked?: boolean;
+  is_bookmarked?: boolean;
+  status: string;
+  created_at: string;
+}
+export interface VideoUploadToken {
+  uploadUrl: string;      // TOS 直传地址
+  storeUri: string;       // 存储路径
+  auth: string;           // 上传鉴权 Token
+  sessionKey: string;     // 确认上传用的 SessionKey
+  uploadHost: string;     // 上传端点
+}
+export const videoFeedApi = {
+  // 获取视频列表
+  getVideos: (params?: { industry?: string; page?: number; limit?: number }) => {
+    const qs = params ? "?" + new URLSearchParams(params as any).toString() : "";
+    return request<{ items: VideoFeedItem[]; total: number; page: number; limit: number }>(`/video-feed${qs}`);
+  },
+  // 获取单个视频播放信息
+  getPlayInfo: (id: string) =>
+    request<{ playUrl: string; coverUrl: string; duration: number; vid: string }>(`/video-feed/${id}/play`),
+  // 点赞
+  like: (id: string) =>
+    request<{ liked: boolean; likes_count: number }>(`/video-feed/${id}/like`, { method: "POST" }),
+  // 收藏（转入询盘）
+  bookmark: (id: string) =>
+    request<{ bookmarkId: string; message: string }>(`/video-feed/${id}/bookmark`, { method: "POST" }),
+  // 获取上传凭证（管理员专用）
+  getUploadToken: (filename: string) =>
+    request<VideoUploadToken>(`/video-feed/upload/token?filename=${encodeURIComponent(filename)}`),
+  // 确认上传完成（管理员专用）
+  commitUpload: (data: { sessionKey: string; title: string; description?: string; industry: string; tags?: string[]; company_name?: string }) =>
+    request<VideoFeedItem>("/video-feed/upload/commit", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  // 直传视频到 TOS
+  uploadToTOS: async (uploadToken: VideoUploadToken, file: File, onProgress?: (pct: number) => void): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", `${uploadToken.uploadUrl}/${uploadToken.storeUri}`);
+      xhr.setRequestHeader("Authorization", uploadToken.auth);
+      xhr.setRequestHeader("Content-Type", file.type || "video/mp4");
+      if (onProgress) {
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+        };
+      }
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) resolve();
+        else reject(new Error(`上传失败: ${xhr.status} ${xhr.responseText}`));
+      };
+      xhr.onerror = () => reject(new Error("网络错误"));
+      xhr.send(file);
+    });
+  },
+};
+
+// ─── 类型定义 ─────────────────────────────────────────────────────
 export interface UserInfo {
   id: string;
   name: string;

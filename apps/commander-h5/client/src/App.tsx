@@ -26,6 +26,7 @@ import TaskQueue from "./pages/TaskQueue";
 // Phase 3
 import FeedPage from "./pages/FeedPage";
 import AdminPage from "./pages/AdminPage";
+import VideoFeedPlayer from "./pages/VideoFeedPlayer";
 
 // ─── 受保护路由 ───────────────────────────────────────────────
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -128,6 +129,7 @@ function Router() {
       <Route path="/style-training">{() => <ProtectedRoute component={StyleTrainingPage} />}</Route>
       <Route path="/task-queue">{() => <ProtectedRoute component={TaskQueuePage} />}</Route>
       {/* Phase 3 新增路由 */}
+      <Route path="/video-feed">{() => <ProtectedRoute component={VideoFeedPlayerWrapper} />}</Route>
       <Route path="/feed">{() => <ProtectedRoute component={FeedPageWrapper} />}</Route>
       <Route path="/admin">{() => <ProtectedRoute component={AdminPageWrapper} />}</Route>
       <Route path="/404" component={NotFound} />
@@ -153,6 +155,12 @@ function TaskQueuePage() {
       <TaskQueue onBack={() => navigate("/phone")} />
     </div>
   );
+}
+
+// Phase 3 视频信息流包装器
+function VideoFeedPlayerWrapper() {
+  const [, navigate] = useLocation();
+  return <VideoFeedPlayer onBack={() => navigate('/phone')} />;
 }
 
 // Phase 3 页面包装器

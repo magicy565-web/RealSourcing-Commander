@@ -1936,6 +1936,7 @@ function EmbeddedFeedCard({
 }
 
 function EmbeddedFeedView({ onBookmark }: { onBookmark: () => void }) {
+  const [, navigate] = useLocation();
   const [items, setItems] = useState<FeedItem[]>([]);
   const [quota, setQuota] = useState<FeedQuota | null>(null);
   const [loading, setLoading] = useState(true);
@@ -2003,15 +2004,23 @@ function EmbeddedFeedView({ onBookmark }: { onBookmark: () => void }) {
         </div>
       )}
       {/* 排序筛选 */}
-      <div className="px-3 py-2 flex gap-2 flex-shrink-0" style={{background:"oklch(0.16 0.02 250)", borderBottom:"1px solid oklch(1 0 0 / 6%)"}}>
+      <div className="px-3 py-2 flex items-center gap-2 flex-shrink-0" style={{background:"oklch(0.16 0.02 250)", borderBottom:"1px solid oklch(1 0 0 / 6%)"}}>
         {(["recommendation", "latest", "value"] as const).map((s) => (
           <button key={s} onClick={() => setSortBy(s)}
             className={`text-xs px-3 py-1 rounded-full font-medium transition-all ${
               sortBy === s ? "bg-sky-500 text-white" : "bg-white/8 text-slate-400 hover:text-white"
             }`}>
-            {s === "recommendation" ? "🎯 推荐" : s === "latest" ? "🕐 最新" : "💰 价值"}
+            {s === "recommendation" ? "🎯 推荐" : s === "latest" ? "🕐 最新" : "💰 价値"}
           </button>
         ))}
+        {/* 视频信息流入口 */}
+        <button
+          onClick={() => navigate("/video-feed")}
+          className="ml-auto flex items-center gap-1 text-xs px-3 py-1 rounded-full font-medium bg-gradient-to-r from-pink-500 to-red-500 text-white active:opacity-80 transition-opacity"
+        >
+          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          视频
+        </button>
       </div>
       {/* 列表 */}
       <div className="flex-1 overflow-y-auto pt-3">

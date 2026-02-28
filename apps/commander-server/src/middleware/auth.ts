@@ -13,8 +13,10 @@ const REFRESH_TOKEN_TTL = "30d";
 
 export interface JWTPayload {
   sub: string;       // user id
+  userId?: string;   // alias for sub (backward compat)
   tenantId: string;
   name: string;
+  role?: string;     // 'admin' | 'user'
   iat?: number;
   exp?: number;
 }

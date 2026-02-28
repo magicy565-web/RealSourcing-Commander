@@ -167,21 +167,30 @@ CREATE TABLE IF NOT EXISTS agent_logs (
 CREATE TABLE IF NOT EXISTS feed_items (
   id              TEXT PRIMARY KEY,
   media_type      TEXT NOT NULL DEFAULT 'text',  -- 'text' | 'image' | 'video'
-  media_url       TEXT,
-  buyer_company   TEXT NOT NULL,
-  buyer_country   TEXT NOT NULL,
+  media_url       TEXT,                          -- video: 'vid:xxxxx' (VOD vid)
+  buyer_company   TEXT NOT NULL DEFAULT '',
+  buyer_country   TEXT NOT NULL DEFAULT '',
   buyer_name      TEXT,
-  product_name    TEXT NOT NULL,
+  product_name    TEXT NOT NULL DEFAULT '',
   quantity        TEXT,
   raw_content     TEXT,
-  industry        TEXT DEFAULT 'other',  -- 'furniture' | 'textile' | 'other'
+  industry        TEXT DEFAULT 'other',          -- 'furniture' | 'textile' | 'other'
   estimated_value INTEGER DEFAULT 0,
   confidence_score INTEGER DEFAULT 0,
   ai_summary      TEXT,
   ai_tags         TEXT DEFAULT '[]',
-  status          TEXT DEFAULT 'active',  -- 'active' | 'archived'
+  status          TEXT DEFAULT 'active',         -- 'active' | 'archived' | 'published' | 'pending'
   created_by      TEXT,
-  created_at      TEXT DEFAULT (datetime('now'))
+  created_at      TEXT DEFAULT (datetime('now')),
+  -- Phase 3 Video fields
+  title           TEXT,
+  description     TEXT,
+  company_name    TEXT,
+  tags            TEXT DEFAULT '[]',
+  cover_url       TEXT,
+  duration        INTEGER DEFAULT 0,
+  likes_count     INTEGER DEFAULT 0,
+  views_count     INTEGER DEFAULT 0
 );
 
 -- Phase 3: 收藏记录
