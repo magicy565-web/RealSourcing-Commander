@@ -451,8 +451,9 @@ function seedDemoData() {
     `).run(log.id, tenantId, instanceId, log.action_type, log.platform, log.status, log.credits_used, log.detail, new Date(now - Math.floor(Math.random() * 3600000)).toISOString());
   }
 
-  // Phase 3: 信息流种子数据
-  const feedItems = [
+  // Phase 3: 信息流种子数据（已清空 Mock 数据，视频由管理员通过 VOD 上传）
+  const feedItems: any[] = [  // 空数组，不插入 Mock 数据
+  /*
     {
       id: "feed-001",
       media_type: "text",
@@ -603,14 +604,9 @@ function seedDemoData() {
       ai_summary: "荷兰可持续时尚品牌，寻求 Bluesign 认证竹纤维T恤，单次 3000 件",
       ai_tags: JSON.stringify(["欧洲市场", "Bluesign认证", "竹纤维", "可持续时尚"]),
     },
+  */
   ];
-  const insertFeed = db.prepare(`
-    INSERT INTO feed_items (id, media_type, buyer_company, buyer_country, buyer_name, product_name, quantity, raw_content, industry, estimated_value, confidence_score, ai_summary, ai_tags)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  for (const item of feedItems) {
-    insertFeed.run(item.id, item.media_type, item.buyer_company, item.buyer_country, item.buyer_name, item.product_name, item.quantity, item.raw_content, item.industry, item.estimated_value, item.confidence_score, item.ai_summary, item.ai_tags);
-  }
+  // feedItems 为空，无需插入
 
   // Phase 3: 行业知识库种子数据
   const knowledgeItems = [
@@ -649,7 +645,7 @@ function seedDemoData() {
     insertKnowledge.run(item.id, item.industry, item.category, item.key, item.value);
   }
 
-  console.log("✅ 演示数据初始化完成（6条询盘，4个社媒账号，5条操作日志，10条信息流，24条知识库）");
+  console.log("✅ 演示数据初始化完成（6条询盘，4个社媒账号，5条操作日志，24条知识库）");
 }
 
 export default db;
