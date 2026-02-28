@@ -680,6 +680,34 @@ function StatusView({ onGoInquiries, isEnterprise = false }: { onGoInquiries: ()
           </div>
           <ChevronRight className="w-4 h-4 text-slate-600 flex-shrink-0" />
         </button>
+        {/* Phase 3: 买家信息流 */}
+        <button onClick={() => navigate("/feed")}
+          className="w-full text-left rounded-xl p-3.5 flex items-center gap-3 active:scale-95 transition-all"
+          style={{background:"oklch(0.19 0.02 250)", border:"1px solid oklch(1 0 0 / 10%)"}}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{background:"linear-gradient(135deg, #0ea5e9, #6366f1)"}}>
+            <span className="text-base">📡</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white">买家信息流</p>
+            <p className="text-xs text-slate-400">AI 推荐 · 每日 10 条 · 一键加入询盘</p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-slate-600 flex-shrink-0" />
+        </button>
+        {/* Phase 3: 管理后台 */}
+        <button onClick={() => navigate("/admin")}
+          className="w-full text-left rounded-xl p-3.5 flex items-center gap-3 active:scale-95 transition-all"
+          style={{background:"oklch(0.19 0.02 250)", border:"1px solid oklch(1 0 0 / 10%)"}}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{background:"linear-gradient(135deg, #10b981, #0ea5e9)"}}>
+            <span className="text-base">🛠️</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white">管理后台</p>
+            <p className="text-xs text-slate-400">系统监控 · 知识库 · 信息流管理</p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-slate-600 flex-shrink-0" />
+        </button>
         {/* 更多任务 */}
         <button onClick={() => setShowLaunch(true)}
           className="w-full py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-semibold text-slate-400 border border-dashed border-white/15 hover:border-white/25 hover:text-white transition-all active:scale-98">

@@ -289,6 +289,13 @@ export const tasksApi = {
   async cancel(id: string) {
     return request<{ success: boolean }>(`/tasks/${id}/cancel`, { method: "POST" });
   },
+
+  async setSchedule(id: string, schedule: { timezone?: string; work_start?: string; work_end?: string; work_days?: number[] }) {
+    return request<{ id: string; schedule: any; status: string; message: string }>(
+      `/tasks/${id}/schedule`,
+      { method: "PATCH", body: JSON.stringify(schedule) }
+    );
+  },
 };
 
 // ─── Dashboard API ────────────────────────────────────────────
@@ -305,6 +312,55 @@ export const dashboardApi = {
   async report() {
     return request<DailyReport>("/dashboard/report");
   },
+};
+
+// ─── Phase 3: 信息流 API ──────────────────────────────────────
+export const feedApi = {
+  getFeed: () => request<FeedResponse>("/feed"),
+  getQuota: () => request<FeedQuota>("/feed/quota"),
+  bookmark: (id: string) =>
+    request<{ bookmarkId: string; inquiryId: string; message: string }>(
+      `/feed/${id}/bookmark`,
+      { method: "POST" }
+    ),
+  getBookmarks: () =>
+    request<{ bookmarks: Bookmark[]; total: number }>("/feed/bookmarks"),
+  uploadItem: (data: Partial<FeedItem>) =>
+    request<FeedItem>("/feed", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+};
+
+// ─── Phase 3: 管理后台 API ────────────────────────────────────
+export const adminApi = {
+  getKnowledge: (params?: { industry?: string; category?: string }) => {
+    const qs = params
+      ? "?" + new URLSearchParams(params as any).toString()
+      : "";
+    return request<{ items: KnowledgeItem[]; total: number; industries: string[]; categories: string[] }>(`/admin/knowledge${qs}`);
+  },
+  addKnowledge: (data: Partial<KnowledgeItem>) =>
+    request<KnowledgeItem>("/admin/knowledge", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  deleteKnowledge: (id: string) =>
+    request<{ message: string }>(`/admin/knowledge/${id}`, {
+      method: "DELETE",
+    }),
+  getMonitor: () => request<MonitorData>("/admin/monitor"),
+  getFeedItems: (params?: { status?: string; page?: number; limit?: number }) => {
+    const qs = params
+      ? "?" + new URLSearchParams(params as any).toString()
+      : "";
+    return request<{ items: FeedItem[]; total: number }>(`/admin/feed${qs}`);
+  },
+  updateFeedItem: (id: string, status: string) =>
+    request<{ message: string }>(`/admin/feed/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    }),
 };
 
 // ─── 类型定义 ─────────────────────────────────────────────────
@@ -536,7 +592,7 @@ export interface Task {
   steps: string[];
   current_step: number;
   total_steps: number;
-  status: "pending" | "running" | "completed" | "failed" | "cancelled";
+  status: "pending" | "running" | "completed" | "failed" | "cancelled" | "sleeping";
   progress: number;
   result?: any;
   error_msg?: string;
@@ -564,4 +620,99 @@ export interface DailyReport {
   agentOps: number;
   creditsUsed: number;
   platformBreakdown: { platform: string; count: number }[];
+}
+
+// ─── Phase 3: 信息流类型 ──────────────────────────────────────
+export interface FeedItem {
+  id: string;
+  media_type: "text" | "image" | "video";
+  media_url?: string;
+  buyer_company: string;
+  buyer_country: string;
+  buyer_name?: string;
+  product_name: string;
+  quantity?: string;
+  raw_content?: string;
+  industry: string;
+  estimated_value: number;
+  confidence_score: number;
+  ai_summary?: string;
+  ai_tags: string[];
+  status: string;
+  recommendation_score?: number;
+  created_at: string;
+}
+
+export interface FeedQuota {
+  used: number;
+  total: number;
+  remaining: number;
+  resetAt: string;
+}
+
+export interface FeedResponse {
+  items: FeedItem[];
+  quota: FeedQuota;
+  total: number;
+}
+
+export interface Bookmark {
+  bookmark_id: string;
+  bookmarked_at: string;
+  feed_item_id: string;
+  buyer_company: string;
+  buyer_country: string;
+  buyer_name?: string;
+  product_name: string;
+  quantity?: string;
+  confidence_score: number;
+  industry: string;
+  ai_summary?: string;
+  ai_tags: string[];
+  inquiry_id: string;
+}
+
+export interface KnowledgeItem {
+  id: string;
+  industry: string;
+  category: string;
+  key: string;
+  value: string;
+  source: string;
+  created_at: string;
+}
+
+export interface MonitorData {
+  system: {
+    status: string;
+    version: string;
+    uptime: number;
+    memoryUsed: number;
+    cpuUsed: number;
+    database: string;
+  };
+  business: {
+    todayInquiries: number;
+    todayOps: number;
+    todayCredits: number;
+    creditsBalance: number;
+  };
+  openclaw: {
+    status: string;
+    opsToday: number;
+    opsLimit: number;
+    lastHeartbeat?: string;
+    accounts: any[];
+  } | null;
+  ai: {
+    todayCalls: number;
+    avgResponseMs: number;
+    successRate: number;
+  };
+  feed: {
+    total: number;
+    todayBookmarks: number;
+  };
+  recentLogs: any[];
+  timestamp: string;
 }

@@ -23,6 +23,9 @@ import { isLoggedIn } from "./lib/api";
 import Login from "./pages/Login";
 import StyleTraining from "./pages/StyleTraining";
 import TaskQueue from "./pages/TaskQueue";
+// Phase 3
+import FeedPage from "./pages/FeedPage";
+import AdminPage from "./pages/AdminPage";
 
 // ─── 受保护路由 ───────────────────────────────────────────────
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -124,13 +127,16 @@ function Router() {
       <Route path="/geo">{() => <ProtectedRoute component={GeoOptimizer} />}</Route>
       <Route path="/style-training">{() => <ProtectedRoute component={StyleTrainingPage} />}</Route>
       <Route path="/task-queue">{() => <ProtectedRoute component={TaskQueuePage} />}</Route>
+      {/* Phase 3 新增路由 */}
+      <Route path="/feed">{() => <ProtectedRoute component={FeedPageWrapper} />}</Route>
+      <Route path="/admin">{() => <ProtectedRoute component={AdminPageWrapper} />}</Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
   );
 }
 
-// ─── StyleTraining 和 TaskQueue 页面包装器 ─────────────────────────────
+// ─── 页面包装器 ─────────────────────────────────────────────────────
 function StyleTrainingPage() {
   const [, navigate] = useLocation();
   return (
@@ -145,6 +151,27 @@ function TaskQueuePage() {
   return (
     <div className="min-h-screen" style={{ background: "oklch(0.14 0.02 250)" }}>
       <TaskQueue onBack={() => navigate("/phone")} />
+    </div>
+  );
+}
+
+// Phase 3 页面包装器
+function FeedPageWrapper() {
+  return (
+    <div className="min-h-screen" style={{ background: "oklch(0.14 0.02 250)" }}>
+      <div className="max-w-md mx-auto h-screen flex flex-col">
+        <FeedPage />
+      </div>
+    </div>
+  );
+}
+
+function AdminPageWrapper() {
+  return (
+    <div className="min-h-screen" style={{ background: "oklch(0.14 0.02 250)" }}>
+      <div className="max-w-md mx-auto h-screen flex flex-col">
+        <AdminPage />
+      </div>
     </div>
   );
 }

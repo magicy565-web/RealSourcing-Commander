@@ -1,5 +1,5 @@
 /**
- * RealSourcing Commander 5.0 — 后端服务入口
+ * RealSourcing Commander 5.0 Phase 3 — 后端服务入口
  *
  * 技术栈：Hono + SQLite (better-sqlite3) + JWT + 阿里云百炼 AI
  *
@@ -32,6 +32,18 @@
  *   POST /api/v1/tasks                    创建新任务
  *   GET  /api/v1/tasks/:id                任务详情
  *   POST /api/v1/tasks/:id/cancel         取消任务
+ *   PATCH /api/v1/tasks/:id/schedule      设置任务工作时间段 (Phase 3)
+ *   GET  /api/v1/feed                     信息流（推荐排序）(Phase 3)
+ *   POST /api/v1/feed                     管理员上传询盘条目 (Phase 3)
+ *   POST /api/v1/feed/:id/bookmark        收藏条目 (Phase 3)
+ *   GET  /api/v1/feed/bookmarks           已收藏列表 (Phase 3)
+ *   GET  /api/v1/feed/quota               今日配额状态 (Phase 3)
+ *   GET  /api/v1/admin/knowledge          行业知识库 (Phase 3)
+ *   POST /api/v1/admin/knowledge          添加知识点 (Phase 3)
+ *   DELETE /api/v1/admin/knowledge/:id    删除知识点 (Phase 3)
+ *   GET  /api/v1/admin/monitor            系统监控数据 (Phase 3)
+ *   GET  /api/v1/admin/feed               信息流管理 (Phase 3)
+ *   PATCH /api/v1/admin/feed/:id          更新信息流状态 (Phase 3)
  */
 import "dotenv/config";
 import { serve } from "@hono/node-server";
@@ -49,6 +61,8 @@ import openclawRouter from "./routes/openclaw.js";
 import dashboardRouter from "./routes/dashboard.js";
 import trainingRouter from "./routes/training.js";
 import tasksRouter from "./routes/tasks.js";
+import feedRouter from "./routes/feed.js";
+import adminRouter from "./routes/admin.js";
 import { scanAndPushFollowupReminders } from "./services/followup.js";
 
 const app = new Hono();
@@ -69,12 +83,12 @@ app.use(
 app.get("/health", (c) =>
   c.json({
     status: "ok",
-    version: "5.0.1",
+    version: "5.0.3-phase3",
     service: "RealSourcing Commander Server",
     timestamp: new Date().toISOString(),
     database: "SQLite (local)",
     ai: "阿里云百炼 Qwen-Plus",
-    features: ["ai-draft", "style-training", "task-queue"],
+    features: ["ai-draft", "style-training", "task-queue", "feed", "knowledge-base", "monitor"],
   })
 );
 
@@ -85,6 +99,9 @@ app.route("/api/v1/openclaw", openclawRouter);
 app.route("/api/v1/dashboard", dashboardRouter);
 app.route("/api/v1/training", trainingRouter);
 app.route("/api/v1/tasks", tasksRouter);
+// Phase 3 新增路由
+app.route("/api/v1/feed", feedRouter);
+app.route("/api/v1/admin", adminRouter);
 
 // ─── 404 ──────────────────────────────────────────────────────
 app.notFound((c) => c.json({ error: "接口不存在" }, 404));
@@ -98,9 +115,10 @@ app.onError((err, c) => {
 // ─── 启动服务 ─────────────────────────────────────────────────
 const PORT = Number(process.env.PORT ?? 4000);
 serve({ fetch: app.fetch, port: PORT }, () => {
-  console.log(`🚀 Commander Server v5.0.1 已启动 → http://localhost:${PORT}`);
+  console.log(`🚀 Commander Server v5.0.3-phase3 已启动 → http://localhost:${PORT}`);
   console.log(`🤖 AI 引擎：阿里云百炼 Qwen-Plus`);
   console.log(`📌 演示账号: admin@minghui.com / admin123`);
+  console.log(`📡 Phase 3 新增：信息流 API、行业知识库、系统监控`);
 
   // 启动 24 小时跟进扫描（每小时执行一次）
   setInterval(() => {

@@ -386,4 +386,64 @@ function simulateTaskExecution(taskId: string, tenantId: string, steps: string[]
   }, 1000);
 }
 
+// ─── Phase 3: 设置任务工作时间段 ─────────────────────────────────
+tasks.patch("/:id/schedule", async (c) => {
+  const user = c.get("user");
+  const taskId = c.req.param("id");
+  const body = await c.req.json();
+  const { timezone, work_start, work_end, work_days } = body;
+
+  const task = db.prepare(
+    "SELECT * FROM task_queue WHERE id = ? AND tenant_id = ?"
+  ).get(taskId, user.tenantId) as any;
+
+  if (!task) {
+    return c.json({ error: "任务不存在" }, 404);
+  }
+
+  // 将工作时间段信息存入 context
+  const context = JSON.parse(task.context ?? "{}");
+  context.schedule = {
+    timezone: timezone ?? "Asia/Shanghai",
+    work_start: work_start ?? "09:00",
+    work_end: work_end ?? "18:00",
+    work_days: work_days ?? [1, 2, 3, 4, 5], // 周一到周五
+  };
+
+  // 检查当前是否在工作时间内
+  const now = new Date();
+  const localHour = new Intl.DateTimeFormat("en-US", {
+    timeZone: context.schedule.timezone,
+    hour: "numeric",
+    hour12: false,
+  }).format(now);
+  const localDay = new Intl.DateTimeFormat("en-US", {
+    timeZone: context.schedule.timezone,
+    weekday: "short",
+  }).format(now);
+  const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const currentDay = dayMap[localDay] ?? 0;
+  const currentHour = parseInt(localHour);
+  const [startH] = (context.schedule.work_start ?? "09:00").split(":").map(Number);
+  const [endH] = (context.schedule.work_end ?? "18:00").split(":").map(Number);
+
+  const isWorkTime =
+    context.schedule.work_days.includes(currentDay) &&
+    currentHour >= startH &&
+    currentHour < endH;
+
+  const newStatus = isWorkTime ? task.status : "sleeping";
+
+  db.prepare(
+    "UPDATE task_queue SET context = ?, status = ?, updated_at = ? WHERE id = ?"
+  ).run(JSON.stringify(context), newStatus, new Date().toISOString(), taskId);
+
+  return c.json({
+    id: taskId,
+    schedule: context.schedule,
+    status: newStatus,
+    message: isWorkTime ? "已设置工作时间段，任务将按时执行" : `已设置工作时间段，当前为非工作时间，任务已进入 sleeping 状态`,
+  });
+});
+
 export default tasks;

@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS users (
   phone           TEXT,
   email           TEXT UNIQUE,
   password_hash   TEXT NOT NULL,
+  role            TEXT DEFAULT 'user',
   push_hour       INTEGER DEFAULT 8,
   push_hour_eve   INTEGER DEFAULT 18,
   created_at      TEXT DEFAULT (datetime('now'))
@@ -54,6 +55,7 @@ CREATE TABLE IF NOT EXISTS openclaw_instances (
   last_heartbeat  TEXT,
   ops_today       INTEGER DEFAULT 0,
   ops_limit       INTEGER DEFAULT 200,
+  config          TEXT DEFAULT '{}',
   created_at      TEXT DEFAULT (datetime('now'))
 );
 
@@ -160,6 +162,62 @@ CREATE TABLE IF NOT EXISTS agent_logs (
   detail          TEXT DEFAULT '{}',
   created_at      TEXT DEFAULT (datetime('now'))
 );
+
+-- Phase 3: 信息流条目（管理方上传）
+CREATE TABLE IF NOT EXISTS feed_items (
+  id              TEXT PRIMARY KEY,
+  media_type      TEXT NOT NULL DEFAULT 'text',  -- 'text' | 'image' | 'video'
+  media_url       TEXT,
+  buyer_company   TEXT NOT NULL,
+  buyer_country   TEXT NOT NULL,
+  buyer_name      TEXT,
+  product_name    TEXT NOT NULL,
+  quantity        TEXT,
+  raw_content     TEXT,
+  industry        TEXT DEFAULT 'other',  -- 'furniture' | 'textile' | 'other'
+  estimated_value INTEGER DEFAULT 0,
+  confidence_score INTEGER DEFAULT 0,
+  ai_summary      TEXT,
+  ai_tags         TEXT DEFAULT '[]',
+  status          TEXT DEFAULT 'active',  -- 'active' | 'archived'
+  created_by      TEXT,
+  created_at      TEXT DEFAULT (datetime('now'))
+);
+
+-- Phase 3: 收藏记录
+CREATE TABLE IF NOT EXISTS bookmarks (
+  id              TEXT PRIMARY KEY,
+  tenant_id       TEXT REFERENCES tenants(id),
+  user_id         TEXT REFERENCES users(id),
+  feed_item_id    TEXT REFERENCES feed_items(id),
+  inquiry_id      TEXT REFERENCES inquiries(id),
+  created_at      TEXT DEFAULT (datetime('now'))
+);
+
+-- Phase 3: 行业知识库
+CREATE TABLE IF NOT EXISTS industry_knowledge (
+  id              TEXT PRIMARY KEY,
+  industry        TEXT NOT NULL,        -- 'furniture' | 'textile'
+  category        TEXT NOT NULL,        -- 'price_range' | 'term' | 'template' | 'cert'
+  key             TEXT NOT NULL,        -- 知识点名称
+  value           TEXT NOT NULL,        -- 知识点内容
+  source          TEXT DEFAULT 'seed',  -- 'seed' | 'learned'
+  created_at      TEXT DEFAULT (datetime('now'))
+);
+
+-- Phase 3: 用户偏好（推荐引擎使用）
+CREATE TABLE IF NOT EXISTS user_preferences (
+  id              TEXT PRIMARY KEY,
+  tenant_id       TEXT REFERENCES tenants(id),
+  user_id         TEXT REFERENCES users(id),
+  preferred_industries TEXT DEFAULT '[]',
+  preferred_products   TEXT DEFAULT '[]',
+  skipped_products     TEXT DEFAULT '[]',
+  daily_quota_used     INTEGER DEFAULT 0,
+  quota_reset_date     TEXT,
+  created_at      TEXT DEFAULT (datetime('now')),
+  updated_at      TEXT DEFAULT (datetime('now'))
+);
 `;
 
 // 执行建表
@@ -185,9 +243,9 @@ function seedDemoData() {
   // 密码: admin123
   const passwordHash = bcrypt.hashSync("admin123", 10);
   db.prepare(`
-    INSERT INTO users (id, tenant_id, name, phone, email, password_hash)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(userId, tenantId, "李总", "13800138000", "admin@minghui.com", passwordHash);
+    INSERT INTO users (id, tenant_id, name, phone, email, password_hash, role)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(userId, tenantId, "李总", "13800138000", "admin@minghui.com", passwordHash, "admin");
 
   db.prepare(`
     INSERT INTO openclaw_instances (id, tenant_id, name, status, ops_today, ops_limit)
@@ -384,7 +442,205 @@ function seedDemoData() {
     `).run(log.id, tenantId, instanceId, log.action_type, log.platform, log.status, log.credits_used, log.detail, new Date(now - Math.floor(Math.random() * 3600000)).toISOString());
   }
 
-  console.log("✅ 演示数据初始化完成（6条询盘，4个社媒账号，5条操作日志）");
+  // Phase 3: 信息流种子数据
+  const feedItems = [
+    {
+      id: "feed-001",
+      media_type: "text",
+      buyer_company: "Nordic Home AB",
+      buyer_country: "瑞典",
+      buyer_name: "Erik Lindqvist",
+      product_name: "实木餐桌套装",
+      quantity: "200套/月",
+      raw_content: "We are looking for solid wood dining table sets for our Scandinavian home brand. Need FSC certified oak or beech. Monthly volume 200 sets.",
+      industry: "furniture",
+      estimated_value: 56000,
+      confidence_score: 88,
+      ai_summary: "瑞典北欧家居品牌，寻求 FSC 认证实木餐桌套装，月量 200 套，高意向大客户",
+      ai_tags: JSON.stringify(["北欧市场", "FSC认证", "实木家具", "大单"]),
+    },
+    {
+      id: "feed-002",
+      media_type: "text",
+      buyer_company: "EcoTextile GmbH",
+      buyer_country: "德国",
+      buyer_name: "Anna Mueller",
+      product_name: "有机棉 T 恤",
+      quantity: "5000件/次",
+      raw_content: "We need GOTS certified organic cotton t-shirts for our sustainable fashion brand. 5000 pieces per order, multiple colors.",
+      industry: "textile",
+      estimated_value: 25000,
+      confidence_score: 82,
+      ai_summary: "德国可持续时尚品牌，需要 GOTS 认证有机棉 T 恤，单次 5000 件",
+      ai_tags: JSON.stringify(["欧洲市场", "GOTS认证", "有机棉", "可持续时尚"]),
+    },
+    {
+      id: "feed-003",
+      media_type: "text",
+      buyer_company: "Pacific Furniture Co",
+      buyer_country: "美国",
+      buyer_name: "James Wilson",
+      product_name: "皮质沙发套装",
+      quantity: "100套/月",
+      raw_content: "Looking for leather sofa sets for our US furniture retail chain. Need CARB certified, genuine leather preferred. Monthly 100 sets.",
+      industry: "furniture",
+      estimated_value: 45000,
+      confidence_score: 79,
+      ai_summary: "美国家具零售链，寻求 CARB 认证真皮沙发，月量 100 套",
+      ai_tags: JSON.stringify(["美国市场", "CARB认证", "皮质沙发", "零售链"]),
+    },
+    {
+      id: "feed-004",
+      media_type: "text",
+      buyer_company: "Tokyo Living KK",
+      buyer_country: "日本",
+      buyer_name: "Tanaka Hiroshi",
+      product_name: "竹纤维毛巾",
+      quantity: "10000条/次",
+      raw_content: "We are looking for bamboo fiber towels for our Japanese hotel chain. Need F**** formaldehyde certification. 10000 pieces per order.",
+      industry: "textile",
+      estimated_value: 18000,
+      confidence_score: 75,
+      ai_summary: "日本酒店链寻求竹纤维毛巾，需要 F★★★★ 甲醇认证，单次 10000 条",
+      ai_tags: JSON.stringify(["日本市场", "竹纤维", "酒店用品", "F★★★★认证"]),
+    },
+    {
+      id: "feed-005",
+      media_type: "text",
+      buyer_company: "Dubai Interiors LLC",
+      buyer_country: "阿联酋",
+      buyer_name: "Mohammed Al-Rashid",
+      product_name: "藤编户外家具",
+      quantity: "500套",
+      raw_content: "We need outdoor rattan furniture for luxury villa projects in Dubai. High-end quality, weather resistant. 500 sets total.",
+      industry: "furniture",
+      estimated_value: 75000,
+      confidence_score: 71,
+      ai_summary: "迪拜豪华别墅项目，需要高端耐候藤编户外家具 500 套",
+      ai_tags: JSON.stringify(["中东市场", "豪华别墅", "户外家具", "高端定制"]),
+    },
+    {
+      id: "feed-006",
+      media_type: "text",
+      buyer_company: "Seoul Fashion House",
+      buyer_country: "韩国",
+      buyer_name: "Kim Ji-yeon",
+      product_name: "亚麻面料",
+      quantity: "3000米/次",
+      raw_content: "Looking for linen fabric for our Korean fashion brand. Need OEKO-TEX certified. 3000 meters per order, various colors.",
+      industry: "textile",
+      estimated_value: 15000,
+      confidence_score: 68,
+      ai_summary: "韩国时尚品牌，需要 OEKO-TEX 认证亚麻面料，单次 3000 米",
+      ai_tags: JSON.stringify(["韩国市场", "OEKO-TEX认证", "亚麻面料", "时尚品牌"]),
+    },
+    {
+      id: "feed-007",
+      media_type: "text",
+      buyer_company: "London Home Decor Ltd",
+      buyer_country: "英国",
+      buyer_name: "Sophie Brown",
+      product_name: "橡木书柜",
+      quantity: "50件/次",
+      raw_content: "We are sourcing oak bookshelves for our UK interior design studio. CE certified, flat-pack preferred. 50 units per order.",
+      industry: "furniture",
+      estimated_value: 8500,
+      confidence_score: 65,
+      ai_summary: "英国室内设计工作室，寻求 CE 认证橡木书柜，平板包装，单次 50 件",
+      ai_tags: JSON.stringify(["英国市场", "CE认证", "实木家具", "平板包装"]),
+    },
+    {
+      id: "feed-008",
+      media_type: "text",
+      buyer_company: "Sydney Textile Imports",
+      buyer_country: "澳大利亚",
+      buyer_name: "Michael Chen",
+      product_name: "有机棉婴儿服装",
+      quantity: "8000件/季",
+      raw_content: "Looking for GOTS certified organic cotton baby clothing for Australian market. 8000 pieces per season, safety standards required.",
+      industry: "textile",
+      estimated_value: 32000,
+      confidence_score: 84,
+      ai_summary: "澳大利亚进口商，寻求 GOTS 认证有机棉婴儿服，季度 8000 件",
+      ai_tags: JSON.stringify(["澳大利亚市场", "GOTS认证", "婴儿服装", "有机棉"]),
+    },
+    {
+      id: "feed-009",
+      media_type: "text",
+      buyer_company: "Toronto Furniture Group",
+      buyer_country: "加拿大",
+      buyer_name: "David Park",
+      product_name: "实木床架",
+      quantity: "150张/月",
+      raw_content: "We need solid wood bed frames for our Canadian furniture retail chain. CARB certified, various sizes. Monthly 150 units.",
+      industry: "furniture",
+      estimated_value: 22500,
+      confidence_score: 77,
+      ai_summary: "加拿大家具零售链，需要 CARB 认证实木床架，月量 150 张",
+      ai_tags: JSON.stringify(["加拿大市场", "CARB认证", "实木床架", "零售链"]),
+    },
+    {
+      id: "feed-010",
+      media_type: "text",
+      buyer_company: "Amsterdam Eco Fashion",
+      buyer_country: "荷兰",
+      buyer_name: "Lars van den Berg",
+      product_name: "竹纤维T恤",
+      quantity: "3000件/次",
+      raw_content: "We are looking for bamboo fiber t-shirts for our Dutch sustainable fashion brand. Bluesign certified preferred. 3000 pieces per order.",
+      industry: "textile",
+      estimated_value: 12000,
+      confidence_score: 72,
+      ai_summary: "荷兰可持续时尚品牌，寻求 Bluesign 认证竹纤维T恤，单次 3000 件",
+      ai_tags: JSON.stringify(["欧洲市场", "Bluesign认证", "竹纤维", "可持续时尚"]),
+    },
+  ];
+  const insertFeed = db.prepare(`
+    INSERT INTO feed_items (id, media_type, buyer_company, buyer_country, buyer_name, product_name, quantity, raw_content, industry, estimated_value, confidence_score, ai_summary, ai_tags)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  for (const item of feedItems) {
+    insertFeed.run(item.id, item.media_type, item.buyer_company, item.buyer_country, item.buyer_name, item.product_name, item.quantity, item.raw_content, item.industry, item.estimated_value, item.confidence_score, item.ai_summary, item.ai_tags);
+  }
+
+  // Phase 3: 行业知识库种子数据
+  const knowledgeItems = [
+    // 家具行业
+    { id: "kb-001", industry: "furniture", category: "price_range", key: "实木餐桌", value: "FOB $80-$350/套，视材质和工艺" },
+    { id: "kb-002", industry: "furniture", category: "price_range", key: "皮质沙发", value: "FOB $150-$800/套，真皮 vs PU 差异大" },
+    { id: "kb-003", industry: "furniture", category: "price_range", key: "藤编户外家具", value: "FOB $60-$200/套" },
+    { id: "kb-004", industry: "furniture", category: "price_range", key: "实木床架", value: "FOB $120-$450/张，视材质和尺寸" },
+    { id: "kb-005", industry: "furniture", category: "price_range", key: "橡木书柜", value: "FOB $80-$280/件，平板包装可降低 20%" },
+    { id: "kb-006", industry: "furniture", category: "cert", key: "欧洲市场", value: "CE 认证、REACH 法规、FSC 木材认证" },
+    { id: "kb-007", industry: "furniture", category: "cert", key: "美国市场", value: "CARB 认证（甲醇）、ASTM 标准" },
+    { id: "kb-008", industry: "furniture", category: "cert", key: "日本市场", value: "JIS 标准、F★★★★ 甲醇等级" },
+    { id: "kb-009", industry: "furniture", category: "term", key: "交货条款", value: "FOB、CIF、EXW、DAP" },
+    { id: "kb-010", industry: "furniture", category: "term", key: "包装", value: "Flat-pack / KD（平板包装）、RTA（即装）" },
+    { id: "kb-011", industry: "furniture", category: "template", key: "标准报价", value: "含价格、MOQ、交货期、付款方式、有效期" },
+    { id: "kb-012", industry: "furniture", category: "template", key: "24h 跟进", value: "商务/友好/强势三种风格" },
+    // 纵织行业
+    { id: "kb-013", industry: "textile", category: "price_range", key: "有机棉 T 恤", value: "FOB $2.5-$8/件，视克重和印花" },
+    { id: "kb-014", industry: "textile", category: "price_range", key: "亚麻面料", value: "FOB $3-$12/米，视密度和宽幅" },
+    { id: "kb-015", industry: "textile", category: "price_range", key: "竹纤维毛巾", value: "FOB $1.2-$4/条，视克重" },
+    { id: "kb-016", industry: "textile", category: "price_range", key: "竹纤维T恤", value: "FOB $3-$9/件，比有机棉轻盈且更环保" },
+    { id: "kb-017", industry: "textile", category: "price_range", key: "婴儿服装", value: "FOB $2-$6/件，有机棉安全要求高" },
+    { id: "kb-018", industry: "textile", category: "cert", key: "有机棉", value: "GOTS 认证（全球有机纵织品标准）" },
+    { id: "kb-019", industry: "textile", category: "cert", key: "环保面料", value: "OEKO-TEX Standard 100" },
+    { id: "kb-020", industry: "textile", category: "cert", key: "欧洲市场", value: "REACH 法规、Bluesign" },
+    { id: "kb-021", industry: "textile", category: "term", key: "面料规格", value: "克重（GSM）、纱支（支/英寸）、幅宽" },
+    { id: "kb-022", industry: "textile", category: "term", key: "工艺", value: "活性染色、数码印花、提花、刺绣" },
+    { id: "kb-023", industry: "textile", category: "template", key: "面料报价", value: "含克重、幅宽、颜色数、MOQ、交货期" },
+    { id: "kb-024", industry: "textile", category: "template", key: "成衣报价", value: "含尺码范围、面料成分、洗涤标签要求" },
+  ];
+  const insertKnowledge = db.prepare(`
+    INSERT INTO industry_knowledge (id, industry, category, key, value)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+  for (const item of knowledgeItems) {
+    insertKnowledge.run(item.id, item.industry, item.category, item.key, item.value);
+  }
+
+  console.log("✅ 演示数据初始化完成（6条询盘，4个社媒账号，5条操作日志，10条信息流，24条知识库）");
 }
 
 export default db;
