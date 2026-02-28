@@ -1751,7 +1751,7 @@ export default function CommanderPhone() {
         style={{background:"oklch(0.14 0.02 250)", border:"1px solid oklch(1 0 0 / 10%)", maxWidth:"390px", height:"100dvh"}}>
 
         <StatusBar />
-        <TopNav view={view} onChangeView={setView} credits={stats?.credits.balance ?? user?.creditsBalance ?? 2840} unreadCount={stats?.pipeline.unread ?? 0} onBack={() => navigate("/")} />
+        <TopNav view={view} onChangeView={setView} credits={stats?.credits?.balance ?? user?.creditsBalance ?? 2840} unreadCount={stats?.pipeline?.unread ?? 0} onBack={() => navigate("/")} />
 
         {/* Demo 模式切换器（原型演示用）*/}
         <div className="flex items-center justify-center gap-2 px-4 py-1.5 flex-shrink-0"

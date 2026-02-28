@@ -102,26 +102,42 @@ inquiries.get("/stats", (c) => {
     "SELECT COALESCE(SUM(credits_used), 0) as v FROM agent_logs WHERE tenant_id = ? AND created_at >= ?"
   ).get(tenantId, todayStr) as any).v;
 
+  const totalAllInquiries = (db.prepare(
+    "SELECT COUNT(*) as c FROM inquiries WHERE tenant_id = ?"
+  ).get(tenantId) as any).c;
+
   return c.json({
     today: {
-      totalInquiries: totalToday,
+      newInquiries: totalToday,
+      totalValue,
+      agentOps: agentLogsToday,
+      creditsUsed: creditsUsedToday,
+    },
+    pipeline: {
       unread,
       unquoted,
       quoted,
       contracted,
-      totalValue,
-      agentLogsCount: agentLogsToday,
-      creditsUsed: creditsUsedToday,
+      total: unread + unquoted + quoted + contracted,
     },
-    overall: {
-      totalValue: totalAllValue,
-      creditsBalance: tenant?.credits_balance ?? 0,
-      openclawStatus: instance?.status ?? "offline",
+    totalAllTime: {
+      inquiries: totalAllInquiries,
+      value: totalAllValue,
     },
-    channels: channelDist.reduce((acc: any, ch: any) => {
-      acc[ch.source_platform] = ch.count;
-      return acc;
-    }, {}),
+    channelDistribution: channelDist.map((ch: any) => ({
+      source_platform: ch.source_platform,
+      count: ch.count,
+    })),
+    credits: {
+      balance: tenant?.credits_balance ?? 0,
+      usedToday: creditsUsedToday,
+    },
+    openclaw: instance ? {
+      status: instance.status,
+      opsToday: instance.ops_today,
+      opsLimit: instance.ops_limit,
+      lastHeartbeat: instance.last_heartbeat,
+    } : null,
   });
 });
 
