@@ -9,6 +9,7 @@
 import { Hono } from "hono";
 import db from "../db/index.js";
 import { authMiddleware } from "../middleware/auth.js";
+import { pushInquiryNotification } from "../services/feishu.js";
 
 const openclaw = new Hono();
 
@@ -198,13 +199,23 @@ openclaw.post("/simulate-lead", async (c) => {
     );
   }
 
-  return c.json({
-    success: true,
-    message: `✅ 模拟询盘已创建：${company} (${country.name}) 询问 ${product}`,
-    inquiryId: id,
-    platform,
+    // 推送飞书通知
+    pushInquiryNotification({
+      id,
+      buyer_name: `Test Buyer ${Math.floor(Math.random() * 1000)}`,
+      buyer_company: company,
+      product_name: product,
+      estimated_value: Math.floor(Math.random() * 100000) + 5000,
+      confidence_score: score,
+    }).catch(err => console.error("Failed to push Feishu inquiry notification:", err));
+
+    return c.json({
+      success: true,
+      message: `✅ 模拟询盘已创建：${company} (${country.name}) 询问 ${product}`,
+      inquiryId: id,
+      platform,
+    });
   });
-});
 
 function safeParseJson(str: string | null, fallback: any) {
   if (!str) return fallback;
