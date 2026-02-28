@@ -210,6 +210,9 @@ export default function VideoFeedPlayer({ onBack }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
 
+  // 已加载播放地址的 item id 集合（避免重复请求）
+  const loadedPlayUrls = useRef<Set<string>>(new Set());
+
   // ─── 手势状态 (ref 避免 re-render 开销) ──────────────────────────────────
   const isAnimating = useRef(false);
   const touchStartY = useRef(0);
@@ -244,6 +247,33 @@ export default function VideoFeedPlayer({ onBack }: Props) {
   useEffect(() => {
     loadVideos(1);
   }, [loadVideos]);
+
+  // ─── 懒加载当前视频播放地址（切换时自动获取）─────────────────────────────────
+  useEffect(() => {
+    const item = items[currentIndex];
+    if (!item) return;
+    // 如果已有 play_url 或已经请求过，跳过
+    if (item.play_url || loadedPlayUrls.current.has(item.id)) return;
+    loadedPlayUrls.current.add(item.id);
+    // 同时预加载下一条
+    const toLoad = [item, items[currentIndex + 1]].filter(Boolean);
+    toLoad.forEach(async (v) => {
+      if (!v || v.play_url || loadedPlayUrls.current.has(v.id + '_next')) return;
+      loadedPlayUrls.current.add(v.id + '_next');
+      try {
+        const res = await videoFeedApi.getPlayInfo(v.id);
+        setItems((prev) =>
+          prev.map((p) =>
+            p.id === v.id
+              ? { ...p, play_url: res.playUrl, cover_url: res.coverUrl || p.cover_url, duration: res.duration || p.duration }
+              : p
+          )
+        );
+      } catch (err) {
+        console.warn('[VideoFeed] 获取播放地址失败', v.id, err);
+      }
+    });
+  }, [currentIndex, items]);
 
   // ─── 设置轨道 transform（无动画，实时跟手）────────────────────────────────
   const setTrackOffset = useCallback((offset: number, animated = false) => {
