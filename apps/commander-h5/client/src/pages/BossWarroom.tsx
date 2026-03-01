@@ -860,7 +860,7 @@ function ReportScreen({ data, onBack }: { data: any; onBack: () => void }) {
 }
 
 // ─── Bottom Navigation ────────────────────────────────────────────────────────
-function BottomNav({ screen, onSelect }: { screen: number; onSelect: (i: number) => void }) {
+function BottomNav({ screen, onSelect, onNavigate }: { screen: number; onSelect: (i: number) => void; onNavigate?: (path: string) => void }) {
   const tabs = [
     { icon: '⚡', label: '战报', color: '#C9A84C' },
     { icon: '🤖', label: '指挥', color: '#60A5FA' },
@@ -894,6 +894,15 @@ function BottomNav({ screen, onSelect }: { screen: number; onSelect: (i: number)
             )}
           </button>
         ))}
+        {/* 询盘快捷入口 */}
+        <button
+          onClick={() => onNavigate?.('/phone')}
+          className="flex flex-col items-center gap-1 min-w-[60px] transition-all duration-300"
+          style={{ opacity: 0.5 }}
+        >
+          <span className="text-xl">📨</span>
+          <span className="text-xs font-semibold" style={{ color: '#6B6B80' }}>询盘</span>
+        </button>
       </div>
     </div>
   );
@@ -990,8 +999,7 @@ export default function BossWarroom() {
     }
   };
 
-  // Unused navigate reference kept for future back button
-  void navigate;
+  // navigate is used for BottomNav cross-page navigation
 
   return (
     <div
@@ -1035,7 +1043,7 @@ export default function BossWarroom() {
       </div>
 
       {/* Bottom navigation */}
-      <BottomNav screen={screen} onSelect={goToScreen} />
+      <BottomNav screen={screen} onSelect={goToScreen} onNavigate={navigate} />
     </div>
   );
 }

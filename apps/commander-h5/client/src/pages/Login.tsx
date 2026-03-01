@@ -19,7 +19,7 @@ export default function Login() {
     try {
       await authApi.login(email, password);
       toast.success("登录成功，欢迎使用 Commander！");
-      navigate("/phone");
+      navigate("/boss-warroom");
     } catch (err: any) {
       toast.error(err.message ?? "登录失败");
     } finally {

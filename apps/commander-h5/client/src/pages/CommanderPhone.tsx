@@ -2231,7 +2231,7 @@ export default function CommanderPhone() {
           credits={stats?.credits?.balance ?? user?.creditsBalance ?? 2840}
           unreadCount={stats?.pipeline?.unread ?? 0}
           feedCount={feedRemaining}
-          onBack={() => navigate("/")}
+          onBack={() => navigate("/boss-warroom")}
         />
 
         {/* Demo 模式切换器（原型演示用）*/}

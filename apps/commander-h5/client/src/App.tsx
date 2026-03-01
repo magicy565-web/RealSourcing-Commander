@@ -88,7 +88,7 @@ function NotificationCenterPage() {
       <NotificationCenter
         pushHour={pushHour}
         pushMinute={pushMinute}
-        onBack={() => navigate("/phone")}
+        onBack={() => navigate("/boss-warroom")}
         onOpenSettings={() => navigate("/notification-settings")}
       />
     </div>
@@ -116,7 +116,8 @@ function NotificationSettingsPage() {
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={LandingPage} />
+      <Route path="/">{() => isLoggedIn() ? <Redirect to="/boss-warroom" /> : <Redirect to="/login" />}</Route>
+      <Route path="/landing" component={LandingPage} />
       <Route path="/login" component={Login} />
       <Route path="/phone">{() => <ProtectedRoute component={CommanderPhone} />}</Route>
       <Route path="/web">{() => <ProtectedRoute component={WebDashboard} />}</Route>
@@ -153,7 +154,7 @@ function StyleTrainingPage() {
   const [, navigate] = useLocation();
   return (
     <div className="min-h-screen" style={{ background: "oklch(0.14 0.02 250)" }}>
-      <StyleTraining onBack={() => navigate("/phone")} />
+      <StyleTraining onBack={() => navigate("/boss-warroom")} />
     </div>
   );
 }
