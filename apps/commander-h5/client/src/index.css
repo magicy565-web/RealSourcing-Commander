@@ -240,7 +240,7 @@
       #0A0A0F;
   }
 
-  /* ─── Bottom Nav ──────────────────────────────────────── */
+  /* ─── Bottom Nav (Legacy) ────────────────────────────── */
   .bottom-nav {
     position: fixed;
     bottom: 0;
@@ -248,12 +248,30 @@
     transform: translateX(-50%);
     width: 100%;
     max-width: 390px;
-    background: rgba(10, 10, 15, 0.92);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    background: rgba(8, 8, 16, 0.95);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
     padding-bottom: env(safe-area-inset-bottom, 0px);
     z-index: 100;
+  }
+
+  /* ─── Tab Bar Active Indicator ───────────────────────── */
+  .tab-active-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    margin-top: 2px;
+  }
+
+  /* ─── Center FAB Button ──────────────────────────────── */
+  .tab-fab {
+    position: relative;
+    margin-top: -16px;
+    border-radius: 50%;
+    box-shadow: 0 4px 20px rgba(239,68,68,0.4), 0 2px 8px rgba(0,0,0,0.3);
+    transition: transform 0.12s ease;
+    &:active { transform: scale(0.88); }
   }
 
   /* ─── Status Badge ────────────────────────────────────── */

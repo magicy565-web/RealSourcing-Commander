@@ -1,11 +1,16 @@
 /**
  * BossWarroom — 全屏沉浸式老板指挥台
- * APEX COMMANDER v2 Design System — Enhanced Edition
+ * APEX COMMANDER v3 — Real Mobile APP Design
  *
- * 三屏滑动架构（左右水平滑动）：
- *   Screen 0 (Hero):    今日战报 + 核心数字 + 紧急信号 + 审批操作
- *   Screen 1 (Command): 数字员工状态 + 老板指令下达 + 快捷指令
- *   Screen 2 (Report):  经营周报对比 + ROI 摘要
+ * 设计升级：
+ *   - 真实手机状态栏（时间 + 信号 + 电量）
+ *   - iOS/Android 风格顶部导航栏（头像 + 通知角标）
+ *   - 真实底部 Tab Bar（图标 + 标签 + 激活态 + 安全区）
+ *   - 卡片触摸反馈（ripple effect + scale）
+ *   - 首页 Hero Banner（渐变背景 + 核心数据）
+ *   - 快捷操作网格（2×2 功能入口）
+ *   - 询盘列表预览（真实 APP 列表样式）
+ *   - 数字员工状态卡（在线/离线/执行中）
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation } from 'wouter';
@@ -33,6 +38,97 @@ function agentStatusColor(s: string): string {
   if (['online', 'working', 'active'].includes(s)) return '#3B82F6';
   if (s === 'sleeping') return '#F5D07A';
   return '#EF4444';
+}
+
+// ─── 状态栏组件（模拟真实手机状态栏）────────────────────────────────────────
+function StatusBar() {
+  const [time, setTime] = useState('');
+  useEffect(() => {
+    const update = () => {
+      const now = new Date();
+      setTime(now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }));
+    };
+    update();
+    const iv = setInterval(update, 1000);
+    return () => clearInterval(iv);
+  }, []);
+
+  return (
+    <div
+      className="flex items-center justify-between px-5 relative z-50"
+      style={{ height: 44, paddingTop: 'env(safe-area-inset-top, 0px)' }}
+    >
+      {/* 时间 */}
+      <span className="text-white text-[15px] font-semibold tabular-nums tracking-tight">{time}</span>
+
+      {/* 右侧：信号 + WiFi + 电量 */}
+      <div className="flex items-center gap-1.5">
+        {/* 信号格 */}
+        <svg width="17" height="12" viewBox="0 0 17 12" fill="none">
+          <rect x="0" y="8" width="3" height="4" rx="0.5" fill="white" opacity="1" />
+          <rect x="4.5" y="5" width="3" height="7" rx="0.5" fill="white" opacity="1" />
+          <rect x="9" y="2.5" width="3" height="9.5" rx="0.5" fill="white" opacity="1" />
+          <rect x="13.5" y="0" width="3" height="12" rx="0.5" fill="white" opacity="0.35" />
+        </svg>
+        {/* WiFi */}
+        <svg width="16" height="12" viewBox="0 0 16 12" fill="none">
+          <path d="M8 9.5C8.828 9.5 9.5 10.172 9.5 11S8.828 12.5 8 12.5 6.5 11.828 6.5 11 7.172 9.5 8 9.5Z" fill="white" />
+          <path d="M4.5 7.5C5.5 6.3 6.7 5.5 8 5.5s2.5.8 3.5 2" stroke="white" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+          <path d="M1.5 4.5C3.2 2.5 5.5 1.2 8 1.2s4.8 1.3 6.5 3.3" stroke="white" strokeWidth="1.2" strokeLinecap="round" fill="none" opacity="0.5" />
+        </svg>
+        {/* 电量 */}
+        <div className="flex items-center gap-0.5">
+          <div className="relative" style={{ width: 25, height: 12 }}>
+            <div className="absolute inset-0 rounded-[3px] border border-white/60" />
+            <div className="absolute" style={{
+              left: 2, top: 2, bottom: 2, right: 2,
+              background: 'white',
+              borderRadius: 1.5,
+              width: '75%',
+            }} />
+            <div className="absolute" style={{
+              right: -3, top: '50%', transform: 'translateY(-50%)',
+              width: 2, height: 5,
+              background: 'rgba(255,255,255,0.4)',
+              borderRadius: '0 1px 1px 0',
+            }} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Sparkline SVG Component ──────────────────────────────────────────────────
+function Sparkline({
+  data, color = '#C9A84C', height = 32, width = 80, filled = true,
+}: {
+  data: number[]; color?: string; height?: number; width?: number; filled?: boolean;
+}) {
+  if (!data || data.length < 2) return <div style={{ width, height }} />;
+  const max = Math.max(...data, 1);
+  const min = Math.min(...data);
+  const range = max - min || 1;
+  const pts = data.map((v, i) => [
+    (i / (data.length - 1)) * width,
+    height - ((v - min) / range) * (height - 4) - 2,
+  ]);
+  const pathD = pts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  const areaD = `${pathD} L${width},${height} L0,${height} Z`;
+  const id = `spark-${color.replace('#', '')}-${Math.random().toString(36).slice(2, 6)}`;
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ overflow: 'visible' }}>
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {filled && <path d={areaD} fill={`url(#${id})`} />}
+      <path d={pathD} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r="2.5" fill={color} />
+    </svg>
+  );
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -77,10 +173,7 @@ function RingProgress({
     <div className="flex flex-col items-center gap-1" style={{ width: size }}>
       <div className="relative" style={{ width: size, height: size }}>
         <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-          <circle
-            cx={size / 2} cy={size / 2} r={r}
-            fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={strokeWidth}
-          />
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={strokeWidth} />
           <circle
             cx={size / 2} cy={size / 2} r={r}
             fill="none" stroke={color} strokeWidth={strokeWidth}
@@ -125,173 +218,28 @@ function CompareBar({
         <div className="flex items-center gap-2">
           <span className="text-[#6B6B80] text-xs w-8 text-right">本周</span>
           <div className="flex-1 h-2 rounded-full" style={{ background: 'rgba(255,255,255,0.07)' }}>
-            <div
-              className="h-2 rounded-full"
-              style={{
-                width: `${thisPct}%`,
-                background: color,
-                transition: 'width 1s cubic-bezier(0.16,1,0.3,1)',
-                boxShadow: `0 0 8px ${color}60`,
-              }}
-            />
+            <div className="h-2 rounded-full" style={{
+              width: `${thisPct}%`, background: color,
+              transition: 'width 1s cubic-bezier(0.16,1,0.3,1)',
+              boxShadow: `0 0 8px ${color}60`,
+            }} />
           </div>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[#6B6B80] text-xs w-8 text-right">上周</span>
           <div className="flex-1 h-2 rounded-full" style={{ background: 'rgba(255,255,255,0.07)' }}>
-            <div
-              className="h-2 rounded-full"
-              style={{
-                width: `${lastPct}%`,
-                background: 'rgba(255,255,255,0.20)',
-                transition: 'width 1s cubic-bezier(0.16,1,0.3,1)',
-              }}
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Screen 0: Hero War Report ────────────────────────────────────────────────
-// ─── Sparkline SVG Component ──────────────────────────────────────────────────
-function Sparkline({
-  data, color = '#C9A84C', height = 32, width = 80, filled = true,
-}: {
-  data: number[]; color?: string; height?: number; width?: number; filled?: boolean;
-}) {
-  if (!data || data.length < 2) return <div style={{ width, height }} />;
-  const max = Math.max(...data, 1);
-  const min = Math.min(...data);
-  const range = max - min || 1;
-  const pts = data.map((v, i) => [
-    (i / (data.length - 1)) * width,
-    height - ((v - min) / range) * (height - 4) - 2,
-  ]);
-  const pathD = pts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
-  const areaD = `${pathD} L${width},${height} L0,${height} Z`;
-  const id = `spark-${color.replace('#', '')}-${Math.random().toString(36).slice(2, 6)}`;
-  return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ overflow: 'visible' }}>
-      <defs>
-        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.35" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      {filled && <path d={areaD} fill={`url(#${id})`} />}
-      <path d={pathD} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      {/* Last point dot */}
-      <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r="2.5" fill={color} />
-    </svg>
-  );
-}
-
-// ─── KPI Card Component ───────────────────────────────────────────────────────
-function KpiCard({
-  label, value, sub, trend, trendVal, color, sparkData, icon, urgent,
-}: {
-  label: string; value: string | number; sub?: string;
-  trend?: 'up' | 'down' | 'flat'; trendVal?: string;
-  color: string; sparkData?: number[]; icon: string; urgent?: boolean;
-}) {
-  const trendColor = trend === 'up' ? '#34D399' : trend === 'down' ? '#F87171' : '#6B6B80';
-  const trendIcon = trend === 'up' ? '▲' : trend === 'down' ? '▼' : '—';
-  return (
-    <div
-      className="relative flex flex-col justify-between p-3.5 rounded-2xl overflow-hidden"
-      style={{
-        background: urgent
-          ? `linear-gradient(135deg, rgba(239,68,68,0.12) 0%, rgba(239,68,68,0.04) 100%)`
-          : `linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)`,
-        border: urgent ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(255,255,255,0.08)',
-        backdropFilter: 'blur(12px)',
-        minHeight: 100,
-      }}
-    >
-      {/* Glow accent */}
-      <div className="absolute top-0 right-0 w-16 h-16 pointer-events-none" style={{
-        background: `radial-gradient(circle at top right, ${color}20 0%, transparent 70%)`,
-      }} />
-      {/* Header */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-1.5">
-          <span className="text-sm">{icon}</span>
-          <span className="text-[#8B8B9E] text-xs font-medium tracking-wide">{label}</span>
-        </div>
-        {trendVal && (
-          <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full" style={{
-            color: trendColor,
-            background: `${trendColor}18`,
-          }}>
-            {trendIcon} {trendVal}
-          </span>
-        )}
-      </div>
-      {/* Value */}
-      <div className="flex items-end justify-between">
-        <div>
-          <div className="text-2xl font-black tabular-nums leading-none" style={{ color }}>
-            {value}
-          </div>
-          {sub && <div className="text-[#6B6B80] text-xs mt-1">{sub}</div>}
-        </div>
-        {sparkData && (
-          <div className="opacity-80">
-            <Sparkline data={sparkData} color={color} height={36} width={72} />
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── Channel Badge Component ──────────────────────────────────────────────────
-function ChannelCard({
-  name, icon, count, replyRate, color,
-}: {
-  name: string; icon: string; count: number; replyRate: number; color: string;
-}) {
-  return (
-    <div
-      className="flex-shrink-0 flex flex-col gap-2 p-3 rounded-xl"
-      style={{
-        width: 100,
-        background: 'rgba(255,255,255,0.05)',
-        border: '1px solid rgba(255,255,255,0.08)',
-        backdropFilter: 'blur(8px)',
-      }}
-    >
-      <div className="flex items-center gap-1.5">
-        <span className="text-base">{icon}</span>
-        <span className="text-[#A0A0B0] text-xs font-medium truncate">{name}</span>
-      </div>
-      <div className="text-xl font-black tabular-nums" style={{ color }}>{count}</div>
-      <div>
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-[#6B6B80]" style={{ fontSize: 9 }}>回复率</span>
-          <span className="text-xs font-semibold" style={{ color }}>{replyRate}%</span>
-        </div>
-        <div className="h-1 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }}>
-          <div
-            className="h-1 rounded-full"
-            style={{
-              width: `${replyRate}%`,
-              background: `linear-gradient(90deg, ${color}, ${color}80)`,
-              boxShadow: `0 0 6px ${color}60`,
+            <div className="h-2 rounded-full" style={{
+              width: `${lastPct}%`, background: 'rgba(255,255,255,0.20)',
               transition: 'width 1s cubic-bezier(0.16,1,0.3,1)',
-            }}
-          />
+            }} />
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-// ─── Screen 0: Hero War Report — Apple/Linear Bento Grid ──────────────────────
-
-// Bento SVG Icons (精致线条图标，替代 emoji)
+// ─── Bento SVG Icons ──────────────────────────────────────────────────────────
 function IconInbox() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -377,8 +325,31 @@ function IconArrowRight() {
     </svg>
   );
 }
+function IconBell() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </svg>
+  );
+}
+function IconSettings() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+function IconChevronRight() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="9 18 15 12 9 6" />
+    </svg>
+  );
+}
 
-// Bento Card 基础容器
+// ─── Bento Card 基础容器 ──────────────────────────────────────────────────────
 function BentoCard({
   children, className = '', style = {}, onClick,
   accentColor = 'rgba(255,255,255,0.06)',
@@ -396,13 +367,13 @@ function BentoCard({
   return (
     <div
       onClick={onClick}
-      className={`relative overflow-hidden rounded-[20px] ${onClick ? 'cursor-pointer active:scale-[0.98]' : ''} ${className}`}
+      className={`relative overflow-hidden rounded-[20px] ${onClick ? 'cursor-pointer active:scale-[0.97]' : ''} ${className}`}
       style={{
         background: accentColor,
         border: `1px solid ${borderColor}`,
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
-        transition: 'transform 0.15s ease',
+        transition: 'transform 0.12s ease, opacity 0.12s ease',
         ...style,
       }}
     >
@@ -416,11 +387,687 @@ function BentoCard({
   );
 }
 
-function HeroScreen({
-  data, approvals, onApprove, onReject, onSwipe, openclawData,
+// ─── 顶部导航栏（真实 APP 风格）────────────────────────────────────────────────
+function AppHeader({
+  greeting, dateStr, unreadCount, onNotification, onSettings,
 }: {
-  data: any; approvals: any[]; onApprove: (id: string) => void;
-  onReject: (id: string) => void; onSwipe: () => void;
+  greeting: string;
+  dateStr: string;
+  unreadCount: number;
+  onNotification: () => void;
+  onSettings: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between px-4 pb-3 relative z-20">
+      {/* 左侧：头像 + 问候语 */}
+      <div className="flex items-center gap-3">
+        {/* 用户头像 */}
+        <div
+          className="relative flex-shrink-0"
+          style={{ width: 40, height: 40 }}
+        >
+          <div
+            className="w-full h-full rounded-full flex items-center justify-center text-sm font-bold"
+            style={{
+              background: 'linear-gradient(135deg, #C9A84C 0%, #F5D07A 100%)',
+              color: '#0A0A0F',
+            }}
+          >
+            老
+          </div>
+          {/* 在线状态点 */}
+          <div
+            className="absolute bottom-0 right-0 rounded-full border-2"
+            style={{
+              width: 11, height: 11,
+              background: '#34D399',
+              borderColor: '#0A0A0F',
+            }}
+          />
+        </div>
+
+        {/* 问候语 */}
+        <div>
+          <p className="text-white text-[16px] font-bold leading-tight tracking-tight">
+            {greeting}，老板 👋
+          </p>
+          <p className="text-[#5A5A72] text-[12px] mt-0.5 font-medium">{dateStr}</p>
+        </div>
+      </div>
+
+      {/* 右侧：通知 + 设置 */}
+      <div className="flex items-center gap-2">
+        {/* 通知按钮 */}
+        <button
+          onClick={onNotification}
+          className="relative flex items-center justify-center rounded-full active:scale-90 transition-transform"
+          style={{
+            width: 38, height: 38,
+            background: 'rgba(255,255,255,0.07)',
+            border: '1px solid rgba(255,255,255,0.1)',
+          }}
+        >
+          <span style={{ color: '#A0A0B0' }}><IconBell /></span>
+          {/* 通知角标 */}
+          {unreadCount > 0 && (
+            <div
+              className="absolute flex items-center justify-center rounded-full"
+              style={{
+                top: -2, right: -2,
+                minWidth: 16, height: 16,
+                background: '#EF4444',
+                fontSize: 9,
+                fontWeight: 700,
+                color: 'white',
+                paddingInline: 3,
+                boxShadow: '0 0 0 2px #0A0A0F',
+              }}
+            >
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </div>
+          )}
+        </button>
+
+        {/* 设置按钮 */}
+        <button
+          onClick={onSettings}
+          className="flex items-center justify-center rounded-full active:scale-90 transition-transform"
+          style={{
+            width: 38, height: 38,
+            background: 'rgba(255,255,255,0.07)',
+            border: '1px solid rgba(255,255,255,0.1)',
+          }}
+        >
+          <span style={{ color: '#A0A0B0' }}><IconSettings /></span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Hero Banner（核心数据一览）────────────────────────────────────────────────
+function HeroBanner({
+  todayInq, unread, aiOps, weekReplyRate, data,
+}: {
+  todayInq: number; unread: number; aiOps: number; weekReplyRate: number; data: any;
+}) {
+  return (
+    <div
+      className="mx-4 rounded-[24px] overflow-hidden relative"
+      style={{
+        background: 'linear-gradient(135deg, #1A1508 0%, #1E1A08 40%, #0F1520 100%)',
+        border: '1px solid rgba(201,168,76,0.25)',
+        boxShadow: '0 8px 32px rgba(201,168,76,0.12), 0 2px 8px rgba(0,0,0,0.4)',
+      }}
+    >
+      {/* 背景装饰 */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div style={{
+          position: 'absolute', top: -40, right: -40, width: 160, height: 160,
+          background: 'radial-gradient(circle, rgba(201,168,76,0.2) 0%, transparent 65%)',
+          filter: 'blur(30px)',
+        }} />
+        <div style={{
+          position: 'absolute', bottom: -20, left: -20, width: 120, height: 120,
+          background: 'radial-gradient(circle, rgba(59,130,246,0.15) 0%, transparent 65%)',
+          filter: 'blur(25px)',
+        }} />
+      </div>
+
+      <div className="relative p-5">
+        {/* 标题行 */}
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="text-[#C9A84C] text-[11px] font-bold tracking-[0.15em] uppercase mb-1">今日战报</p>
+            <p className="text-white text-[22px] font-black leading-tight">
+              {data ? todayInq : '—'}
+              <span className="text-[#8B8B9E] text-[14px] font-medium ml-1.5">条询盘</span>
+            </p>
+          </div>
+          {/* 状态徽章 */}
+          <div
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full"
+            style={{
+              background: unread > 0 ? 'rgba(239,68,68,0.15)' : 'rgba(52,211,153,0.12)',
+              border: `1px solid ${unread > 0 ? 'rgba(239,68,68,0.3)' : 'rgba(52,211,153,0.25)'}`,
+            }}
+          >
+            <div style={{
+              width: 6, height: 6, borderRadius: '50%',
+              background: unread > 0 ? '#F87171' : '#34D399',
+              boxShadow: `0 0 6px ${unread > 0 ? '#F87171' : '#34D399'}`,
+            }} />
+            <span className="text-[11px] font-bold" style={{ color: unread > 0 ? '#F87171' : '#34D399' }}>
+              {unread > 0 ? `${unread} 未回复` : '全部已回'}
+            </span>
+          </div>
+        </div>
+
+        {/* 三个核心指标 */}
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: '未回复', value: data ? unread : '—', color: unread > 0 ? '#F87171' : '#34D399', icon: '📨' },
+            { label: 'AI 操作', value: data ? aiOps : '—', color: '#60A5FA', icon: '🤖' },
+            { label: '回复率', value: data ? `${weekReplyRate}%` : '—', color: '#C9A84C', icon: '⚡' },
+          ].map(item => (
+            <div
+              key={item.label}
+              className="flex flex-col items-center py-3 rounded-2xl"
+              style={{
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.08)',
+              }}
+            >
+              <span className="text-base mb-1">{item.icon}</span>
+              <span className="text-[20px] font-black tabular-nums leading-none" style={{ color: item.color }}>
+                {item.value}
+              </span>
+              <span className="text-[#5A5A72] text-[10px] mt-1.5 font-medium">{item.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── 快捷功能网格 ──────────────────────────────────────────────────────────────
+function QuickActions({ onNavigate }: { onNavigate: (path: string) => void }) {
+  const actions = [
+    {
+      icon: '📨', label: '询盘管理', sub: '处理新询盘',
+      color: '#C9A84C', bg: 'rgba(201,168,76,0.1)', border: 'rgba(201,168,76,0.2)',
+      path: '/phone',
+    },
+    {
+      icon: '🤖', label: '数字员工', sub: '下达指令',
+      color: '#60A5FA', bg: 'rgba(96,165,250,0.1)', border: 'rgba(96,165,250,0.2)',
+      path: '/phone',
+    },
+    {
+      icon: '🌍', label: '市场拓展', sub: '开发新市场',
+      color: '#34D399', bg: 'rgba(52,211,153,0.1)', border: 'rgba(52,211,153,0.2)',
+      path: '/market',
+    },
+    {
+      icon: '📊', label: '增长报告', sub: '查看数据',
+      color: '#A78BFA', bg: 'rgba(167,139,250,0.1)', border: 'rgba(167,139,250,0.2)',
+      path: '/web',
+    },
+    {
+      icon: '🎬', label: 'TikTok', sub: '内容运营',
+      color: '#F472B6', bg: 'rgba(244,114,182,0.1)', border: 'rgba(244,114,182,0.2)',
+      path: '/tiktok',
+    },
+    {
+      icon: '💼', label: 'LinkedIn', sub: '开发客户',
+      color: '#60A5FA', bg: 'rgba(96,165,250,0.08)', border: 'rgba(96,165,250,0.18)',
+      path: '/linkedin',
+    },
+    {
+      icon: '💬', label: 'WhatsApp', sub: '客户沟通',
+      color: '#34D399', bg: 'rgba(52,211,153,0.08)', border: 'rgba(52,211,153,0.18)',
+      path: '/whatsapp',
+    },
+    {
+      icon: '💰', label: 'ROI 分析', sub: '投资回报',
+      color: '#F59E0B', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.18)',
+      path: '/roi',
+    },
+  ];
+
+  return (
+    <div className="px-4">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-white text-[15px] font-bold">快捷功能</span>
+        <button className="text-[#5A5A72] text-[12px] flex items-center gap-0.5">
+          全部 <span style={{ color: '#5A5A72' }}><IconChevronRight /></span>
+        </button>
+      </div>
+      <div className="grid grid-cols-4 gap-3">
+        {actions.map((action, i) => (
+          <button
+            key={i}
+            onClick={() => onNavigate(action.path)}
+            className="flex flex-col items-center gap-1.5 active:scale-90 transition-transform"
+          >
+            {/* 图标容器 */}
+            <div
+              className="flex items-center justify-center rounded-[18px]"
+              style={{
+                width: 56, height: 56,
+                background: action.bg,
+                border: `1px solid ${action.border}`,
+              }}
+            >
+              <span className="text-[24px]">{action.icon}</span>
+            </div>
+            <span className="text-[#A0A0B0] text-[11px] font-medium text-center leading-tight">{action.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── 数字员工状态卡 ────────────────────────────────────────────────────────────
+function AgentStatusCard({
+  data, openclawData, onNavigate,
+}: {
+  data: any; openclawData: any; onNavigate: (path: string) => void;
+}) {
+  const agent = data?.agent ?? null;
+  const agentStatus = agent?.instance?.status ?? 'offline';
+  const ocStatus = openclawData?.status ?? 'offline';
+  const ocIsActive = ['online', 'working', 'active'].includes(ocStatus);
+  const ocOpsToday = openclawData?.opsToday ?? 0;
+  const ocOpsLimit = openclawData?.opsLimit ?? 200;
+  const ocUtilization = ocOpsLimit > 0 ? Math.round((ocOpsToday / ocOpsLimit) * 100) : 0;
+
+  return (
+    <div className="px-4">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-white text-[15px] font-bold">数字员工</span>
+        <button
+          onClick={() => onNavigate('/phone')}
+          className="text-[#C9A84C] text-[12px] flex items-center gap-0.5 font-semibold"
+        >
+          管理 <span><IconChevronRight /></span>
+        </button>
+      </div>
+
+      <BentoCard
+        accentColor="rgba(96,165,250,0.06)"
+        borderColor="rgba(96,165,250,0.18)"
+        glow="rgba(96,165,250,0.1)"
+        onClick={() => onNavigate('/phone')}
+        style={{ padding: '16px' }}
+      >
+        {/* 头部 */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            {/* OpenClaw 图标 */}
+            <div
+              className="flex items-center justify-center rounded-2xl"
+              style={{
+                width: 44, height: 44,
+                background: 'linear-gradient(135deg, rgba(96,165,250,0.2) 0%, rgba(59,130,246,0.1) 100%)',
+                border: '1px solid rgba(96,165,250,0.25)',
+                color: '#60A5FA',
+              }}
+            >
+              <IconMonitor />
+            </div>
+            <div>
+              <p className="text-white text-[15px] font-bold leading-tight">OpenClaw</p>
+              <p className="text-[#5A5A72] text-[11px] mt-0.5">云端自动化引擎</p>
+            </div>
+          </div>
+
+          {/* 运行状态 */}
+          <div
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full"
+            style={{
+              background: ocIsActive ? 'rgba(52,211,153,0.1)' : 'rgba(239,68,68,0.1)',
+              border: `1px solid ${ocIsActive ? 'rgba(52,211,153,0.25)' : 'rgba(239,68,68,0.25)'}`,
+            }}
+          >
+            <div style={{
+              width: 6, height: 6, borderRadius: '50%',
+              background: ocIsActive ? '#34D399' : '#F87171',
+              boxShadow: `0 0 6px ${ocIsActive ? '#34D399' : '#F87171'}`,
+            }} />
+            <span className="text-[11px] font-bold" style={{ color: ocIsActive ? '#34D399' : '#F87171' }}>
+              {ocIsActive ? '运行中' : '离线'}
+            </span>
+          </div>
+        </div>
+
+        {/* 三个指标 */}
+        <div className="grid grid-cols-3 gap-2 mb-4">
+          {[
+            { label: '实例数', value: openclawData?.instances ?? 1, color: '#60A5FA' },
+            { label: '今日操作', value: ocOpsToday, color: '#A78BFA' },
+            { label: '利用率', value: `${ocUtilization}%`, color: ocUtilization > 80 ? '#F87171' : '#34D399' },
+          ].map(item => (
+            <div key={item.label} className="flex flex-col items-center py-3 rounded-2xl" style={{
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.07)',
+            }}>
+              <span className="text-[20px] font-black tabular-nums leading-none" style={{ color: item.color }}>
+                {item.value}
+              </span>
+              <span className="text-[#5A5A72] text-[10px] mt-1.5 font-medium">{item.label}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* 进度条 */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[#8B8B9E] text-[11px] font-medium">操作配额</span>
+            <span className="text-[#8B8B9E] text-[11px]">{ocOpsToday} / {ocOpsLimit}</span>
+          </div>
+          <div className="h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.07)' }}>
+            <div className="h-1.5 rounded-full" style={{
+              width: `${Math.min(ocUtilization, 100)}%`,
+              background: ocUtilization > 80
+                ? 'linear-gradient(90deg, #F87171, #F59E0B)'
+                : 'linear-gradient(90deg, #60A5FA, #A78BFA)',
+              boxShadow: `0 0 8px ${ocUtilization > 80 ? 'rgba(248,113,113,0.4)' : 'rgba(96,165,250,0.4)'}`,
+              transition: 'width 1s cubic-bezier(0.16,1,0.3,1)',
+            }} />
+          </div>
+        </div>
+      </BentoCard>
+    </div>
+  );
+}
+
+// ─── 待处理询盘列表 ────────────────────────────────────────────────────────────
+function PendingInquiriesList({
+  approvals, onApprove, onReject, onNavigate,
+}: {
+  approvals: any[];
+  onApprove: (id: string) => void;
+  onReject: (id: string) => void;
+  onNavigate: (path: string) => void;
+}) {
+  // Mock 询盘数据（当没有真实数据时显示）
+  const mockItems = [
+    {
+      id: 'mock1',
+      buyerName: 'Nguyen Van An',
+      company: 'SunPower Solutions',
+      country: '🇻🇳 越南',
+      product: '400W 单晶硅太阳能板',
+      channel: 'Alibaba RFQ',
+      channelColor: '#F59E0B',
+      time: '3分钟前',
+      urgency: 'high',
+      confidence: 87,
+    },
+    {
+      id: 'mock2',
+      buyerName: 'Klaus Weber',
+      company: 'EcoHome Trading GmbH',
+      country: '🇩🇪 德国',
+      product: '户外柚木家具套装',
+      channel: 'LinkedIn',
+      channelColor: '#60A5FA',
+      time: '18分钟前',
+      urgency: 'normal',
+      confidence: 72,
+    },
+    {
+      id: 'mock3',
+      buyerName: 'Mike Johnson',
+      company: 'Pacific Imports LLC',
+      country: '🇺🇸 美国',
+      product: 'LED 灯具 OEM 定制',
+      channel: 'WhatsApp',
+      channelColor: '#34D399',
+      time: '1小时前',
+      urgency: 'normal',
+      confidence: 91,
+    },
+  ];
+
+  const displayItems = approvals.length > 0
+    ? approvals.map((a: any) => ({
+        id: a.id,
+        buyerName: a.buyerName || a.customerName || '客户',
+        company: a.company || '未知公司',
+        country: '',
+        product: a.product || '产品询盘',
+        channel: a.channel || 'AI 草稿',
+        channelColor: '#C9A84C',
+        time: new Date(a.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+        urgency: 'normal',
+        confidence: 80,
+        draftContent: a.draftContent || a.draft,
+        isApproval: true,
+      }))
+    : mockItems;
+
+  return (
+    <div className="px-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span className="text-white text-[15px] font-bold">待处理询盘</span>
+          {approvals.length > 0 && (
+            <div
+              className="flex items-center justify-center rounded-full text-[10px] font-bold"
+              style={{
+                minWidth: 18, height: 18,
+                background: '#EF4444',
+                color: 'white',
+                paddingInline: 4,
+              }}
+            >
+              {approvals.length}
+            </div>
+          )}
+        </div>
+        <button
+          onClick={() => onNavigate('/phone')}
+          className="text-[#C9A84C] text-[12px] flex items-center gap-0.5 font-semibold"
+        >
+          全部 <span><IconChevronRight /></span>
+        </button>
+      </div>
+
+      <div className="flex flex-col gap-2.5">
+        {displayItems.slice(0, 3).map((item: any) => (
+          <div
+            key={item.id}
+            onClick={() => onNavigate('/phone')}
+            className="flex items-center gap-3 p-3.5 rounded-[18px] cursor-pointer active:scale-[0.98] transition-transform"
+            style={{
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.08)',
+            }}
+          >
+            {/* 头像 */}
+            <div
+              className="flex-shrink-0 flex items-center justify-center rounded-full text-sm font-bold"
+              style={{
+                width: 44, height: 44,
+                background: `${item.channelColor}20`,
+                border: `1.5px solid ${item.channelColor}40`,
+                color: item.channelColor,
+              }}
+            >
+              {item.buyerName.charAt(0).toUpperCase()}
+            </div>
+
+            {/* 内容 */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between mb-0.5">
+                <span className="text-white text-[13px] font-semibold truncate">{item.buyerName}</span>
+                <span className="text-[#5A5A72] text-[11px] flex-shrink-0 ml-2">{item.time}</span>
+              </div>
+              <p className="text-[#8B8B9E] text-[12px] truncate mb-1">{item.product}</p>
+              <div className="flex items-center gap-2">
+                {/* 渠道标签 */}
+                <span
+                  className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                  style={{
+                    background: `${item.channelColor}15`,
+                    color: item.channelColor,
+                    border: `1px solid ${item.channelColor}25`,
+                  }}
+                >
+                  {item.channel}
+                </span>
+                {/* 置信度 */}
+                <span className="text-[#5A5A72] text-[10px]">{item.country}</span>
+              </div>
+            </div>
+
+            {/* 置信度 + 箭头 */}
+            <div className="flex flex-col items-end gap-1 flex-shrink-0">
+              <div
+                className="text-[11px] font-bold px-2 py-0.5 rounded-full"
+                style={{
+                  background: item.confidence >= 80 ? 'rgba(52,211,153,0.12)' : item.confidence >= 60 ? 'rgba(245,158,11,0.12)' : 'rgba(148,163,184,0.12)',
+                  color: item.confidence >= 80 ? '#34D399' : item.confidence >= 60 ? '#F59E0B' : '#94A3B8',
+                }}
+              >
+                {item.confidence}%
+              </div>
+              <span style={{ color: '#3A3A52' }}><IconChevronRight /></span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 审批按钮（当有真实审批数据时） */}
+      {approvals.length > 0 && (
+        <div className="mt-3 flex flex-col gap-2">
+          {approvals.slice(0, 2).map((a: any) => (
+            <div
+              key={`approval-${a.id}`}
+              className="p-4 rounded-[18px]"
+              style={{
+                background: 'rgba(245,158,11,0.06)',
+                border: '1px solid rgba(245,158,11,0.2)',
+              }}
+            >
+              <div className="flex items-start justify-between mb-2">
+                <div>
+                  <p className="text-white text-[13px] font-bold">{a.buyerName || '客户'}</p>
+                  <p className="text-[#5A5A72] text-[11px] mt-0.5">AI 草稿 · 等待审批</p>
+                </div>
+                <span className="text-[#F59E0B] text-[10px] font-bold px-2 py-0.5 rounded-full"
+                  style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)' }}>
+                  待审批
+                </span>
+              </div>
+              <p className="text-[#8B8B9E] text-[12px] leading-relaxed line-clamp-2 mb-3">
+                {a.draftContent || a.draft || '（草稿内容）'}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => onApprove(a.id)}
+                  className="flex-1 py-2.5 rounded-2xl text-[12px] font-bold active:scale-95 transition-transform"
+                  style={{ background: 'linear-gradient(135deg, #C9A84C, #F5D07A)', color: '#0A0A0F' }}
+                >
+                  ✓ 批准发送
+                </button>
+                <button
+                  onClick={() => onReject(a.id)}
+                  className="flex-1 py-2.5 rounded-2xl text-[12px] font-semibold active:scale-95 transition-transform"
+                  style={{ background: 'rgba(239,68,68,0.1)', color: '#F87171', border: '1px solid rgba(239,68,68,0.25)' }}
+                >
+                  ✗ 拒绝
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── 渠道来源卡片 ──────────────────────────────────────────────────────────────
+function ChannelSummary({ todayInq }: { todayInq: number }) {
+  const channels = [
+    { name: 'Alibaba', abbr: 'Ali', count: Math.max(todayInq > 0 ? Math.round(todayInq * 0.4) : 2, 0), replyRate: 85, color: '#F59E0B', bg: 'rgba(245,158,11,0.1)' },
+    { name: 'LinkedIn', abbr: 'In', count: Math.max(todayInq > 0 ? Math.round(todayInq * 0.25) : 1, 0), replyRate: 72, color: '#60A5FA', bg: 'rgba(96,165,250,0.1)' },
+    { name: 'WhatsApp', abbr: 'WA', count: Math.max(todayInq > 0 ? Math.round(todayInq * 0.15) : 1, 0), replyRate: 91, color: '#34D399', bg: 'rgba(52,211,153,0.1)' },
+    { name: 'TikTok', abbr: 'TT', count: Math.max(todayInq > 0 ? Math.round(todayInq * 0.1) : 1, 0), replyRate: 45, color: '#F472B6', bg: 'rgba(244,114,182,0.1)' },
+  ];
+
+  return (
+    <div className="px-4">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-white text-[15px] font-bold">渠道来源</span>
+        <span className="text-[#5A5A72] text-[12px]">今日</span>
+      </div>
+      <div className="grid grid-cols-4 gap-2.5">
+        {channels.map(ch => (
+          <div
+            key={ch.name}
+            className="flex flex-col items-center py-3 px-2 rounded-[18px] active:scale-95 transition-transform cursor-pointer"
+            style={{
+              background: ch.bg,
+              border: `1px solid ${ch.color}25`,
+            }}
+          >
+            {/* 渠道缩写 */}
+            <div
+              className="flex items-center justify-center rounded-xl mb-2 font-black text-[11px]"
+              style={{
+                width: 34, height: 34,
+                background: `${ch.color}20`,
+                color: ch.color,
+                border: `1px solid ${ch.color}30`,
+              }}
+            >
+              {ch.abbr}
+            </div>
+            <div className="text-[22px] font-black tabular-nums leading-none" style={{ color: ch.color }}>{ch.count}</div>
+            <div className="text-[9px] text-[#5A5A72] mt-1 truncate w-full text-center">{ch.name}</div>
+            {/* 回复率进度条 */}
+            <div className="mt-2 w-full h-0.5 rounded-full" style={{ background: 'rgba(255,255,255,0.07)' }}>
+              <div className="h-0.5 rounded-full" style={{ width: `${ch.replyRate}%`, background: ch.color }} />
+            </div>
+            <span className="text-[9px] font-semibold mt-1" style={{ color: ch.color }}>{ch.replyRate}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── 近7天趋势 ────────────────────────────────────────────────────────────────
+function WeekTrendCard({ inqTrend, todayInq }: { inqTrend: number[]; todayInq: number }) {
+  return (
+    <div className="px-4">
+      <BentoCard
+        accentColor="rgba(255,255,255,0.03)"
+        borderColor="rgba(255,255,255,0.07)"
+        style={{ padding: '16px 18px 14px' }}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-white text-[14px] font-bold">近 7 天询盘趋势</span>
+          <span className="text-[#34D399] text-[11px] font-bold">▲ 持续增长</span>
+        </div>
+        <div className="flex items-end gap-1.5" style={{ height: 52 }}>
+          {inqTrend.map((v, i) => {
+            const maxV = Math.max(...inqTrend, 1);
+            const h = Math.max((v / maxV) * 44, 4);
+            const days = ['一', '二', '三', '四', '五', '六', '日'];
+            const isToday = i === inqTrend.length - 1;
+            return (
+              <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                <div className="w-full rounded-t-md" style={{
+                  height: h,
+                  background: isToday
+                    ? 'linear-gradient(180deg, #C9A84C 0%, rgba(201,168,76,0.3) 100%)'
+                    : 'rgba(255,255,255,0.09)',
+                  boxShadow: isToday ? '0 0 10px rgba(201,168,76,0.35)' : 'none',
+                }} />
+                <span style={{ fontSize: 9, color: isToday ? '#C9A84C' : '#3A3A52', fontWeight: isToday ? 700 : 400 }}>周{days[i]}</span>
+              </div>
+            );
+          })}
+        </div>
+      </BentoCard>
+    </div>
+  );
+}
+
+// ─── Screen 0: 首页（Home）────────────────────────────────────────────────────
+function HomeScreen({
+  data, approvals, onApprove, onReject, onNavigate, openclawData,
+}: {
+  data: any; approvals: any[];
+  onApprove: (id: string) => void;
+  onReject: (id: string) => void;
+  onNavigate: (path: string) => void;
   openclawData: any;
 }) {
   const now = new Date();
@@ -431,556 +1078,102 @@ function HeroScreen({
 
   const signals = data?.signals ?? null;
   const agent = data?.agent ?? null;
-  const agentStatus = agent?.instance?.status ?? 'offline';
   const weekReport = data?.weekReport ?? null;
 
   const todayInq = signals?.newInquiries ?? 0;
   const unread = signals?.unread ?? 0;
   const aiOps = agent?.completedTasks ?? 0;
-  const weekInq = weekReport?.thisWeek?.inquiries ?? 0;
+  const weekReplyRate = weekReport?.thisWeek?.replyRate ?? 78;
   const lastWeekInq = weekReport?.lastWeek?.inquiries ?? 0;
-  const weekReplyRate = weekReport?.thisWeek?.replyRate ?? 0;
-  const lastWeekReplyRate = weekReport?.lastWeek?.replyRate ?? 0;
 
   const inqTrend = [lastWeekInq > 0 ? Math.round(lastWeekInq / 7) : 2, 3, 5, 4, 6, 4, todayInq || 5];
-  const replyTrend = [lastWeekReplyRate || 60, 65, 70, 68, 72, 75, weekReplyRate || 78];
-  const aiTrend = [0, 1, 2, 1, 3, 2, aiOps || 3];
-
-  // OpenClaw 数据
-  const ocStatus = openclawData?.status ?? 'offline';
-  const ocInstances = openclawData?.instances ?? 1;
-  const ocOpsToday = openclawData?.opsToday ?? 0;
-  const ocOpsLimit = openclawData?.opsLimit ?? 200;
-  const ocUtilization = ocOpsLimit > 0 ? Math.round((ocOpsToday / ocOpsLimit) * 100) : 0;
-  const ocIsActive = ['online', 'working', 'active'].includes(ocStatus);
-
-  // 渠道数据
-  const channels = [
-    { name: 'Alibaba', abbr: 'Ali', count: Math.max(todayInq > 0 ? Math.round(todayInq * 0.4) : 2, 0), replyRate: 85, color: '#F59E0B', bg: 'rgba(245,158,11,0.12)' },
-    { name: 'LinkedIn', abbr: 'In', count: Math.max(todayInq > 0 ? Math.round(todayInq * 0.25) : 1, 0), replyRate: 72, color: '#60A5FA', bg: 'rgba(96,165,250,0.12)' },
-    { name: 'WhatsApp', abbr: 'WA', count: Math.max(todayInq > 0 ? Math.round(todayInq * 0.15) : 1, 0), replyRate: 91, color: '#34D399', bg: 'rgba(52,211,153,0.12)' },
-    { name: 'TikTok', abbr: 'TT', count: Math.max(todayInq > 0 ? Math.round(todayInq * 0.1) : 1, 0), replyRate: 45, color: '#F472B6', bg: 'rgba(244,114,182,0.12)' },
-  ];
-
-  // 紧急待办
-  const urgentActions: Array<{ level: 'red' | 'orange' | 'green'; text: string; sub: string; action: string }> = [
-    ...(unread > 0 ? [{ level: 'red' as const, text: `${unread} 条询盘未回复`, sub: '最长等待 3 小时', action: '立即处理' }] : []),
-    ...(approvals.length > 0 ? [{ level: 'orange' as const, text: `${approvals.length} 条草稿待审批`, sub: 'AI 已起草，等待确认', action: '查看草稿' }] : []),
-    ...(weekReplyRate > 0 && weekReplyRate < 70 ? [{ level: 'orange' as const, text: '本周回复率偏低', sub: `当前 ${weekReplyRate}%，建议提速`, action: '查看详情' }] : []),
-    ...(unread === 0 && approvals.length === 0 ? [{ level: 'green' as const, text: '今日运营状态良好', sub: '所有询盘均已及时处理', action: '查看报告' }] : []),
-  ].slice(0, 2);
-
-  const levelColor = { red: '#F87171', orange: '#F59E0B', green: '#34D399' };
-  const levelBg = { red: 'rgba(239,68,68,0.08)', orange: 'rgba(245,158,11,0.08)', green: 'rgba(52,211,153,0.06)' };
-  const levelBorder = { red: 'rgba(239,68,68,0.2)', orange: 'rgba(245,158,11,0.2)', green: 'rgba(52,211,153,0.18)' };
 
   return (
-    <div className="relative flex flex-col h-full overflow-hidden" style={{
-      background: 'linear-gradient(155deg, #070710 0%, #0B0B18 40%, #080810 100%)',
-    }}>
-      {/* ── Ambient glows ── */}
+    <div
+      className="relative flex flex-col h-full"
+      style={{
+        background: 'linear-gradient(180deg, #070710 0%, #0A0A18 100%)',
+      }}
+    >
+      {/* 背景光晕 */}
       <div className="absolute pointer-events-none" style={{
-        top: -80, left: '20%', width: 320, height: 320,
-        background: 'radial-gradient(circle, rgba(201,168,76,0.14) 0%, transparent 65%)',
-        filter: 'blur(60px)',
-      }} />
-      <div className="absolute pointer-events-none" style={{
-        top: '45%', right: -60, width: 240, height: 240,
-        background: 'radial-gradient(circle, rgba(59,130,246,0.1) 0%, transparent 65%)',
+        top: -60, left: '15%', width: 280, height: 280,
+        background: 'radial-gradient(circle, rgba(201,168,76,0.12) 0%, transparent 65%)',
         filter: 'blur(50px)',
       }} />
       <div className="absolute pointer-events-none" style={{
-        bottom: 100, left: -40, width: 200, height: 200,
-        background: 'radial-gradient(circle, rgba(52,211,153,0.08) 0%, transparent 65%)',
+        top: '30%', right: -40, width: 200, height: 200,
+        background: 'radial-gradient(circle, rgba(59,130,246,0.08) 0%, transparent 65%)',
         filter: 'blur(40px)',
       }} />
 
-      {/* ── Scrollable content ── */}
+      {/* 状态栏 */}
+      <StatusBar />
+
+      {/* 顶部导航 */}
+      <AppHeader
+        greeting={greeting}
+        dateStr={dateStr}
+        unreadCount={unread + approvals.length}
+        onNotification={() => onNavigate('/notifications')}
+        onSettings={() => {}}
+      />
+
+      {/* 可滚动内容区 */}
       <div className="flex-1 overflow-y-auto scroll-area relative z-10" style={{ paddingBottom: 90 }}>
+        <div className="flex flex-col gap-5 pb-4">
 
-        {/* ── Header ── */}
-        <div className="flex items-start justify-between px-5 pt-12 pb-5">
-          <div>
-            <p className="text-[#5A5A72] text-[11px] font-semibold tracking-[0.12em] uppercase mb-1.5">{dateStr}</p>
-            <p className="text-white text-[22px] font-bold tracking-tight leading-tight">{greeting}，老板</p>
-          </div>
-          {/* Agent status pill */}
-          <div
-            className="flex items-center gap-2 px-3.5 py-2 rounded-2xl"
-            style={{
-              background: 'rgba(255,255,255,0.05)',
-              border: '1px solid rgba(255,255,255,0.1)',
-              backdropFilter: 'blur(16px)',
-            }}
-          >
-            <div style={{
-              width: 7, height: 7, borderRadius: '50%',
-              background: agentStatusColor(agentStatus),
-              boxShadow: `0 0 8px ${agentStatusColor(agentStatus)}`,
-            }} />
-            <div className="flex flex-col">
-              <span className="text-[#5A5A72] text-[9px] font-semibold tracking-widest uppercase leading-none">数字员工</span>
-              <span className="text-white text-[11px] font-bold mt-0.5">{agentStatusLabel(agentStatus)}</span>
-            </div>
-          </div>
+          {/* Hero Banner */}
+          <HeroBanner
+            todayInq={todayInq}
+            unread={unread}
+            aiOps={aiOps}
+            weekReplyRate={weekReplyRate}
+            data={data}
+          />
+
+          {/* 快捷功能 */}
+          <QuickActions onNavigate={onNavigate} />
+
+          {/* 待处理询盘 */}
+          <PendingInquiriesList
+            approvals={approvals}
+            onApprove={onApprove}
+            onReject={onReject}
+            onNavigate={onNavigate}
+          />
+
+          {/* 数字员工状态 */}
+          <AgentStatusCard
+            data={data}
+            openclawData={openclawData}
+            onNavigate={onNavigate}
+          />
+
+          {/* 渠道来源 */}
+          <ChannelSummary todayInq={todayInq} />
+
+          {/* 趋势图 */}
+          <WeekTrendCard inqTrend={inqTrend} todayInq={todayInq} />
+
         </div>
-
-        {/* ── BENTO GRID ── */}
-        <div className="px-4 flex flex-col gap-3">
-
-          {/* Row 1: 今日询盘（大卡 2/3）+ 未回复（小卡 1/3）*/}
-          <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
-
-            {/* 今日询盘 — 大卡 */}
-            <BentoCard
-              accentColor="rgba(201,168,76,0.08)"
-              borderColor="rgba(201,168,76,0.18)"
-              glow="rgba(201,168,76,0.15)"
-              style={{ padding: '18px 16px 14px' }}
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center justify-center rounded-xl" style={{
-                  width: 36, height: 36,
-                  background: 'rgba(201,168,76,0.15)',
-                  color: '#C9A84C',
-                }}>
-                  <IconInbox />
-                </div>
-                {lastWeekInq > 0 && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{
-                    background: 'rgba(52,211,153,0.12)',
-                    color: '#34D399',
-                  }}>
-                    ▲ {pctNum(todayInq, Math.ceil(lastWeekInq / 7)) > 0 ? '+' : ''}{pctNum(todayInq, Math.ceil(lastWeekInq / 7)).toFixed(0)}%
-                  </span>
-                )}
-              </div>
-              <div className="text-[38px] font-black tabular-nums leading-none" style={{ color: '#C9A84C' }}>
-                {data ? todayInq : <span className="shimmer inline-block w-12 h-9 rounded-lg" />}
-              </div>
-              <div className="mt-1.5 flex items-end justify-between">
-                <div>
-                  <p className="text-[#8B8B9E] text-[11px] font-medium">今日询盘</p>
-                  <p className="text-[#5A5A72] text-[10px] mt-0.5">条新询盘</p>
-                </div>
-                <Sparkline data={inqTrend} color="#C9A84C" height={32} width={64} />
-              </div>
-            </BentoCard>
-
-            {/* 未回复 — 小卡 */}
-            <BentoCard
-              accentColor={unread > 0 ? 'rgba(239,68,68,0.08)' : 'rgba(52,211,153,0.06)'}
-              borderColor={unread > 0 ? 'rgba(239,68,68,0.2)' : 'rgba(52,211,153,0.15)'}
-              glow={unread > 0 ? 'rgba(239,68,68,0.12)' : 'rgba(52,211,153,0.1)'}
-              style={{ padding: '18px 16px 14px' }}
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center justify-center rounded-xl" style={{
-                  width: 36, height: 36,
-                  background: unread > 0 ? 'rgba(239,68,68,0.15)' : 'rgba(52,211,153,0.12)',
-                  color: unread > 0 ? '#F87171' : '#34D399',
-                }}>
-                  {unread > 0 ? <IconAlertCircle /> : <IconCheckCircle />}
-                </div>
-              </div>
-              <div className="text-[38px] font-black tabular-nums leading-none" style={{ color: unread > 0 ? '#F87171' : '#34D399' }}>
-                {data ? unread : <span className="shimmer inline-block w-10 h-9 rounded-lg" />}
-              </div>
-              <div className="mt-1.5">
-                <p className="text-[#8B8B9E] text-[11px] font-medium">未回复</p>
-                <p className="text-[#5A5A72] text-[10px] mt-0.5">{unread > 0 ? '需处理' : '全部已回'}</p>
-              </div>
-            </BentoCard>
-          </div>
-
-          {/* Row 2: OpenClaw 云电脑 — 全宽大板块 */}
-          <BentoCard
-            accentColor="rgba(96,165,250,0.07)"
-            borderColor="rgba(96,165,250,0.2)"
-            glow="rgba(96,165,250,0.12)"
-            style={{ padding: '20px 20px 18px' }}
-          >
-            {/* 顶部：图标 + 标题 + 状态 */}
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center rounded-2xl" style={{
-                  width: 44, height: 44,
-                  background: 'linear-gradient(135deg, rgba(96,165,250,0.2) 0%, rgba(59,130,246,0.1) 100%)',
-                  border: '1px solid rgba(96,165,250,0.25)',
-                  color: '#60A5FA',
-                }}>
-                  <IconMonitor />
-                </div>
-                <div>
-                  <p className="text-white text-[15px] font-bold leading-tight">OpenClaw</p>
-                  <p className="text-[#5A5A72] text-[11px] mt-0.5">云端自动化引擎</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{
-                background: ocIsActive ? 'rgba(52,211,153,0.1)' : 'rgba(239,68,68,0.1)',
-                border: `1px solid ${ocIsActive ? 'rgba(52,211,153,0.25)' : 'rgba(239,68,68,0.25)'}`,
-              }}>
-                <div style={{
-                  width: 6, height: 6, borderRadius: '50%',
-                  background: ocIsActive ? '#34D399' : '#F87171',
-                  boxShadow: `0 0 6px ${ocIsActive ? '#34D399' : '#F87171'}`,
-                }} />
-                <span className="text-[11px] font-bold" style={{ color: ocIsActive ? '#34D399' : '#F87171' }}>
-                  {ocIsActive ? '运行中' : '离线'}
-                </span>
-              </div>
-            </div>
-
-            {/* 三个核心指标 */}
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              {[
-                { label: '实例数', value: ocInstances, unit: '个', color: '#60A5FA' },
-                { label: '今日操作', value: ocOpsToday, unit: '次', color: '#A78BFA' },
-                { label: '利用率', value: `${ocUtilization}%`, unit: '', color: ocUtilization > 80 ? '#F87171' : '#34D399' },
-              ].map(item => (
-                <div key={item.label} className="flex flex-col items-center py-3 rounded-2xl" style={{
-                  background: 'rgba(255,255,255,0.04)',
-                  border: '1px solid rgba(255,255,255,0.07)',
-                }}>
-                  <span className="text-[22px] font-black tabular-nums leading-none" style={{ color: item.color }}>
-                    {item.value}
-                  </span>
-                  <span className="text-[#5A5A72] text-[10px] mt-1.5 font-medium">{item.label}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* 利用率进度条 */}
-            <div className="mb-4">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[#8B8B9E] text-[11px] font-medium">操作配额</span>
-                <span className="text-[#8B8B9E] text-[11px]">{ocOpsToday} / {ocOpsLimit}</span>
-              </div>
-              <div className="h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.07)' }}>
-                <div className="h-1.5 rounded-full" style={{
-                  width: `${Math.min(ocUtilization, 100)}%`,
-                  background: ocUtilization > 80
-                    ? 'linear-gradient(90deg, #F87171, #F59E0B)'
-                    : 'linear-gradient(90deg, #60A5FA, #A78BFA)',
-                  boxShadow: `0 0 8px ${ocUtilization > 80 ? 'rgba(248,113,113,0.4)' : 'rgba(96,165,250,0.4)'}`,
-                  transition: 'width 1s cubic-bezier(0.16,1,0.3,1)',
-                }} />
-              </div>
-            </div>
-
-            {/* 进入按钮 */}
-            <button
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-[13px]"
-              style={{
-                background: 'linear-gradient(135deg, rgba(96,165,250,0.2) 0%, rgba(59,130,246,0.12) 100%)',
-                border: '1px solid rgba(96,165,250,0.3)',
-                color: '#60A5FA',
-              }}
-            >
-              <IconMonitor />
-              <span>进入 OpenClaw 控制台</span>
-              <IconArrowRight />
-            </button>
-          </BentoCard>
-
-          {/* Row 3: 本周询盘 + AI 操作 */}
-          <div className="grid grid-cols-2 gap-3">
-            <BentoCard
-              accentColor="rgba(167,139,250,0.07)"
-              borderColor="rgba(167,139,250,0.18)"
-              glow="rgba(167,139,250,0.12)"
-              style={{ padding: '16px 14px 14px' }}
-            >
-              <div className="flex items-center justify-center rounded-xl mb-3" style={{
-                width: 34, height: 34,
-                background: 'rgba(167,139,250,0.15)',
-                color: '#A78BFA',
-              }}>
-                <IconTrendingUp />
-              </div>
-              <div className="text-[32px] font-black tabular-nums leading-none" style={{ color: '#A78BFA' }}>
-                {data ? weekInq : <span className="shimmer inline-block w-10 h-8 rounded-lg" />}
-              </div>
-              <div className="mt-2 flex items-end justify-between">
-                <div>
-                  <p className="text-[#8B8B9E] text-[11px] font-medium">本周询盘</p>
-                  {lastWeekInq > 0 && (
-                    <p className="text-[#5A5A72] text-[10px] mt-0.5">上周 {lastWeekInq} 条</p>
-                  )}
-                </div>
-                <Sparkline data={inqTrend.map((v, i) => v + i)} color="#A78BFA" height={28} width={52} />
-              </div>
-            </BentoCard>
-
-            <BentoCard
-              accentColor="rgba(52,211,153,0.06)"
-              borderColor="rgba(52,211,153,0.15)"
-              glow="rgba(52,211,153,0.1)"
-              style={{ padding: '16px 14px 14px' }}
-            >
-              <div className="flex items-center justify-center rounded-xl mb-3" style={{
-                width: 34, height: 34,
-                background: 'rgba(52,211,153,0.12)',
-                color: '#34D399',
-              }}>
-                <IconCpu />
-              </div>
-              <div className="text-[32px] font-black tabular-nums leading-none" style={{ color: '#34D399' }}>
-                {data ? aiOps : <span className="shimmer inline-block w-10 h-8 rounded-lg" />}
-              </div>
-              <div className="mt-2 flex items-end justify-between">
-                <div>
-                  <p className="text-[#8B8B9E] text-[11px] font-medium">AI 操作</p>
-                  <p className="text-[#5A5A72] text-[10px] mt-0.5">今日完成</p>
-                </div>
-                <Sparkline data={aiTrend} color="#34D399" height={28} width={52} />
-              </div>
-            </BentoCard>
-          </div>
-
-          {/* Row 4: 回复效率 — 全宽 */}
-          <BentoCard
-            accentColor="rgba(201,168,76,0.06)"
-            borderColor="rgba(201,168,76,0.15)"
-            style={{ padding: '16px 18px' }}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <div style={{ color: '#C9A84C' }}><IconZap /></div>
-                <span className="text-[#C9A84C] text-[13px] font-bold">回复效率</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-[#5A5A72] text-[11px]">上周 {lastWeekReplyRate || 68}%</span>
-                <span className="text-[#34D399] text-[11px] font-bold">本周 {weekReplyRate || 78}%</span>
-              </div>
-            </div>
-            <div className="relative h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.07)' }}>
-              <div className="absolute left-0 top-0 h-1.5 rounded-full" style={{
-                width: `${weekReplyRate || 78}%`,
-                background: 'linear-gradient(90deg, #C9A84C, #F5D07A)',
-                boxShadow: '0 0 8px rgba(201,168,76,0.5)',
-                transition: 'width 1.2s cubic-bezier(0.16,1,0.3,1)',
-              }} />
-              <div className="absolute top-1/2 -translate-y-1/2 w-px h-3.5" style={{
-                left: `${lastWeekReplyRate || 68}%`,
-                background: 'rgba(255,255,255,0.25)',
-              }} />
-            </div>
-            <div className="flex items-center justify-between mt-2">
-              <span className="text-[#5A5A72] text-[10px]">0%</span>
-              <Sparkline data={replyTrend} color="#C9A84C" height={18} width={56} filled={false} />
-              <span className="text-[#5A5A72] text-[10px]">100%</span>
-            </div>
-          </BentoCard>
-
-          {/* Row 5: 渠道来源 — 4个小卡横排 */}
-          <div>
-            <div className="flex items-center justify-between mb-2.5">
-              <span className="text-[#8B8B9E] text-[12px] font-semibold tracking-wide">渠道来源</span>
-              <div className="flex items-center gap-1" style={{ color: '#5A5A72' }}>
-                <IconGlobe />
-                <span className="text-[10px]">今日</span>
-              </div>
-            </div>
-            <div className="grid grid-cols-4 gap-2">
-              {channels.map(ch => (
-                <BentoCard
-                  key={ch.name}
-                  accentColor={ch.bg}
-                  borderColor={`${ch.color}25`}
-                  style={{ padding: '12px 10px' }}
-                >
-                  {/* 渠道缩写徽章 */}
-                  <div className="flex items-center justify-center w-8 h-8 rounded-xl mb-2 mx-auto font-black text-[11px]" style={{
-                    background: `${ch.color}20`,
-                    color: ch.color,
-                    border: `1px solid ${ch.color}30`,
-                  }}>
-                    {ch.abbr}
-                  </div>
-                  <div className="text-center">
-                    <div className="text-[22px] font-black tabular-nums leading-none" style={{ color: ch.color }}>{ch.count}</div>
-                    <div className="text-[9px] text-[#5A5A72] mt-1 truncate">{ch.name}</div>
-                  </div>
-                  {/* 回复率迷你进度条 */}
-                  <div className="mt-2 h-0.5 rounded-full" style={{ background: 'rgba(255,255,255,0.07)' }}>
-                    <div className="h-0.5 rounded-full" style={{
-                      width: `${ch.replyRate}%`,
-                      background: ch.color,
-                    }} />
-                  </div>
-                  <div className="text-center mt-1">
-                    <span className="text-[9px] font-semibold" style={{ color: ch.color }}>{ch.replyRate}%</span>
-                  </div>
-                </BentoCard>
-              ))}
-            </div>
-          </div>
-
-          {/* Row 6: 战情速报 */}
-          {urgentActions.length > 0 && (
-            <div>
-              <div className="flex items-center justify-between mb-2.5">
-                <span className="text-[#8B8B9E] text-[12px] font-semibold tracking-wide">战情速报</span>
-                {approvals.length > 0 && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{
-                    background: 'rgba(245,158,11,0.12)',
-                    color: '#F59E0B',
-                    border: '1px solid rgba(245,158,11,0.2)',
-                  }}>
-                    {approvals.length} 待审批
-                  </span>
-                )}
-              </div>
-              <div className="flex flex-col gap-2">
-                {urgentActions.map((item, i) => (
-                  <BentoCard
-                    key={i}
-                    accentColor={levelBg[item.level]}
-                    borderColor={levelBorder[item.level]}
-                    style={{ padding: '14px 16px' }}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div style={{ color: levelColor[item.level] }}>
-                          {item.level === 'red' ? <IconAlertCircle /> : item.level === 'green' ? <IconCheckCircle /> : <IconActivity />}
-                        </div>
-                        <div>
-                          <p className="text-white text-[13px] font-semibold leading-tight">{item.text}</p>
-                          <p className="text-[#5A5A72] text-[11px] mt-0.5">{item.sub}</p>
-                        </div>
-                      </div>
-                      <button
-                        className="text-[11px] font-bold px-3 py-1.5 rounded-xl flex-shrink-0"
-                        style={{
-                          background: `${levelColor[item.level]}15`,
-                          color: levelColor[item.level],
-                          border: `1px solid ${levelColor[item.level]}25`,
-                        }}
-                      >
-                        {item.action}
-                      </button>
-                    </div>
-                  </BentoCard>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Row 7: 近 7 天趋势 — SVG 折线图 */}
-          <BentoCard
-            accentColor="rgba(255,255,255,0.03)"
-            borderColor="rgba(255,255,255,0.07)"
-            style={{ padding: '16px 18px 14px' }}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[#8B8B9E] text-[12px] font-semibold">近 7 天询盘趋势</span>
-              <span className="text-[#34D399] text-[11px] font-bold">▲ 持续增长</span>
-            </div>
-            {/* 柱状图 */}
-            <div className="flex items-end gap-1.5" style={{ height: 52 }}>
-              {inqTrend.map((v, i) => {
-                const maxV = Math.max(...inqTrend, 1);
-                const h = Math.max((v / maxV) * 44, 4);
-                const days = ['一', '二', '三', '四', '五', '六', '日'];
-                const isToday = i === inqTrend.length - 1;
-                return (
-                  <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                    <div className="w-full rounded-t-md" style={{
-                      height: h,
-                      background: isToday
-                        ? 'linear-gradient(180deg, #C9A84C 0%, rgba(201,168,76,0.3) 100%)'
-                        : 'rgba(255,255,255,0.09)',
-                      boxShadow: isToday ? '0 0 10px rgba(201,168,76,0.35)' : 'none',
-                    }} />
-                    <span style={{ fontSize: 9, color: isToday ? '#C9A84C' : '#3A3A52', fontWeight: isToday ? 700 : 400 }}>周{days[i]}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </BentoCard>
-
-          {/* Row 8: 审批卡片 */}
-          {approvals.length > 0 && (
-            <div>
-              <div className="flex items-center justify-between mb-2.5">
-                <span className="text-[#8B8B9E] text-[12px] font-semibold tracking-wide">待审批回复</span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{
-                  background: 'rgba(245,158,11,0.12)', color: '#F59E0B',
-                  border: '1px solid rgba(245,158,11,0.2)',
-                }}>{approvals.length} 条</span>
-              </div>
-              <div className="flex flex-col gap-2.5">
-                {approvals.map((a: any, i: number) => (
-                  <BentoCard
-                    key={a.id}
-                    accentColor="rgba(245,158,11,0.05)"
-                    borderColor="rgba(245,158,11,0.18)"
-                    style={{ padding: '16px', animationDelay: `${i * 0.08}s` }}
-                    className="slide-up"
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <p className="text-white text-[13px] font-bold">{a.buyerName || a.customerName || '客户'}</p>
-                        <p className="text-[#5A5A72] text-[11px] mt-0.5">询盘 #{String(a.inquiryId || a.id).slice(-6)}</p>
-                      </div>
-                      <span className="text-[#5A5A72] text-[11px]">
-                        {new Date(a.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-                    <p className="text-[#8B8B9E] text-[12px] leading-relaxed line-clamp-2 mb-3">
-                      {a.draftContent || a.draft || '（草稿内容）'}
-                    </p>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => onApprove(a.id)}
-                        className="flex-1 py-2.5 rounded-2xl text-[12px] font-bold"
-                        style={{ background: 'linear-gradient(135deg, #C9A84C, #F5D07A)', color: '#0A0A0F' }}
-                      >✓ 批准发送</button>
-                      <button
-                        onClick={() => onReject(a.id)}
-                        className="flex-1 py-2.5 rounded-2xl text-[12px] font-semibold"
-                        style={{ background: 'rgba(239,68,68,0.1)', color: '#F87171', border: '1px solid rgba(239,68,68,0.25)' }}
-                      >✗ 拒绝</button>
-                    </div>
-                  </BentoCard>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Row 9: 进入指挥台 */}
-          <button
-            onClick={onSwipe}
-            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-[13px] mb-2"
-            style={{
-              background: 'rgba(201,168,76,0.08)',
-              border: '1px solid rgba(201,168,76,0.2)',
-              color: '#C9A84C',
-            }}
-          >
-            <span>进入指挥台</span>
-            <IconArrowRight />
-          </button>
-
-        </div>{/* end bento grid */}
-      </div>{/* end scroll */}
+      </div>
     </div>
   );
 }
+
 // ─── Screen 1: Command Center ─────────────────────────────────────────────────
-// 指令实验室阶段颜色
 const PHASE_COLORS: Record<string, string> = {
-  analyze:  '#60A5FA',
-  filter:   '#A78BFA',
-  execute:  '#34D399',
-  report:   '#F59E0B',
+  analyze: '#60A5FA',
+  filter: '#A78BFA',
+  execute: '#34D399',
+  report: '#F59E0B',
 };
 const PHASE_ICONS: Record<string, string> = {
-  analyze:  '🔍',
-  filter:   '🎯',
-  execute:  '⚡',
-  report:   '📊',
+  analyze: '🔍',
+  filter: '🎯',
+  execute: '⚡',
+  report: '📊',
 };
 
 function CommandScreen({ data, onBack, onNext }: { data: any; onBack: () => void; onNext: () => void }) {
@@ -989,7 +1182,6 @@ function CommandScreen({ data, onBack, onNext }: { data: any; onBack: () => void
   const [sent, setSent] = useState(false);
   const [recent, setRecent] = useState<string[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  // Command Lab 2.0 state
   const [labMode, setLabMode] = useState(false);
   const [labLoading, setLabLoading] = useState(false);
   const [labResult, setLabResult] = useState<null | {
@@ -1005,7 +1197,7 @@ function CommandScreen({ data, onBack, onNext }: { data: any; onBack: () => void
 
   const quickCommands = [
     { icon: '🌍', text: '今天重点开发欧洲市场' },
-    { icon: '⭐', text: '优先回复高价値询盘' },
+    { icon: '⭐', text: '优先回复高价值询盘' },
     { icon: '🇺🇸', text: '加大对美国客户的触达频率' },
     { icon: '🔄', text: '暂停推广，专注跟进老客户' },
   ];
@@ -1057,8 +1249,11 @@ function CommandScreen({ data, onBack, onNext }: { data: any; onBack: () => void
         filter: 'blur(40px)',
       }} />
 
+      {/* 状态栏 */}
+      <StatusBar />
+
       {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-12 pb-4 relative z-10">
+      <div className="flex items-center justify-between px-5 pb-4 relative z-10">
         <button onClick={onBack} className="flex items-center gap-1 text-[#6B6B80] text-sm active:opacity-60 transition-opacity">
           <span>←</span>
           <span>战报</span>
@@ -1125,7 +1320,6 @@ function CommandScreen({ data, onBack, onNext }: { data: any; onBack: () => void
 
         {/* Command input + Lab Mode */}
         <div className="glass-card-elevated p-4 mb-4 slide-up delay-100">
-          {/* 标题行 */}
           <div className="flex items-center justify-between mb-3">
             <p className="text-[#A0A0B0] text-sm font-semibold">下达指令</p>
             <button
@@ -1155,7 +1349,7 @@ function CommandScreen({ data, onBack, onNext }: { data: any; onBack: () => void
             <button
               onClick={handleLabAnalyze}
               disabled={!command.trim() || labLoading}
-              className="w-full py-3.5 text-sm mt-3 font-bold rounded-xl flex items-center justify-center gap-2 transition-all"
+              className="w-full py-3.5 text-sm mt-3 font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95"
               style={{
                 background: (!command.trim() || labLoading) ? 'rgba(124,58,237,0.3)' : 'linear-gradient(135deg, #7c3aed, #6d28d9)',
                 opacity: (!command.trim() || labLoading) ? 0.6 : 1,
@@ -1172,7 +1366,7 @@ function CommandScreen({ data, onBack, onNext }: { data: any; onBack: () => void
             <button
               onClick={handleSend}
               disabled={!command.trim() || sending}
-              className={`btn-gold w-full py-3.5 text-sm mt-3 font-bold ${(!command.trim() || sending) ? 'opacity-50' : 'glow-pulse'}`}
+              className={`btn-gold w-full py-3.5 text-sm mt-3 font-bold active:scale-95 transition-transform ${(!command.trim() || sending) ? 'opacity-50' : 'glow-pulse'}`}
               style={{ fontSize: '0.9375rem', letterSpacing: '0.02em' }}
             >
               {sending ? '发送中…' : sent ? '✓ 指令已发送' : '⚡ 发送指令'}
@@ -1189,7 +1383,6 @@ function CommandScreen({ data, onBack, onNext }: { data: any; onBack: () => void
         {/* Command Lab 结果卡片 */}
         {labMode && labResult && (
           <div className="glass-card-elevated p-4 mb-4 slide-up" style={{ border: '1px solid rgba(124,58,237,0.3)' }}>
-            {/* 标题 */}
             <div className="flex items-start justify-between gap-2 mb-4">
               <div>
                 <p className="text-[#A78BFA] text-xs font-semibold mb-0.5">指令实验室 · 执行路径</p>
@@ -1203,7 +1396,6 @@ function CommandScreen({ data, onBack, onNext }: { data: any; onBack: () => void
               </span>
             </div>
 
-            {/* 执行流程步骤 */}
             <div className="space-y-2 mb-4">
               {labResult.steps.map((step, idx) => {
                 const color = PHASE_COLORS[step.phase] ?? '#A0A0B0';
@@ -1213,14 +1405,13 @@ function CommandScreen({ data, onBack, onNext }: { data: any; onBack: () => void
                   <div key={step.id}>
                     <button
                       onClick={() => setActiveStep(isActive ? null : step.id)}
-                      className="w-full text-left rounded-xl p-3 transition-all"
+                      className="w-full text-left rounded-xl p-3 transition-all active:scale-[0.98]"
                       style={{
                         background: isActive ? `${color}18` : 'rgba(255,255,255,0.04)',
                         border: `1px solid ${isActive ? color + '40' : 'rgba(255,255,255,0.06)'}`,
                       }}
                     >
                       <div className="flex items-center gap-3">
-                        {/* 连接线 */}
                         <div className="flex flex-col items-center flex-shrink-0">
                           <div className="w-7 h-7 rounded-full flex items-center justify-center text-sm" style={{ background: `${color}25` }}>
                             {icon}
@@ -1253,150 +1444,115 @@ function CommandScreen({ data, onBack, onNext }: { data: any; onBack: () => void
               })}
             </div>
 
-            {/* 汇总行 */}
-            <div className="flex items-center justify-between py-3 px-1" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-              <div className="flex items-center gap-4">
-                <span className="text-xs text-[#6B6B80]">总耗时 <span className="text-[#F1F1F5] font-semibold">{labResult.totalTime}</span></span>
-                <span className="text-xs text-[#6B6B80]">总积分 <span className="text-[#C9A84C] font-semibold">{labResult.totalCredits}</span></span>
+            <div className="flex items-center justify-between p-3 rounded-xl" style={{
+              background: 'rgba(124,58,237,0.08)',
+              border: '1px solid rgba(124,58,237,0.2)',
+            }}>
+              <div>
+                <p className="text-[#A78BFA] text-xs font-semibold">预计消耗</p>
+                <p className="text-[#F1F1F5] text-sm font-bold mt-0.5">{labResult.totalCredits} 积分 · {labResult.totalTime}</p>
               </div>
               <button
-                onClick={async () => {
-                  setSending(true);
-                  try {
-                    await bossApi.sendCommand(command.trim());
-                    setSent(true);
-                    setTimeout(() => setSent(false), 3000);
-                  } catch {}
-                  finally { setSending(false); }
-                }}
-                disabled={sending}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-white transition-all"
-                style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)' }}
+                onClick={handleSend}
+                className="px-4 py-2 rounded-xl text-xs font-bold active:scale-95 transition-transform"
+                style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#fff' }}
               >
-                {sending ? '执行中…' : '确认执行'}
+                确认执行
               </button>
             </div>
-
-            {/* 风险提示 */}
-            <p className="text-xs text-[#6B6B80] mt-2 leading-relaxed">
-              ⚠️ {labResult.riskNote}
-            </p>
           </div>
         )}
 
-        {/* Recent commands */}
+        {/* 快捷指令 */}
+        <div className="glass-card-elevated p-4 slide-up delay-200">
+          <p className="text-[#A0A0B0] text-sm font-semibold mb-3">快捷指令</p>
+          <div className="flex flex-col gap-2">
+            {quickCommands.map((cmd, i) => (
+              <button
+                key={i}
+                onClick={() => setCommand(cmd.text)}
+                className="flex items-center gap-3 p-3 rounded-xl text-left transition-all active:scale-[0.98]"
+                style={{
+                  background: command === cmd.text ? 'rgba(201,168,76,0.1)' : 'rgba(255,255,255,0.04)',
+                  border: `1px solid ${command === cmd.text ? 'rgba(201,168,76,0.25)' : 'rgba(255,255,255,0.06)'}`,
+                }}
+              >
+                <span className="text-lg">{cmd.icon}</span>
+                <span className="text-[#A0A0B0] text-sm">{cmd.text}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 最近指令 */}
         {recent.length > 0 && (
-          <div className="mb-4 slide-up delay-150">
-            <p className="text-[#6B6B80] text-xs font-medium mb-2 px-1">最近指令</p>
-            <div className="flex flex-col gap-1.5">
+          <div className="glass-card-elevated p-4 mt-4 slide-up delay-300">
+            <p className="text-[#A0A0B0] text-sm font-semibold mb-3">最近指令</p>
+            <div className="flex flex-col gap-2">
               {recent.map((r, i) => (
                 <button
                   key={i}
                   onClick={() => setCommand(r)}
-                  className="btn-ghost text-left px-3 py-2 text-xs text-[#A0A0B0] flex items-center gap-2"
+                  className="flex items-center gap-2 p-2.5 rounded-lg text-left active:scale-[0.98] transition-transform"
+                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}
                 >
-                  <span className="text-[#C9A84C] text-xs">↩</span>
-                  <span className="line-clamp-1">{r}</span>
+                  <span className="text-[#6B6B80] text-xs">↩</span>
+                  <span className="text-[#8B8B9E] text-xs truncate">{r}</span>
                 </button>
               ))}
             </div>
           </div>
         )}
-
-        {/* Quick commands */}
-        <div className="mb-4 slide-up delay-200">
-          <p className="text-[#6B6B80] text-xs font-medium mb-2 px-1">快捷指令</p>
-          <div className="grid grid-cols-1 gap-2">
-            {quickCommands.map((q, i) => (
-              <button
-                key={i}
-                onClick={() => setCommand(q.text)}
-                className="btn-ghost text-left px-4 py-3 text-sm text-[#A0A0B0] flex items-center gap-3"
-              >
-                <span className="text-base flex-shrink-0">{q.icon}</span>
-                <span>{q.text}</span>
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   );
 }
 
-// ─── Screen 2: Weekly Report ──────────────────────────────────────────────────
+// ─── Screen 2: Report Screen ──────────────────────────────────────────────────
 function ReportScreen({ data, onBack }: { data: any; onBack: () => void }) {
   const weekReport = data?.weekReport ?? null;
   const roi = data?.roi ?? null;
+
   const thisWeek = weekReport?.thisWeek ?? {};
   const lastWeek = weekReport?.lastWeek ?? {};
 
   const compareItems = [
-    { label: '询盘数', thisWeek: thisWeek.inquiries ?? 0, lastWeek: lastWeek.inquiries ?? 0, color: '#C9A84C' },
-    { label: '回复数', thisWeek: thisWeek.replies ?? 0, lastWeek: lastWeek.replies ?? 0, color: '#60A5FA' },
-    { label: '新客户', thisWeek: thisWeek.newCustomers ?? 0, lastWeek: lastWeek.newCustomers ?? 0, color: '#34D399' },
-    { label: '报价单', thisWeek: thisWeek.quotations ?? 0, lastWeek: lastWeek.quotations ?? 0, color: '#A78BFA' },
+    { label: '询盘量', thisWeek: thisWeek.inquiries ?? 0, lastWeek: lastWeek.inquiries ?? 0, color: '#C9A84C' },
+    { label: '回复率', thisWeek: thisWeek.replyRate ?? 0, lastWeek: lastWeek.replyRate ?? 0, color: '#60A5FA' },
+    { label: '转化率', thisWeek: thisWeek.conversionRate ?? 0, lastWeek: lastWeek.conversionRate ?? 0, color: '#34D399' },
+    { label: 'AI 操作', thisWeek: thisWeek.aiOps ?? 0, lastWeek: lastWeek.aiOps ?? 0, color: '#A78BFA' },
   ];
-
-  const totalThis = (thisWeek.inquiries ?? 0) + (thisWeek.replies ?? 0);
-  const totalLast = (lastWeek.inquiries ?? 0) + (lastWeek.replies ?? 0);
-  const overallTrend = pctNum(totalThis, totalLast);
 
   return (
     <div className="relative flex flex-col h-full overflow-hidden" style={{
-      background: 'linear-gradient(180deg, #080A0F 0%, #0A0D16 40%, #080A10 100%)',
+      background: 'linear-gradient(180deg, #080812 0%, #0A0A18 100%)',
     }}>
-      {/* Background glow */}
       <div className="absolute pointer-events-none" style={{
-        top: -60, left: '30%',
-        width: 300, height: 300,
+        top: -60, left: '30%', width: 240, height: 240,
         background: 'radial-gradient(circle, rgba(52,211,153,0.12) 0%, transparent 65%)',
-        filter: 'blur(60px)',
-      }} />
-      <div className="absolute pointer-events-none" style={{
-        bottom: 80, right: -40,
-        width: 200, height: 200,
-        background: 'radial-gradient(circle, rgba(167,139,250,0.10) 0%, transparent 65%)',
-        filter: 'blur(40px)',
+        filter: 'blur(50px)',
       }} />
 
+      {/* 状态栏 */}
+      <StatusBar />
+
       {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-12 pb-4 relative z-10">
+      <div className="flex items-center justify-between px-5 pb-4 relative z-10">
         <button onClick={onBack} className="flex items-center gap-1 text-[#6B6B80] text-sm active:opacity-60 transition-opacity">
           <span>←</span>
-          <span>指挥台</span>
+          <span>指挥</span>
         </button>
         <h1 className="text-[#F1F1F5] text-base font-bold">经营周报</h1>
-        <div style={{ width: 60 }} />
+        <div style={{ width: 48 }} />
       </div>
 
       <div className="flex-1 scroll-area px-4 pb-28 relative z-10">
-        {/* Overall trend card */}
-        <div className="glass-card-elevated p-4 mb-4 slide-up" style={{
-          background: overallTrend >= 0
-            ? 'linear-gradient(135deg, rgba(52,211,153,0.08) 0%, rgba(16,185,129,0.04) 100%)'
-            : 'linear-gradient(135deg, rgba(239,68,68,0.08) 0%, rgba(220,38,38,0.04) 100%)',
-          border: `1px solid ${overallTrend >= 0 ? 'rgba(52,211,153,0.20)' : 'rgba(239,68,68,0.20)'}`,
-        }}>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[#6B6B80] text-xs mb-1">本周整体趋势</p>
-              <div className="flex items-center gap-2">
-                <span className="text-3xl font-black" style={{
-                  color: overallTrend >= 0 ? '#34D399' : '#F87171',
-                }}>
-                  {overallTrend >= 0 ? '▲' : '▼'} {Math.abs(overallTrend).toFixed(1)}%
-                </span>
-              </div>
-              <p className="text-[#6B6B80] text-xs mt-1">较上周同期</p>
-            </div>
-            <div className="text-5xl">{overallTrend >= 0 ? '📈' : '📉'}</div>
-          </div>
-        </div>
-
-        {/* Legend */}
+        {/* 本周 vs 上周 标题 */}
         {weekReport && (
-          <div className="flex items-center justify-between px-1 mb-3">
+          <div className="flex items-center gap-3 mb-4 p-3 rounded-2xl" style={{
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.07)',
+          }}>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full" style={{ background: '#C9A84C' }} />
               <span className="text-[#6B6B80] text-xs">本周（彩色）</span>
@@ -1448,7 +1604,6 @@ function ReportScreen({ data, onBack }: { data: any; onBack: () => void }) {
           </div>
         )}
 
-        {/* No data state */}
         {!weekReport && !roi && (
           <div className="glass-card p-6 text-center slide-up delay-200">
             <div className="text-4xl mb-3">📊</div>
@@ -1461,50 +1616,177 @@ function ReportScreen({ data, onBack }: { data: any; onBack: () => void }) {
   );
 }
 
-// ─── Bottom Navigation ────────────────────────────────────────────────────────
-function BottomNav({ screen, onSelect, onNavigate }: { screen: number; onSelect: (i: number) => void; onNavigate?: (path: string) => void }) {
+// ─── 底部 Tab Bar（真实 APP 风格）────────────────────────────────────────────
+function BottomTabBar({
+  activeTab,
+  onSelect,
+  onNavigate,
+  unreadCount,
+}: {
+  activeTab: number;
+  onSelect: (i: number) => void;
+  onNavigate?: (path: string) => void;
+  unreadCount: number;
+}) {
   const tabs = [
-    { icon: '⚡', label: '战报', color: '#C9A84C' },
-    { icon: '🤖', label: '指挥', color: '#60A5FA' },
-    { icon: '📊', label: '周报', color: '#34D399' },
+    {
+      id: 0,
+      label: '首页',
+      activeColor: '#C9A84C',
+      icon: (active: boolean) => (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? '#C9A84C' : 'none'} stroke={active ? '#C9A84C' : '#6B6B80'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+          <polyline points="9 22 9 12 15 12 15 22" />
+        </svg>
+      ),
+    },
+    {
+      id: 1,
+      label: '指挥',
+      activeColor: '#60A5FA',
+      icon: (active: boolean) => (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? '#60A5FA' : 'none'} stroke={active ? '#60A5FA' : '#6B6B80'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+        </svg>
+      ),
+    },
+    {
+      id: 'inquiry',
+      label: '询盘',
+      activeColor: '#EF4444',
+      isCenter: true,
+      icon: (active: boolean) => (
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+        </svg>
+      ),
+    },
+    {
+      id: 2,
+      label: '周报',
+      activeColor: '#34D399',
+      icon: (active: boolean) => (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? '#34D399' : 'none'} stroke={active ? '#34D399' : '#6B6B80'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="18" y1="20" x2="18" y2="10" />
+          <line x1="12" y1="20" x2="12" y2="4" />
+          <line x1="6" y1="20" x2="6" y2="14" />
+        </svg>
+      ),
+    },
+    {
+      id: 'profile',
+      label: '我的',
+      activeColor: '#A78BFA',
+      icon: (active: boolean) => (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? '#A78BFA' : 'none'} stroke={active ? '#A78BFA' : '#6B6B80'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
+        </svg>
+      ),
+    },
   ];
+
   return (
-    <div className="bottom-nav">
-      <div className="flex items-center justify-around py-3 px-4">
-        {tabs.map((t, i) => (
-          <button
-            key={i}
-            onClick={() => onSelect(i)}
-            className="flex flex-col items-center gap-1 min-w-[60px] transition-all duration-300"
-            style={{
-              opacity: screen === i ? 1 : 0.4,
-              transform: screen === i ? 'scale(1.08)' : 'scale(1)',
-            }}
-          >
-            <span className="text-xl">{t.icon}</span>
-            <span
-              className="text-xs font-semibold"
-              style={{ color: screen === i ? t.color : '#6B6B80' }}
+    <div
+      className="absolute bottom-0 left-0 right-0 z-50"
+      style={{
+        background: 'rgba(8, 8, 16, 0.95)',
+        backdropFilter: 'blur(24px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+        borderTop: '1px solid rgba(255,255,255,0.08)',
+        paddingBottom: 'env(safe-area-inset-bottom, 8px)',
+      }}
+    >
+      <div className="flex items-end justify-around px-2 pt-2 pb-1">
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.id;
+          const isCenter = (tab as any).isCenter;
+          const isInquiry = tab.id === 'inquiry';
+          const isProfile = tab.id === 'profile';
+
+          if (isCenter) {
+            return (
+              <button
+                key={tab.id}
+                onClick={() => onNavigate?.('/phone')}
+                className="flex flex-col items-center relative"
+                style={{ marginBottom: 4 }}
+              >
+                {/* 中央突出按钮 */}
+                <div
+                  className="flex items-center justify-center rounded-full active:scale-90 transition-transform relative"
+                  style={{
+                    width: 52, height: 52,
+                    background: 'linear-gradient(135deg, #EF4444 0%, #F87171 100%)',
+                    boxShadow: '0 4px 20px rgba(239,68,68,0.4), 0 2px 8px rgba(0,0,0,0.3)',
+                    marginTop: -16,
+                  }}
+                >
+                  {tab.icon(false)}
+                  {/* 未读角标 */}
+                  {unreadCount > 0 && (
+                    <div
+                      className="absolute flex items-center justify-center rounded-full"
+                      style={{
+                        top: -2, right: -2,
+                        minWidth: 16, height: 16,
+                        background: '#fff',
+                        fontSize: 9,
+                        fontWeight: 700,
+                        color: '#EF4444',
+                        paddingInline: 3,
+                        boxShadow: '0 0 0 2px rgba(8,8,16,0.95)',
+                      }}
+                    >
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </div>
+                  )}
+                </div>
+                <span className="text-[10px] font-semibold mt-1" style={{ color: '#F87171' }}>
+                  {tab.label}
+                </span>
+              </button>
+            );
+          }
+
+          return (
+            <button
+              key={tab.id}
+              onClick={() => {
+                if (isProfile) {
+                  // 个人中心暂未实现
+                } else {
+                  onSelect(tab.id as number);
+                }
+              }}
+              className="flex flex-col items-center gap-1 min-w-[52px] py-1 active:scale-90 transition-transform"
             >
-              {t.label}
-            </span>
-            {screen === i && (
-              <div
-                className="rounded-full"
-                style={{ width: 4, height: 4, background: t.color, marginTop: -2 }}
-              />
-            )}
-          </button>
-        ))}
-        {/* 询盘快捷入口 */}
-        <button
-          onClick={() => onNavigate?.('/phone')}
-          className="flex flex-col items-center gap-1 min-w-[60px] transition-all duration-300"
-          style={{ opacity: 0.5 }}
-        >
-          <span className="text-xl">📨</span>
-          <span className="text-xs font-semibold" style={{ color: '#6B6B80' }}>询盘</span>
-        </button>
+              {/* 图标 */}
+              <div className="relative">
+                {tab.icon(isActive)}
+              </div>
+              {/* 标签 */}
+              <span
+                className="text-[10px] font-semibold"
+                style={{ color: isActive ? (tab as any).activeColor : '#6B6B80' }}
+              >
+                {tab.label}
+              </span>
+              {/* 激活指示器 */}
+              {isActive && (
+                <div
+                  className="rounded-full"
+                  style={{
+                    width: 4, height: 4,
+                    background: (tab as any).activeColor,
+                    boxShadow: `0 0 6px ${(tab as any).activeColor}`,
+                    marginTop: -2,
+                  }}
+                />
+              )}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -1516,7 +1798,7 @@ function PageIndicator({ screen, total }: { screen: number; total: number }) {
     <div
       className="absolute flex items-center gap-1.5 z-20"
       style={{
-        top: 'calc(env(safe-area-inset-top, 0px) + 16px)',
+        top: 'calc(env(safe-area-inset-top, 0px) + 48px)',
         left: '50%',
         transform: 'translateX(-50%)',
       }}
@@ -1540,13 +1822,14 @@ function PageIndicator({ screen, total }: { screen: number; total: number }) {
 export default function BossWarroom() {
   const [, navigate] = useLocation();
   const [screen, setScreen] = useState(0);
-   const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<any>(null);
   const [approvals, setApprovals] = useState<any[]>([]);
   const [openclawData, setOpenclawData] = useState<any>(null);
   const [transitioning, setTransitioning] = useState(false);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
+
   const fetchData = useCallback(async () => {
     try {
       const [warroomRes, approvalsRes] = await Promise.all([
@@ -1559,6 +1842,7 @@ export default function BossWarroom() {
       console.error('Warroom fetch error', e);
     }
   }, []);
+
   const fetchOpenclawData = useCallback(async () => {
     try {
       const res = await openclawApi.status();
@@ -1575,7 +1859,6 @@ export default function BossWarroom() {
         opsLimit: res?.instance?.opsLimit ?? 200,
       });
     } catch (e) {
-      // OpenClaw data is optional, fail silently
       setOpenclawData({ status: 'offline', instances: 0, activeInstances: 0, opsToday: 0, opsLimit: 200 });
     }
   }, []);
@@ -1623,7 +1906,7 @@ export default function BossWarroom() {
     }
   };
 
-  // navigate is used for BottomNav cross-page navigation
+  const unreadCount = (data?.signals?.unread ?? 0) + approvals.length;
 
   return (
     <div
@@ -1645,16 +1928,19 @@ export default function BossWarroom() {
           willChange: 'transform',
         }}
       >
+        {/* Screen 0: 首页 */}
         <div style={{ width: '33.333%', height: '100dvh', flexShrink: 0 }}>
-          <HeroScreen
+          <HomeScreen
             data={data}
             approvals={approvals}
             onApprove={handleApprove}
             onReject={handleReject}
-            onSwipe={() => goToScreen(1)}
+            onNavigate={navigate}
             openclawData={openclawData}
           />
         </div>
+
+        {/* Screen 1: 指挥台 */}
         <div style={{ width: '33.333%', height: '100dvh', flexShrink: 0 }}>
           <CommandScreen
             data={data}
@@ -1662,13 +1948,20 @@ export default function BossWarroom() {
             onNext={() => goToScreen(2)}
           />
         </div>
+
+        {/* Screen 2: 周报 */}
         <div style={{ width: '33.333%', height: '100dvh', flexShrink: 0 }}>
           <ReportScreen data={data} onBack={() => goToScreen(1)} />
         </div>
       </div>
 
-      {/* Bottom navigation */}
-      <BottomNav screen={screen} onSelect={goToScreen} onNavigate={navigate} />
+      {/* 底部 Tab Bar */}
+      <BottomTabBar
+        activeTab={screen}
+        onSelect={goToScreen}
+        onNavigate={navigate}
+        unreadCount={unreadCount}
+      />
     </div>
   );
 }
