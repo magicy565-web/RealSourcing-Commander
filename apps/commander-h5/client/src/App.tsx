@@ -27,10 +27,11 @@ import TaskQueue from "./pages/TaskQueue";
 import FeedPage from "./pages/FeedPage";
 import AdminPage from "./pages/AdminPage";
 import VideoFeedPlayer from "./pages/VideoFeedPlayer";
-// Phase 5
+// Phase 5 新增路由
 import MultiAccountManager from "./pages/MultiAccountManager";
 import ROICalculator from "./pages/ROICalculator";
-
+// Phase 6 老板指挥台
+import BossWarroom from "./pages/BossWarroom";
 // ─── 受保护路由 ───────────────────────────────────────────────
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   if (!isLoggedIn()) {
@@ -134,6 +135,8 @@ function Router() {
       {/* Phase 5 新增路由 */}
       <Route path="/multi-account">{() => <ProtectedRoute component={MultiAccountManager} />}</Route>
       <Route path="/roi">{() => <ProtectedRoute component={ROICalculator} />}</Route>
+      {/* Phase 6 老板指挥台 */}
+      <Route path="/warroom">{() => <ProtectedRoute component={BossWarroom} />}</Route>
       {/* Phase 3 新增路由 */}
       <Route path="/video-feed">{() => <ProtectedRoute component={VideoFeedPlayerWrapper} />}</Route>
       <Route path="/feed">{() => <ProtectedRoute component={FeedPageWrapper} />}</Route>

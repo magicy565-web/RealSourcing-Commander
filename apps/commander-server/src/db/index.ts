@@ -129,7 +129,7 @@ CREATE TABLE IF NOT EXISTS inquiry_replies (
   id              TEXT PRIMARY KEY,
   inquiry_id      TEXT REFERENCES inquiries(id),
   quotation_id    TEXT REFERENCES quotations(id),
-  reply_type      TEXT NOT NULL,
+  reply_type      TEXT,  -- nullable: reply 路由不强制传入
   content_zh      TEXT,
   content_en      TEXT,
   send_status     TEXT DEFAULT 'draft',

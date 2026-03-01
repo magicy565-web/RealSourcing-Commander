@@ -140,10 +140,57 @@ openclaw.post("/heartbeat", async (c) => {
     WHERE id = ?
   `).run(resolvedStatus, now, opsToday ?? instance.ops_today, instanceId);
 
+  // ─── Phase 6: 拉取待发送的老板审批回复 ──────────────────────────────────
+  const pendingSends = db.prepare(`
+    SELECT pa.id, pa.inquiry_id, pa.content_en, pa.content_zh,
+           pa.platform, pa.buyer_name, pa.buyer_company
+    FROM pending_approvals pa
+    WHERE pa.tenant_id = ? AND pa.status = 'approved'
+    LIMIT 10
+  `).all(instance.tenant_id) as any[];
+
+  // 将已拉取的审批回复标记为 sent（模拟 OpenClaw 成功发送）
+  if (pendingSends.length > 0) {
+    const sentNow = new Date().toISOString();
+    const ids = pendingSends.map(() => '?').join(',');
+    db.prepare(`
+      UPDATE pending_approvals SET status='sent', sent_at=?, updated_at=? WHERE id IN (${ids})
+    `).run(sentNow, sentNow, ...pendingSends.map((p: any) => p.id));
+
+    // 同步更新 inquiry_replies 中对应记录的 send_status
+    db.prepare(`
+      UPDATE inquiry_replies SET send_status='sent', sent_at=? WHERE send_status='queued_for_send'
+    `).run(sentNow);
+  }
+
+  // ─── Phase 6: 拉取待执行的老板指令任务 ─────────────────────────────────────
+  const pendingTasks = db.prepare(`
+    SELECT id, task_type, platform, target_info, context, steps
+    FROM task_queue
+    WHERE tenant_id = ? AND status = 'pending'
+    ORDER BY created_at ASC LIMIT 5
+  `).all(instance.tenant_id) as any[];
+
   return c.json({
     success: true,
     message: "心跳已记录",
     status: resolvedStatus,
+    // Phase 6 扩展：OpenClaw 拉取待执行项
+    pendingSends: pendingSends.map((p: any) => ({
+      approvalId: p.id,
+      inquiryId: p.inquiry_id,
+      platform: p.platform,
+      buyerName: p.buyer_name,
+      contentEn: p.content_en,
+      contentZh: p.content_zh,
+    })),
+    pendingTasks: pendingTasks.map((t: any) => ({
+      taskId: t.id,
+      taskType: t.task_type,
+      platform: t.platform,
+      targetInfo: (() => { try { return JSON.parse(t.target_info); } catch { return {}; } })(),
+      context: (() => { try { return JSON.parse(t.context); } catch { return {}; } })(),
+    })),
   });
 });
 

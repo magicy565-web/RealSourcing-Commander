@@ -969,3 +969,115 @@ export interface MonitorData {
   recentLogs: any[];
   timestamp: string;
 }
+
+// ─── Phase 6: Boss Command Center API ───────────────────────────────────────────────
+export const bossApi = {
+  /** 老板下达自然语言指令 */
+  sendCommand: (command: string) =>
+    request<{ success: boolean; commandId: string; message: string; status: string }>(
+      "/boss/command", { method: "POST", body: JSON.stringify({ command }) }
+    ),
+
+  /** 历史指令列表 */
+  getCommands: (limit = 20) =>
+    request<{ commands: BossCommand[]; total: number }>(`/boss/commands?limit=${limit}`),
+
+  /** 待审批回复草稿列表 */
+  getPendingApprovals: (status = "pending") =>
+    request<{ approvals: PendingApproval[]; pendingCount: number }>(`/boss/pending-approvals?status=${status}`),
+
+  /** 批准草稿（触发 OpenClaw 自动发送） */
+  approve: (id: string) =>
+    request<{ success: boolean; message: string; replyId: string; status: string; approvedAt: string }>(
+      `/boss/approvals/${id}/approve`, { method: "POST" }
+    ),
+
+  /** 拒绝草稿 */
+  reject: (id: string, reason = "老板拒绝") =>
+    request<{ success: boolean; message: string; rejectedAt: string }>(
+      `/boss/approvals/${id}/reject`, { method: "POST", body: JSON.stringify({ reason }) }
+    ),
+
+  /** 战报聚合数据（三模块） */
+  getWarroom: () =>
+    request<WaRoomData>("/boss/warroom"),
+};
+
+export interface BossCommand {
+  id: string;
+  raw_input: string;
+  structured: {
+    intent?: string;
+    params?: Record<string, any>;
+    confidence?: number;
+    humanReadable?: string;
+  };
+  status: "queued" | "dispatched" | "failed";
+  task_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PendingApproval {
+  id: string;
+  inquiry_id: string;
+  content_en: string;
+  content_zh?: string;
+  platform?: string;
+  buyer_name?: string;
+  buyer_company?: string;
+  buyer_country?: string;
+  product_name?: string;
+  estimated_value?: number;
+  confidence_score?: number;
+  status: "pending" | "approved" | "rejected" | "sent";
+  created_at: string;
+}
+
+export interface WaRoomData {
+  signals: {
+    newInquiries: number;
+    unread: number;
+    pendingApprovals: number;
+    newQuotations: number;
+    latestInquiries: Inquiry[];
+    hasUrgent: boolean;
+  };
+  agent: {
+    instance: {
+      id: string;
+      name: string;
+      status: string;
+      opsToday: number;
+      opsLimit: number;
+      lastHeartbeat?: string;
+      consecutiveFailures: number;
+      sleepUntil?: string | null;
+      utilizationRate: number;
+    } | null;
+    accounts: { platform: string; healthStatus: string; usageRate: number }[];
+    todayTasks: number;
+    completedTasks: number;
+    pendingCommands: number;
+  };
+  weekReport: {
+    lastWeek: WeekStats;
+    thisWeek: WeekStats;
+    growth: {
+      inquiries: number;
+      replied: number;
+      contracted: number;
+      contractedValue: number;
+      highValue: number;
+    };
+  };
+}
+
+export interface WeekStats {
+  inquiries: number;
+  replied: number;
+  contracted: number;
+  contractedValue: number;
+  highValue: number;
+  replyRate: number;
+}

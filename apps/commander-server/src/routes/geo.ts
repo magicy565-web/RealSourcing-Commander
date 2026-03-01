@@ -125,8 +125,8 @@ geo.get("/competitors", (c) => {
 
   // 基于行业知识库和模拟数据生成竞争对手分析
   const knowledge = db.prepare(`
-    SELECT * FROM industry_knowledge WHERE tenant_id = ? LIMIT 20
-  `).all(tenantId) as any[];
+    SELECT * FROM industry_knowledge LIMIT 20
+  `).all() as any[];
 
   // 模拟竞争对手数据（基于市场）
   const competitorsByMarket: Record<string, any[]> = {
@@ -219,6 +219,22 @@ geo.post("/strategy", async (c) => {
   "opportunityScore": 0-100的整数（市场机会评分）
 }`;
 
+  // 内置规则引擎兆底策略（当 AI 不可用时使用）
+  const fallbackStrategy = {
+    tone: region === "欧洲" ? "专业正式" : region === "中东" ? "热情亲和" : "简洁直接",
+    pricingStrategy: "先报区间价，根据客户反馈逐步优化",
+    keyPoints: [
+      `强调产品质量认证（CE/UL/RoHS）`,
+      `提供免费样品和定制化服务`,
+      `明确交货期和付款方式`,
+    ],
+    culturalTips: region === "中东" ? "尊重当地宗教习俗，避免在斋月期间推销" : "尊重当地商业文化，保持专业态度",
+    followupTiming: "24小时内回复，3个工作日内跟进",
+    draftOpening: `Dear ${country} Partner, Thank you for your interest in our ${product}. We are pleased to offer competitive pricing and professional service.`,
+    riskWarning: region === "中东" ? "建议 TT 或 LC 付款，确认认证要求" : "确认付款方式，建议 T/T 30% 定金",
+    opportunityScore: history.length > 5 ? 80 : history.length > 0 ? 65 : 55,
+    source: "rule-engine",
+  };
   try {
     const raw = await chat(systemPrompt, userPrompt, { temperature: 0.5, maxTokens: 600 });
     const match = raw.match(/\{[\s\S]*\}/);
@@ -226,7 +242,8 @@ geo.post("/strategy", async (c) => {
     const strategy = JSON.parse(match[0]);
     return c.json({ success: true, country, region, product, strategy });
   } catch (e: any) {
-    return c.json({ error: "AI 策略生成失败", message: e.message }, 500);
+    // AI 失败时使用规则引擎兆底
+    return c.json({ success: true, country, region, product, strategy: fallbackStrategy, aiAvailable: false });
   }
 });
 
@@ -300,8 +317,8 @@ geo.get("/top-markets", (c) => {
     FROM inquiries WHERE tenant_id = ?
     GROUP BY buyer_country
     ORDER BY inquiries DESC, avg_score DESC
-    LIMIT 8
-  `).all(tenantId) as any[];
+    LIMIT ?
+  `).all(tenantId, parseInt(c.req.query("limit") ?? "8")) as any[];
 
   return c.json({
     markets: markets.map((m, i) => ({
