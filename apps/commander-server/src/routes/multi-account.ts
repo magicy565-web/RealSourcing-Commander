@@ -451,3 +451,112 @@ multiAccount.post("/circuit-breaker/:id", async (c) => {
 });
 
 export default multiAccount;
+
+// ─── GET /matrix — 24h 热力图数据 ────────────────────────────────
+multiAccount.get("/matrix", (c) => {
+  const { tenantId } = c.get("user") as any;
+  const instances = db.prepare(
+    "SELECT * FROM openclaw_instances WHERE tenant_id = ?"
+  ).all(tenantId) as any[];
+
+  // 生成过去 7 天 × 24 小时的热力图数据（从 agent_logs 聚合）
+  const now = new Date();
+  const heatmapData: Array<{ day: number; hour: number; count: number }> = [];
+
+  for (let d = 6; d >= 0; d--) {
+    const dayStart = new Date(now);
+    dayStart.setDate(dayStart.getDate() - d);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart);
+    dayEnd.setDate(dayEnd.getDate() + 1);
+
+    for (let h = 0; h < 24; h++) {
+      const hourStart = new Date(dayStart);
+      hourStart.setHours(h);
+      const hourEnd = new Date(hourStart);
+      hourEnd.setHours(h + 1);
+
+      const row = db.prepare(`
+        SELECT COUNT(*) as c FROM agent_logs
+        WHERE tenant_id = ?
+        AND created_at >= ? AND created_at < ?
+      `).get(tenantId, hourStart.toISOString(), hourEnd.toISOString()) as any;
+
+      heatmapData.push({ day: 6 - d, hour: h, count: row?.c ?? 0 });
+    }
+  }
+
+  // 实例概览
+  const instanceSummary = instances.map((inst: any) => {
+    const accounts = db.prepare(
+      "SELECT * FROM social_accounts WHERE instance_id = ?"
+    ).all(inst.id) as any[];
+    const todayOps = (db.prepare(`
+      SELECT COUNT(*) as c FROM agent_logs
+      WHERE instance_id = ? AND created_at >= date('now')
+    `).get(inst.id) as any)?.c ?? 0;
+    return {
+      id: inst.id,
+      name: inst.name,
+      status: inst.status,
+      opsToday: todayOps,
+      opsLimit: inst.ops_limit ?? 100,
+      accountCount: accounts.length,
+      utilizationRate: inst.ops_limit > 0 ? Math.round((todayOps / inst.ops_limit) * 100) : 0,
+    };
+  });
+
+  // 批量操作建议
+  const batchSuggestions = [];
+  const sleepingCount = instances.filter((i: any) => i.status === 'sleeping').length;
+  const errorCount = instances.filter((i: any) => i.status === 'error').length;
+  if (sleepingCount > 0) batchSuggestions.push({ type: 'wake_all', label: `唤醒 ${sleepingCount} 个休眠实例`, icon: '⚡' });
+  if (errorCount > 0) batchSuggestions.push({ type: 'reset_errors', label: `重置 ${errorCount} 个异常实例`, icon: '🔄' });
+  batchSuggestions.push({ type: 'pause_all', label: '暂停所有实例', icon: '⏸' });
+
+  return c.json({
+    heatmap: heatmapData,
+    instances: instanceSummary,
+    batchSuggestions,
+    summary: {
+      total: instances.length,
+      active: instances.filter((i: any) => ['online', 'active', 'working'].includes(i.status)).length,
+      sleeping: sleepingCount,
+      error: errorCount,
+    },
+  });
+});
+
+// ─── POST /batch — 批量操作实例 ──────────────────────────────────
+multiAccount.post("/batch", async (c) => {
+  const { tenantId } = c.get("user") as any;
+  const { action, instanceIds } = await c.req.json();
+
+  const validActions = ['wake_all', 'pause_all', 'reset_errors'];
+  if (!validActions.includes(action)) return c.json({ error: '无效的批量操作' }, 400);
+
+  let affected = 0;
+  if (action === 'wake_all') {
+    const result = db.prepare(`
+      UPDATE openclaw_instances SET status='online', sleep_until=NULL
+      WHERE tenant_id=? AND status='sleeping'
+    `).run(tenantId);
+    affected = result.changes;
+  } else if (action === 'pause_all') {
+    const ids = instanceIds?.length
+      ? instanceIds
+      : (db.prepare("SELECT id FROM openclaw_instances WHERE tenant_id=?").all(tenantId) as any[]).map((r: any) => r.id);
+    for (const id of ids) {
+      db.prepare("UPDATE openclaw_instances SET status='sleeping' WHERE id=? AND tenant_id=?").run(id, tenantId);
+    }
+    affected = ids.length;
+  } else if (action === 'reset_errors') {
+    const result = db.prepare(`
+      UPDATE openclaw_instances SET status='online', consecutive_failures=0
+      WHERE tenant_id=? AND status='error'
+    `).run(tenantId);
+    affected = result.changes;
+  }
+
+  return c.json({ success: true, action, affected, message: `批量操作完成，影响 ${affected} 个实例` });
+});

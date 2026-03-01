@@ -204,3 +204,122 @@ ${params.context ? `上下文：${params.context}` : ""}
   if (!jsonMatch) return { steps: ["执行任务"], estimatedOps: 5, estimatedCredits: 10 };
   return JSON.parse(jsonMatch[0]);
 }
+
+// ─── 5. SmartQuoteAI — AI 智能价格建议 ──────────────────────
+export interface SmartQuoteSuggestion {
+  conservative: { price: number; label: string; desc: string; conversionRate: string };
+  balanced:     { price: number; label: string; desc: string; conversionRate: string };
+  aggressive:   { price: number; label: string; desc: string; conversionRate: string };
+  marketInsight: string;
+  riskNote: string;
+  suggestedUnit: string;
+  suggestedPriceTerm: string;
+}
+
+export async function generateSmartQuote(params: {
+  productName: string;
+  quantity?: string;
+  buyerCountry: string;
+  buyerCompany?: string;
+  estimatedValue?: number;
+  historicalAvgPrice?: number;
+  platform: string;
+  tenantName?: string;
+}): Promise<SmartQuoteSuggestion> {
+  const systemPrompt = `你是一个专业的外贸报价策略顾问，擅长 B2B 出口定价分析。公司：${params.tenantName ?? "明辉照明有限公司"}。你的任务是根据询盘信息，给出三档报价建议，帮助老板快速决策。`;
+
+  const userPrompt = `询盘信息：
+产品：${params.productName}
+数量：${params.quantity ?? "未知"}
+买家国家：${params.buyerCountry}
+买家公司：${params.buyerCompany ?? "未知"}
+来源平台：${params.platform}
+${params.estimatedValue ? `预估金额：$${params.estimatedValue}` : ""}
+${params.historicalAvgPrice ? `历史成交均价：$${params.historicalAvgPrice}` : ""}
+
+请给出三档报价建议，以 JSON 格式输出（只输出 JSON，不要其他文字）：
+{
+  "conservative": {"price": 单价数字,"label": "稳健型","desc": "适合新客户开发，高转化率","conversionRate": "75%"},
+  "balanced": {"price": 单价数字,"label": "平衡型","desc": "利润与转化率兼顾","conversionRate": "55%"},
+  "aggressive": {"price": 单价数字,"label": "溢价型","desc": "彰显品牌价值，高利润","conversionRate": "30%"},
+  "marketInsight": "一句话市场洞察（中文，50字以内）",
+  "riskNote": "一句话风险提示（中文，50字以内）",
+  "suggestedUnit": "建议计价单位，如 件/套/KG",
+  "suggestedPriceTerm": "建议贸易术语，如 FOB/CIF"
+}`;
+
+  const raw = await chat(systemPrompt, userPrompt, { temperature: 0.5, maxTokens: 600 });
+  const jsonMatch = raw.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    const base = params.estimatedValue ? Math.round((params.estimatedValue / 100) * 10) / 10 : 10;
+    return {
+      conservative: { price: +(base * 0.85).toFixed(2), label: "稳健型", desc: "高转化率，适合开发新客户", conversionRate: "75%" },
+      balanced:     { price: +(base * 1.0).toFixed(2),  label: "平衡型", desc: "利润与转化率兼顾",         conversionRate: "55%" },
+      aggressive:   { price: +(base * 1.2).toFixed(2),  label: "溢价型", desc: "彰显品牌价值，高利润",     conversionRate: "30%" },
+      marketInsight: "当前市场竞争激烈，建议以平衡型价格切入",
+      riskNote: "溢价型报价需配合详细产品优势说明",
+      suggestedUnit: "件",
+      suggestedPriceTerm: "FOB",
+    };
+  }
+  return JSON.parse(jsonMatch[0]) as SmartQuoteSuggestion;
+}
+
+// ─── 6. Command Lab — 复合指令拆解 ───────────────────────────
+export interface CommandLabResult {
+  title: string;
+  steps: Array<{
+    id: number;
+    phase: "analyze" | "filter" | "execute" | "report";
+    label: string;
+    detail: string;
+    estimatedTime: string;
+    platform?: string;
+    creditCost: number;
+  }>;
+  totalCredits: number;
+  totalTime: string;
+  riskLevel: "low" | "medium" | "high";
+  riskNote: string;
+  subTasks: string[];
+}
+
+export async function parseComplexCommand(rawInput: string): Promise<CommandLabResult> {
+  const systemPrompt = `你是一个外贸业务 AI 指挥官，擅长将复杂的复合指令拆解为可执行的子任务流程。每个步骤必须明确、可量化，并标注预估时间和积分消耗。`;
+
+  const userPrompt = `老板指令：「${rawInput}」
+
+请将这个复合指令拆解为 3-6 个执行步骤，以 JSON 格式输出（只输出 JSON，不要其他文字）：
+{
+  "title": "指令标题（简短，20字以内）",
+  "steps": [
+    {"id": 1,"phase": "analyze","label": "步骤名称（10字以内）","detail": "具体执行内容（30字以内）","estimatedTime": "预估时间，如 2分钟","platform": "执行平台，如 linkedin/whatsapp/feishu/all","creditCost": 积分消耗整数}
+  ],
+  "totalCredits": 总积分消耗整数,
+  "totalTime": "总预估时间，如 15分钟",
+  "riskLevel": "low|medium|high",
+  "riskNote": "风险说明（30字以内）",
+  "subTasks": ["子任务1", "子任务2"]
+}
+phase 类型说明：analyze=数据分析, filter=筛选目标, execute=执行操作, report=生成报告`;
+
+  const raw = await chat(systemPrompt, userPrompt, { temperature: 0.6, maxTokens: 800 });
+  const jsonMatch = raw.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    return {
+      title: "复合指令执行",
+      steps: [
+        { id: 1, phase: "analyze", label: "数据分析", detail: "分析历史询盘和客户数据", estimatedTime: "3分钟", platform: "feishu", creditCost: 5 },
+        { id: 2, phase: "filter",  label: "筛选目标", detail: "筛选符合条件的目标客户", estimatedTime: "2分钟", platform: "all",    creditCost: 3 },
+        { id: 3, phase: "execute", label: "执行方案", detail: "向目标客户发送挽回消息", estimatedTime: "10分钟", platform: "whatsapp", creditCost: 15 },
+        { id: 4, phase: "report",  label: "生成报告", detail: "汇总执行结果推送飞书",  estimatedTime: "1分钟", platform: "feishu", creditCost: 2 },
+      ],
+      totalCredits: 25,
+      totalTime: "16分钟",
+      riskLevel: "medium",
+      riskNote: "批量发送需控制频率，避免账号异常",
+      subTasks: ["分析目标客户", "生成个性化消息", "监控回复率"],
+    };
+  }
+  return JSON.parse(jsonMatch[0]) as CommandLabResult;
+}

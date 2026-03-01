@@ -14,7 +14,7 @@
 import { Hono } from "hono";
 import db from "../db/index.js";
 import { authMiddleware } from "../middleware/auth.js";
-import { generateInquiryDraft, generateFollowupDraft } from "../services/ai.js";
+import { generateInquiryDraft, generateFollowupDraft, generateSmartQuote } from "../services/ai.js";
 import { addBitableRecord, createQuotationNotificationCard, sendFeishuCard, pushQuotationNotification } from "../services/feishu.js";
 import { executeAiFollowup } from "../services/followup.js";
 import { generateConceptImage } from "../services/conceptImage.js";
@@ -255,6 +255,46 @@ inquiries.post("/:id/ai-draft", async (c) => {
   }
 });
 
+// ─── AI 智能报价建议 (SmartQuoteAI) ─────────────────────────────
+inquiries.post("/:id/smart-quote", async (c) => {
+  const user = c.get("user");
+  const { id } = c.req.param();
+  const row = db.prepare(
+    "SELECT * FROM inquiries WHERE id = ? AND tenant_id = ?"
+  ).get(id, user.tenantId) as any;
+  if (!row) return c.json({ error: "询盘不存在" }, 404);
+  const histRow = db.prepare(`
+    SELECT AVG(unit_price) as avg_price FROM quotations
+    WHERE tenant_id = ? AND status = 'sent'
+    AND product_name LIKE ?
+  `).get(user.tenantId, `%${(row.product_name ?? "").split(" ")[0]}%`) as any;
+  const tenant = db.prepare("SELECT name FROM tenants WHERE id=?").get(user.tenantId) as any;
+  try {
+    const result = await generateSmartQuote({
+      productName: row.product_name ?? "",
+      quantity: row.quantity ?? undefined,
+      buyerCountry: row.buyer_country ?? "",
+      buyerCompany: row.buyer_company ?? undefined,
+      estimatedValue: row.estimated_value ?? undefined,
+      historicalAvgPrice: histRow?.avg_price ?? undefined,
+      platform: row.source_platform ?? "custom",
+      tenantName: tenant?.name,
+    });
+    const creditsUsed = 2;
+    db.prepare("UPDATE tenants SET credits_balance = credits_balance - ? WHERE id = ?")
+      .run(creditsUsed, user.tenantId);
+    const updatedTenant = db.prepare("SELECT credits_balance FROM tenants WHERE id = ?").get(user.tenantId) as any;
+    db.prepare(`
+      INSERT INTO credit_ledger (id, tenant_id, type, amount, balance_after, description, task_id)
+      VALUES (lower(hex(randomblob(16))), ?, 'smart_quote', ?, ?, ?, ?)
+    `).run(user.tenantId, -creditsUsed, updatedTenant.credits_balance, `AI 智能报价建议 - ${row.product_name}`, id);
+    return c.json({ success: true, creditsUsed, suggestion: result });
+  } catch (err: any) {
+    console.error("SmartQuote 生成失败:", err);
+    return c.json({ error: "AI 报价建议生成失败", detail: err.message }, 500);
+  }
+});
+
 // ─── 更新状态 ─────────────────────────────────────────────────
 inquiries.patch("/:id/status", async (c) => {
   const user = c.get("user");
@@ -375,11 +415,13 @@ inquiries.post("/:id/reply", async (c) => {
 
         const followupResult = await generateFollowupDraft({
           buyerName: row.buyer_name ?? "",
+          buyerCompany: row.buyer_company ?? "",
           productName: row.product_name ?? "",
-          unitPrice: quotation.unit_price,
-          currency: quotation.currency,
-          minOrder: quotation.min_order,
-          deliveryDays: quotation.delivery_days,
+          unitPrice: quotation.unit_price ?? 0,
+          currency: quotation.currency ?? "USD",
+          unit: quotation.unit ?? "unit",
+          priceTerm: quotation.price_term ?? "FOB",
+          style: "business" as const,
           styleProfile,
           tenantName: tenant?.name,
         });

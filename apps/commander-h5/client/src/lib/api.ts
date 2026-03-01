@@ -185,6 +185,22 @@ export const inquiriesApi = {
     );
   },
 
+  async smartQuote(id: string) {
+    return request<{
+      success: boolean;
+      creditsUsed: number;
+      suggestion: {
+        conservative: { price: number; label: string; desc: string; conversionRate: string };
+        balanced:     { price: number; label: string; desc: string; conversionRate: string };
+        aggressive:   { price: number; label: string; desc: string; conversionRate: string };
+        marketInsight: string;
+        riskNote: string;
+        suggestedUnit: string;
+        suggestedPriceTerm: string;
+      };
+    }>(`/inquiries/${id}/smart-quote`, { method: "POST", body: JSON.stringify({}) });
+  },
+
   async regenerateDraft(id: string, opts?: { priceHint?: string }) {
     const res = await request<{
       success: boolean;
@@ -556,6 +572,15 @@ export const multiAccountApi = {
 
   getHealth: () =>
     request<{ overallHealth: string; instances: any[]; summary: any }>("/multi-account/health"),
+
+  getMatrix: () =>
+    request<{ heatmap: any[]; instances: any[]; batchSuggestions: any[]; summary: any }>("/multi-account/matrix"),
+
+  batchAction: (action: string, instanceIds?: string[]) =>
+    request<{ success: boolean; action: string; affected: number; message: string }>("/multi-account/batch", {
+      method: "POST",
+      body: JSON.stringify({ action, instanceIds }),
+    }),
 
   triggerCircuitBreaker: (id: string, action: "trigger" | "reset", reason?: string, sleepMinutes?: number) =>
     request<{ success: boolean; action: string; sleepUntil?: string; message: string }>(`/multi-account/circuit-breaker/${id}`, {
@@ -1001,6 +1026,30 @@ export const bossApi = {
   /** 战报聚合数据（三模块） */
   getWarroom: () =>
     request<WaRoomData>("/boss/warroom"),
+
+  /** 复合指令实验室：AI 拆解复合指令为可视化流程 */
+  commandLab: (command: string) =>
+    request<{
+      success: boolean;
+      commandId: string;
+      lab: {
+        title: string;
+        steps: Array<{
+          id: number;
+          phase: "analyze" | "filter" | "execute" | "report";
+          label: string;
+          detail: string;
+          estimatedTime: string;
+          platform?: string;
+          creditCost: number;
+        }>;
+        totalCredits: number;
+        totalTime: string;
+        riskLevel: "low" | "medium" | "high";
+        riskNote: string;
+        subTasks: string[];
+      };
+    }>("/boss/command-lab", { method: "POST", body: JSON.stringify({ command }) }),
 };
 
 export interface BossCommand {

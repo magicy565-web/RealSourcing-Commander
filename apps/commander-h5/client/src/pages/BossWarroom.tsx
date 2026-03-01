@@ -367,16 +367,43 @@ function HeroScreen({
 }
 
 // ─── Screen 1: Command Center ─────────────────────────────────────────────────
+// 指令实验室阶段颜色
+const PHASE_COLORS: Record<string, string> = {
+  analyze:  '#60A5FA',
+  filter:   '#A78BFA',
+  execute:  '#34D399',
+  report:   '#F59E0B',
+};
+const PHASE_ICONS: Record<string, string> = {
+  analyze:  '🔍',
+  filter:   '🎯',
+  execute:  '⚡',
+  report:   '📊',
+};
+
 function CommandScreen({ data, onBack, onNext }: { data: any; onBack: () => void; onNext: () => void }) {
   const [command, setCommand] = useState('');
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [recent, setRecent] = useState<string[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Command Lab 2.0 state
+  const [labMode, setLabMode] = useState(false);
+  const [labLoading, setLabLoading] = useState(false);
+  const [labResult, setLabResult] = useState<null | {
+    title: string;
+    steps: Array<{ id: number; phase: string; label: string; detail: string; estimatedTime: string; platform?: string; creditCost: number }>;
+    totalCredits: number;
+    totalTime: string;
+    riskLevel: 'low' | 'medium' | 'high';
+    riskNote: string;
+    subTasks: string[];
+  }>(null);
+  const [activeStep, setActiveStep] = useState<number | null>(null);
 
   const quickCommands = [
     { icon: '🌍', text: '今天重点开发欧洲市场' },
-    { icon: '⭐', text: '优先回复高价值询盘' },
+    { icon: '⭐', text: '优先回复高价値询盘' },
     { icon: '🇺🇸', text: '加大对美国客户的触达频率' },
     { icon: '🔄', text: '暂停推广，专注跟进老客户' },
   ];
@@ -392,6 +419,20 @@ function CommandScreen({ data, onBack, onNext }: { data: any; onBack: () => void
       setTimeout(() => setSent(false), 3000);
     } catch (e) { console.error(e); }
     finally { setSending(false); }
+  };
+
+  const handleLabAnalyze = async () => {
+    if (!command.trim()) return;
+    setLabLoading(true);
+    try {
+      const res = await bossApi.commandLab(command.trim());
+      setLabResult(res.lab);
+      setActiveStep(null);
+    } catch (e: any) {
+      console.error(e);
+    } finally {
+      setLabLoading(false);
+    }
   };
 
   const agent = data?.agent ?? null;
@@ -480,34 +521,166 @@ function CommandScreen({ data, onBack, onNext }: { data: any; onBack: () => void
           )}
         </div>
 
-        {/* Command input */}
+        {/* Command input + Lab Mode */}
         <div className="glass-card-elevated p-4 mb-4 slide-up delay-100">
+          {/* 标题行 */}
           <div className="flex items-center justify-between mb-3">
             <p className="text-[#A0A0B0] text-sm font-semibold">下达指令</p>
-            <span className="text-[#6B6B80] text-xs">AI 自动解析执行</span>
+            <button
+              onClick={() => { setLabMode(v => !v); setLabResult(null); }}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all"
+              style={{
+                background: labMode ? 'rgba(124,58,237,0.25)' : 'rgba(255,255,255,0.06)',
+                border: `1px solid ${labMode ? 'rgba(124,58,237,0.5)' : 'rgba(255,255,255,0.1)'}`,
+                color: labMode ? '#A78BFA' : '#6B6B80',
+              }}
+            >
+              <span>🧪</span>
+              <span>指令实验室</span>
+            </button>
           </div>
+
           <textarea
             ref={textareaRef}
             value={command}
             onChange={e => setCommand(e.target.value)}
-            placeholder="用自然语言告诉数字员工今天的重点…"
+            placeholder={labMode ? '输入复合指令，AI 将拆解为可视化执行流程…' : '用自然语言告诉数字员工今天的重点…'}
             className="input-dark w-full resize-none text-sm leading-relaxed"
             rows={3}
           />
-          <button
-            onClick={handleSend}
-            disabled={!command.trim() || sending}
-            className={`btn-gold w-full py-3.5 text-sm mt-3 font-bold ${(!command.trim() || sending) ? 'opacity-50' : 'glow-pulse'}`}
-            style={{ fontSize: '0.9375rem', letterSpacing: '0.02em' }}
-          >
-            {sending ? '发送中…' : sent ? '✓ 指令已发送' : '⚡ 发送指令'}
-          </button>
-          {sent && (
+
+          {labMode ? (
+            <button
+              onClick={handleLabAnalyze}
+              disabled={!command.trim() || labLoading}
+              className="w-full py-3.5 text-sm mt-3 font-bold rounded-xl flex items-center justify-center gap-2 transition-all"
+              style={{
+                background: (!command.trim() || labLoading) ? 'rgba(124,58,237,0.3)' : 'linear-gradient(135deg, #7c3aed, #6d28d9)',
+                opacity: (!command.trim() || labLoading) ? 0.6 : 1,
+                color: '#fff',
+              }}
+            >
+              {labLoading ? (
+                <><span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />AI 拆解中…</>
+              ) : (
+                <><span>🧪</span>分析指令流程</>
+              )}
+            </button>
+          ) : (
+            <button
+              onClick={handleSend}
+              disabled={!command.trim() || sending}
+              className={`btn-gold w-full py-3.5 text-sm mt-3 font-bold ${(!command.trim() || sending) ? 'opacity-50' : 'glow-pulse'}`}
+              style={{ fontSize: '0.9375rem', letterSpacing: '0.02em' }}
+            >
+              {sending ? '发送中…' : sent ? '✓ 指令已发送' : '⚡ 发送指令'}
+            </button>
+          )}
+
+          {sent && !labMode && (
             <p className="text-[#34D399] text-xs text-center mt-2 fade-in">
               数字员工已收到指令，正在解析执行
             </p>
           )}
         </div>
+
+        {/* Command Lab 结果卡片 */}
+        {labMode && labResult && (
+          <div className="glass-card-elevated p-4 mb-4 slide-up" style={{ border: '1px solid rgba(124,58,237,0.3)' }}>
+            {/* 标题 */}
+            <div className="flex items-start justify-between gap-2 mb-4">
+              <div>
+                <p className="text-[#A78BFA] text-xs font-semibold mb-0.5">指令实验室 · 执行路径</p>
+                <p className="text-[#F1F1F5] text-sm font-bold">{labResult.title}</p>
+              </div>
+              <span className="flex-shrink-0 text-xs px-2 py-0.5 rounded-full font-semibold" style={{
+                background: labResult.riskLevel === 'high' ? 'rgba(239,68,68,0.2)' : labResult.riskLevel === 'medium' ? 'rgba(245,158,11,0.2)' : 'rgba(52,211,153,0.2)',
+                color: labResult.riskLevel === 'high' ? '#F87171' : labResult.riskLevel === 'medium' ? '#FCD34D' : '#34D399',
+              }}>
+                {labResult.riskLevel === 'high' ? '高风险' : labResult.riskLevel === 'medium' ? '中风险' : '低风险'}
+              </span>
+            </div>
+
+            {/* 执行流程步骤 */}
+            <div className="space-y-2 mb-4">
+              {labResult.steps.map((step, idx) => {
+                const color = PHASE_COLORS[step.phase] ?? '#A0A0B0';
+                const icon = PHASE_ICONS[step.phase] ?? '▶';
+                const isActive = activeStep === step.id;
+                return (
+                  <div key={step.id}>
+                    <button
+                      onClick={() => setActiveStep(isActive ? null : step.id)}
+                      className="w-full text-left rounded-xl p-3 transition-all"
+                      style={{
+                        background: isActive ? `${color}18` : 'rgba(255,255,255,0.04)',
+                        border: `1px solid ${isActive ? color + '40' : 'rgba(255,255,255,0.06)'}`,
+                      }}
+                    >
+                      <div className="flex items-center gap-3">
+                        {/* 连接线 */}
+                        <div className="flex flex-col items-center flex-shrink-0">
+                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-sm" style={{ background: `${color}25` }}>
+                            {icon}
+                          </div>
+                          {idx < labResult.steps.length - 1 && (
+                            <div className="w-px h-2 mt-1" style={{ background: `${color}30` }} />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold" style={{ color }}>{step.label}</span>
+                            {step.platform && <span className="text-xs text-[#6B6B80]">{step.platform}</span>}
+                          </div>
+                          <div className="flex items-center gap-3 mt-0.5">
+                            <span className="text-xs text-[#6B6B80]">≈{step.estimatedTime}</span>
+                            <span className="text-xs text-[#6B6B80]">{step.creditCost} 积分</span>
+                          </div>
+                        </div>
+                        <span className="text-[#6B6B80] text-xs">{isActive ? '▲' : '▼'}</span>
+                      </div>
+                    </button>
+                    {isActive && (
+                      <div className="mt-1 px-3 py-2 rounded-xl text-xs text-[#A0A0B0] leading-relaxed"
+                        style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        {step.detail}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 汇总行 */}
+            <div className="flex items-center justify-between py-3 px-1" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="flex items-center gap-4">
+                <span className="text-xs text-[#6B6B80]">总耗时 <span className="text-[#F1F1F5] font-semibold">{labResult.totalTime}</span></span>
+                <span className="text-xs text-[#6B6B80]">总积分 <span className="text-[#C9A84C] font-semibold">{labResult.totalCredits}</span></span>
+              </div>
+              <button
+                onClick={async () => {
+                  setSending(true);
+                  try {
+                    await bossApi.sendCommand(command.trim());
+                    setSent(true);
+                    setTimeout(() => setSent(false), 3000);
+                  } catch {}
+                  finally { setSending(false); }
+                }}
+                disabled={sending}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white transition-all"
+                style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)' }}
+              >
+                {sending ? '执行中…' : '确认执行'}
+              </button>
+            </div>
+
+            {/* 风险提示 */}
+            <p className="text-xs text-[#6B6B80] mt-2 leading-relaxed">
+              ⚠️ {labResult.riskNote}
+            </p>
+          </div>
+        )}
 
         {/* Recent commands */}
         {recent.length > 0 && (

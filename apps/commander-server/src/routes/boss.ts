@@ -14,7 +14,7 @@
 import { Hono } from "hono";
 import { db } from "../db/index.js";
 import { authMiddleware } from "../middleware/auth.js";
-import { chat } from "../services/ai.js";
+import { chat, parseComplexCommand } from "../services/ai.js";
 
 const boss = new Hono();
 boss.use("*", authMiddleware);
@@ -105,12 +105,12 @@ ${Object.entries(INTENT_MAP).map(([k, v]) => `- ${k}: ${v.description}`).join('\
 }`;
 
   try {
-    const raw = await chat(prompt);
+    const raw = await chat("你是一个外贸指令解析助手，请返回 JSON 格式。", prompt);
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error("No JSON in response");
     return JSON.parse(jsonMatch[0]);
   } catch {
-    // 规则引擎兜底
+    // 规则引擎底底
     const lower = rawInput.toLowerCase();
     let intent = "focus_market";
     const params: Record<string, any> = { priority: "normal" };
@@ -514,6 +514,29 @@ boss.get("/warroom", (c) => {
       },
     },
   });
+});
+
+// ─── POST /boss/command-lab — 复合指令实验室 ─────────────────────────
+boss.post("/command-lab", async (c) => {
+  const { tenantId, userId } = c.get("user") as any;
+  const body = await c.req.json();
+  const rawInput: string = body.command ?? "";
+  if (!rawInput.trim()) return c.json({ error: "指令不能为空" }, 400);
+  const commandId = `cmd-lab-${Date.now()}`;
+  db.prepare(`
+    INSERT INTO boss_commands (id, tenant_id, user_id, raw_input, status)
+    VALUES (?, ?, ?, ?, 'queued')
+  `).run(commandId, tenantId, userId, rawInput);
+  try {
+    const labResult = await parseComplexCommand(rawInput);
+    db.prepare(`
+      UPDATE boss_commands SET structured=?, status='dispatched', updated_at=datetime('now') WHERE id=?
+    `).run(JSON.stringify({ ...labResult, type: 'command_lab' }), commandId);
+    return c.json({ success: true, commandId, lab: labResult });
+  } catch (err: any) {
+    db.prepare(`UPDATE boss_commands SET status='failed', updated_at=datetime('now') WHERE id=?`).run(commandId);
+    return c.json({ error: "指令拆解失败", detail: err.message }, 500);
+  }
 });
 
 export default boss;

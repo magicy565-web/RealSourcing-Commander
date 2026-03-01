@@ -1003,6 +1003,18 @@ function LeadDetailFlow({ lead: initialLead, onBack, onUpdate }: {
   const { steps: thinkingSteps, isRunning: thinkingRunning, totalDuration: thinkingDuration } = useAIThinking(aiThinkingTriggered);
   const [transferTo, setTransferTo] = useState("");
   const [transferNote, setTransferNote] = useState("");
+  // SmartQuoteAI state
+  const [smartQuoteLoading, setSmartQuoteLoading] = useState(false);
+  const [smartQuoteSuggestion, setSmartQuoteSuggestion] = useState<null | {
+    conservative: { price: number; label: string; desc: string; conversionRate: string };
+    balanced:     { price: number; label: string; desc: string; conversionRate: string };
+    aggressive:   { price: number; label: string; desc: string; conversionRate: string };
+    marketInsight: string;
+    riskNote: string;
+    suggestedUnit: string;
+    suggestedPriceTerm: string;
+  }>(null);
+  const [smartQuoteExpanded, setSmartQuoteExpanded] = useState(false);
 
   const sc = statusConfig[lead.status];
 
@@ -1310,6 +1322,100 @@ function LeadDetailFlow({ lead: initialLead, onBack, onUpdate }: {
               className="text-xs text-blue-400 flex items-center gap-0.5">
               <Eye className="w-3 h-3" />预览
             </button>
+          </div>
+
+          {/* SmartQuoteAI 卡片 */}
+          <div className="rounded-xl overflow-hidden" style={{background:"oklch(0.16 0.04 280 / 60%)", border:"1px solid oklch(0.55 0.18 280 / 30%)"}}>
+            <button
+              onClick={() => setSmartQuoteExpanded(v => !v)}
+              className="w-full flex items-center justify-between px-3.5 py-3 active:opacity-70 transition-opacity"
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{background:"linear-gradient(135deg,#7c3aed,#6d28d9)"}}>
+                  <Sparkles className="w-3.5 h-3.5 text-white" />
+                </div>
+                <span className="text-sm font-semibold text-white">AI 报价建议</span>
+                {smartQuoteSuggestion && <span className="text-xs px-1.5 py-0.5 rounded-full text-purple-300" style={{background:"oklch(0.35 0.15 280 / 40%)"}}>已生成</span>}
+              </div>
+              <div className="flex items-center gap-2">
+                {!smartQuoteSuggestion && <span className="text-xs text-purple-400">消耗 2 积分</span>}
+                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${smartQuoteExpanded ? "rotate-180" : ""}`} />
+              </div>
+            </button>
+            {smartQuoteExpanded && (
+              <div className="px-3.5 pb-3.5">
+                {!smartQuoteSuggestion ? (
+                  <button
+                    onClick={async () => {
+                      setSmartQuoteLoading(true);
+                      try {
+                        const res = await inquiriesApi.smartQuote(lead.id);
+                        setSmartQuoteSuggestion(res.suggestion);
+                        toast.success("✨ AI 报价建议已生成！");
+                      } catch (e: any) {
+                        toast.error(e.message ?? "生成失败");
+                      } finally {
+                        setSmartQuoteLoading(false);
+                      }
+                    }}
+                    disabled={smartQuoteLoading}
+                    className="w-full py-2.5 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-60"
+                    style={{background:"linear-gradient(135deg, oklch(0.55 0.20 280), oklch(0.48 0.22 275))"}}
+                  >
+                    {smartQuoteLoading ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" />AI 分析中...</>
+                    ) : (
+                      <><Sparkles className="w-4 h-4" />生成三档价格建议</>
+                    )}
+                  </button>
+                ) : (
+                  <div className="space-y-2">
+                    {([
+                      { key: "conservative" as const, color: "#34d399", bg: "oklch(0.28 0.10 160 / 30%)", border: "oklch(0.50 0.15 160 / 40%)" },
+                      { key: "balanced"     as const, color: "#60a5fa", bg: "oklch(0.28 0.10 230 / 30%)", border: "oklch(0.50 0.15 230 / 40%)" },
+                      { key: "aggressive"   as const, color: "#f59e0b", bg: "oklch(0.28 0.10 60  / 30%)", border: "oklch(0.50 0.15 60  / 40%)" },
+                    ] as const).map(({ key, color, bg, border }) => {
+                      const s = smartQuoteSuggestion![key];
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => {
+                            setPrice(String(s.price));
+                            const unit = `${smartQuoteSuggestion!.suggestedUnit} ${smartQuoteSuggestion!.suggestedPriceTerm}`;
+                            setPriceUnit(unit);
+                            toast.success(`已填入${s.label}价格 $${s.price}`);
+                          }}
+                          className="w-full text-left p-3 rounded-xl flex items-center justify-between active:scale-98 transition-all"
+                          style={{background: bg, border: `1px solid ${border}`}}
+                        >
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <span className="text-xs font-bold" style={{color}}>{s.label}</span>
+                              <span className="text-xs text-slate-500">{s.desc}</span>
+                            </div>
+                            <p className="text-xs text-slate-500">预估转化率 {s.conversionRate}</p>
+                          </div>
+                          <div className="text-right ml-3">
+                            <p className="text-base font-black font-mono" style={{color}}>${s.price}</p>
+                            <p className="text-xs text-slate-500">点击填入</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                    <div className="pt-1 space-y-1">
+                      <p className="text-xs text-slate-400 flex items-start gap-1.5">
+                        <TrendingUp className="w-3 h-3 text-blue-400 flex-shrink-0 mt-0.5" />
+                        {smartQuoteSuggestion.marketInsight}
+                      </p>
+                      <p className="text-xs text-slate-500 flex items-start gap-1.5">
+                        <AlertTriangle className="w-3 h-3 text-amber-400 flex-shrink-0 mt-0.5" />
+                        {smartQuoteSuggestion.riskNote}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* 报价金额 */}
