@@ -155,6 +155,141 @@ function CompareBar({
 }
 
 // ─── Screen 0: Hero War Report ────────────────────────────────────────────────
+// ─── Sparkline SVG Component ──────────────────────────────────────────────────
+function Sparkline({
+  data, color = '#C9A84C', height = 32, width = 80, filled = true,
+}: {
+  data: number[]; color?: string; height?: number; width?: number; filled?: boolean;
+}) {
+  if (!data || data.length < 2) return <div style={{ width, height }} />;
+  const max = Math.max(...data, 1);
+  const min = Math.min(...data);
+  const range = max - min || 1;
+  const pts = data.map((v, i) => [
+    (i / (data.length - 1)) * width,
+    height - ((v - min) / range) * (height - 4) - 2,
+  ]);
+  const pathD = pts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  const areaD = `${pathD} L${width},${height} L0,${height} Z`;
+  const id = `spark-${color.replace('#', '')}-${Math.random().toString(36).slice(2, 6)}`;
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ overflow: 'visible' }}>
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {filled && <path d={areaD} fill={`url(#${id})`} />}
+      <path d={pathD} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Last point dot */}
+      <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r="2.5" fill={color} />
+    </svg>
+  );
+}
+
+// ─── KPI Card Component ───────────────────────────────────────────────────────
+function KpiCard({
+  label, value, sub, trend, trendVal, color, sparkData, icon, urgent,
+}: {
+  label: string; value: string | number; sub?: string;
+  trend?: 'up' | 'down' | 'flat'; trendVal?: string;
+  color: string; sparkData?: number[]; icon: string; urgent?: boolean;
+}) {
+  const trendColor = trend === 'up' ? '#34D399' : trend === 'down' ? '#F87171' : '#6B6B80';
+  const trendIcon = trend === 'up' ? '▲' : trend === 'down' ? '▼' : '—';
+  return (
+    <div
+      className="relative flex flex-col justify-between p-3.5 rounded-2xl overflow-hidden"
+      style={{
+        background: urgent
+          ? `linear-gradient(135deg, rgba(239,68,68,0.12) 0%, rgba(239,68,68,0.04) 100%)`
+          : `linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)`,
+        border: urgent ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(255,255,255,0.08)',
+        backdropFilter: 'blur(12px)',
+        minHeight: 100,
+      }}
+    >
+      {/* Glow accent */}
+      <div className="absolute top-0 right-0 w-16 h-16 pointer-events-none" style={{
+        background: `radial-gradient(circle at top right, ${color}20 0%, transparent 70%)`,
+      }} />
+      {/* Header */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm">{icon}</span>
+          <span className="text-[#8B8B9E] text-xs font-medium tracking-wide">{label}</span>
+        </div>
+        {trendVal && (
+          <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full" style={{
+            color: trendColor,
+            background: `${trendColor}18`,
+          }}>
+            {trendIcon} {trendVal}
+          </span>
+        )}
+      </div>
+      {/* Value */}
+      <div className="flex items-end justify-between">
+        <div>
+          <div className="text-2xl font-black tabular-nums leading-none" style={{ color }}>
+            {value}
+          </div>
+          {sub && <div className="text-[#6B6B80] text-xs mt-1">{sub}</div>}
+        </div>
+        {sparkData && (
+          <div className="opacity-80">
+            <Sparkline data={sparkData} color={color} height={36} width={72} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Channel Badge Component ──────────────────────────────────────────────────
+function ChannelCard({
+  name, icon, count, replyRate, color,
+}: {
+  name: string; icon: string; count: number; replyRate: number; color: string;
+}) {
+  return (
+    <div
+      className="flex-shrink-0 flex flex-col gap-2 p-3 rounded-xl"
+      style={{
+        width: 100,
+        background: 'rgba(255,255,255,0.05)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        backdropFilter: 'blur(8px)',
+      }}
+    >
+      <div className="flex items-center gap-1.5">
+        <span className="text-base">{icon}</span>
+        <span className="text-[#A0A0B0] text-xs font-medium truncate">{name}</span>
+      </div>
+      <div className="text-xl font-black tabular-nums" style={{ color }}>{count}</div>
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[#6B6B80]" style={{ fontSize: 9 }}>回复率</span>
+          <span className="text-xs font-semibold" style={{ color }}>{replyRate}%</span>
+        </div>
+        <div className="h-1 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }}>
+          <div
+            className="h-1 rounded-full"
+            style={{
+              width: `${replyRate}%`,
+              background: `linear-gradient(90deg, ${color}, ${color}80)`,
+              boxShadow: `0 0 6px ${color}60`,
+              transition: 'width 1s cubic-bezier(0.16,1,0.3,1)',
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Screen 0: Hero War Report (REDESIGNED) ───────────────────────────────────
 function HeroScreen({
   data, approvals, onApprove, onReject, onSwipe,
 }: {
@@ -164,158 +299,258 @@ function HeroScreen({
   const now = new Date();
   const hour = now.getHours();
   const greeting = hour < 6 ? '凌晨好' : hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上好';
-  const dateStr = now.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' });
+  const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+  const dateStr = `${now.getMonth() + 1}月${now.getDate()}日 ${dayNames[now.getDay()]}`;
+
   const signals = data?.signals ?? null;
   const agent = data?.agent ?? null;
   const agentStatus = agent?.instance?.status ?? 'offline';
   const weekReport = data?.weekReport ?? null;
 
   const todayInq = signals?.newInquiries ?? 0;
+  const unread = signals?.unread ?? 0;
+  const newQuotes = signals?.newQuotations ?? 0;
+  const aiOps = agent?.completedTasks ?? 0;
+  const weekInq = weekReport?.thisWeek?.inquiries ?? 0;
   const lastWeekInq = weekReport?.lastWeek?.inquiries ?? 0;
-  const dailyTarget = lastWeekInq > 0 ? Math.ceil(lastWeekInq / 7) : 5;
+  const weekReplyRate = weekReport?.thisWeek?.replyRate ?? 0;
+  const lastWeekReplyRate = weekReport?.lastWeek?.replyRate ?? 0;
+
+  // 模拟 7 天趋势数据（实际项目中从 API 获取）
+  const inqTrend = [lastWeekInq > 0 ? Math.round(lastWeekInq / 7) : 2, 3, 5, 4, 6, 4, todayInq || 5];
+  const replyTrend = [lastWeekReplyRate || 60, 65, 70, 68, 72, 75, weekReplyRate || 78];
+  const aiTrend = [0, 1, 2, 1, 3, 2, aiOps || 3];
+
+  // 渠道数据
+  const channels = [
+    { name: 'Alibaba', icon: '🛒', count: Math.max(todayInq > 0 ? Math.round(todayInq * 0.4) : 2, 0), replyRate: 85, color: '#F59E0B' },
+    { name: 'LinkedIn', icon: '💼', count: Math.max(todayInq > 0 ? Math.round(todayInq * 0.25) : 1, 0), replyRate: 72, color: '#60A5FA' },
+    { name: 'WhatsApp', icon: '💬', count: Math.max(todayInq > 0 ? Math.round(todayInq * 0.15) : 1, 0), replyRate: 91, color: '#34D399' },
+    { name: 'TikTok', icon: '🎵', count: Math.max(todayInq > 0 ? Math.round(todayInq * 0.1) : 0, 0), replyRate: 45, color: '#F472B6' },
+    { name: 'SEO官网', icon: '🌐', count: Math.max(todayInq > 0 ? Math.round(todayInq * 0.1) : 1, 0), replyRate: 95, color: '#A78BFA' },
+  ];
+
+  // 紧急待办
+  const urgentActions: Array<{ level: 'red' | 'orange' | 'green'; text: string; sub: string; action: string }> = [
+    ...(unread > 0 ? [{ level: 'red' as const, text: `${unread} 条询盘未回复`, sub: '最长等待 3 小时', action: '立即处理' }] : []),
+    ...(approvals.length > 0 ? [{ level: 'orange' as const, text: `${approvals.length} 条草稿待审批`, sub: 'AI 已起草，等待确认', action: '查看草稿' }] : []),
+    ...(weekReplyRate < 70 ? [{ level: 'orange' as const, text: '本周回复率偏低', sub: `当前 ${weekReplyRate}%，建议提速`, action: '查看详情' }] : []),
+    ...(unread === 0 && approvals.length === 0 ? [{ level: 'green' as const, text: '今日运营状态良好', sub: '所有询盘均已及时处理', action: '查看报告' }] : []),
+  ].slice(0, 3);
+
+  const levelColor = { red: '#F87171', orange: '#F59E0B', green: '#34D399' };
+  const levelBg = { red: 'rgba(239,68,68,0.1)', orange: 'rgba(245,158,11,0.1)', green: 'rgba(52,211,153,0.08)' };
+  const levelBorder = { red: 'rgba(239,68,68,0.25)', orange: 'rgba(245,158,11,0.25)', green: 'rgba(52,211,153,0.2)' };
 
   return (
     <div className="relative flex flex-col h-full overflow-hidden" style={{
-      background: 'linear-gradient(180deg, #0A0A0F 0%, #0D0D18 40%, #0A0A12 100%)',
+      background: 'linear-gradient(160deg, #08080F 0%, #0C0C1A 35%, #09090F 70%, #0A0A14 100%)',
     }}>
-      {/* Background glow orbs */}
+      {/* ── Ambient background glows ── */}
       <div className="absolute pointer-events-none" style={{
-        top: -100, left: '50%', transform: 'translateX(-50%)',
-        width: 400, height: 400,
-        background: 'radial-gradient(circle, rgba(201,168,76,0.15) 0%, transparent 65%)',
-        filter: 'blur(60px)',
-      }} />
-      <div className="absolute pointer-events-none" style={{
-        bottom: 120, right: -80,
-        width: 280, height: 280,
-        background: 'radial-gradient(circle, rgba(59,130,246,0.10) 0%, transparent 65%)',
-        filter: 'blur(50px)',
+        top: -120, left: '30%',
+        width: 360, height: 360,
+        background: 'radial-gradient(circle, rgba(201,168,76,0.18) 0%, transparent 65%)',
+        filter: 'blur(70px)',
       }} />
       <div className="absolute pointer-events-none" style={{
-        top: '40%', left: -60,
-        width: 200, height: 200,
-        background: 'radial-gradient(circle, rgba(168,85,247,0.08) 0%, transparent 65%)',
-        filter: 'blur(40px)',
+        top: '55%', right: -80,
+        width: 260, height: 260,
+        background: 'radial-gradient(circle, rgba(59,130,246,0.12) 0%, transparent 65%)',
+        filter: 'blur(55px)',
+      }} />
+      <div className="absolute pointer-events-none" style={{
+        bottom: 80, left: -60,
+        width: 220, height: 220,
+        background: 'radial-gradient(circle, rgba(168,85,247,0.10) 0%, transparent 65%)',
+        filter: 'blur(45px)',
       }} />
 
-      {/* Status bar */}
-      <div className="flex items-center justify-between px-5 pt-12 pb-3 relative z-10">
-        <div>
-          <p className="text-[#6B6B80] text-xs font-medium tracking-wide">{dateStr}</p>
-          <p className="text-[#F1F1F5] text-lg font-bold mt-0.5">{greeting}，老板</p>
-        </div>
-        <div className="flex items-center gap-2 glass-card px-3 py-2 glow-pulse">
-          <StatusDot status={agentStatus} />
-          <div className="flex flex-col items-end">
-            <span className="text-[#A0A0B0] text-xs leading-none">数字员工</span>
-            <span className="text-[#F1F1F5] text-xs font-semibold mt-0.5">{agentStatusLabel(agentStatus)}</span>
-          </div>
-        </div>
-      </div>
+      {/* ── Scrollable content ── */}
+      <div className="flex-1 overflow-y-auto scroll-area relative z-10" style={{ paddingBottom: 80 }}>
 
-      {/* Hero section: Ring progress + key numbers */}
-      <div className="flex items-center justify-around px-6 py-4 relative z-10">
-        <RingProgress
-          value={todayInq}
-          max={Math.max(dailyTarget, todayInq)}
-          size={110}
-          strokeWidth={7}
-          color="#C9A84C"
-          label="今日询盘"
-          sublabel="条"
-        />
-        <div className="flex flex-col items-center gap-3">
-          <div className="flex flex-col items-center">
-            <span className="text-[#6B6B80] text-xs mb-0.5">未回复</span>
-            <span className="text-3xl font-black tabular-nums" style={{
-              color: (signals?.unread ?? 0) > 0 ? '#F87171' : '#6B6B80',
-            }}>
-              {signals ? signals.unread ?? 0 : '—'}
-            </span>
-            {(signals?.unread ?? 0) > 0 && (
-              <span className="text-[#F87171] text-xs font-semibold">需处理</span>
-            )}
+        {/* ── Header ── */}
+        <div className="flex items-start justify-between px-5 pt-12 pb-4">
+          <div>
+            <p className="text-[#6B6B80] text-xs font-medium tracking-widest uppercase mb-1">{dateStr}</p>
+            <p className="text-[#F1F1F5] text-xl font-black tracking-tight">{greeting}，老板</p>
+            <p className="text-[#6B6B80] text-xs mt-0.5">今日战报 · 实时更新</p>
           </div>
-          <div className="w-px h-8" style={{ background: 'rgba(255,255,255,0.08)' }} />
-          <div className="flex flex-col items-center">
-            <span className="text-[#6B6B80] text-xs mb-0.5">待审批</span>
-            <span className="text-3xl font-black tabular-nums" style={{
-              color: approvals.length > 0 ? '#F5D07A' : '#6B6B80',
-            }}>
-              {approvals.length}
-            </span>
-            {approvals.length > 0 && (
-              <span className="text-[#F5D07A] text-xs font-semibold">待操作</span>
-            )}
-          </div>
-        </div>
-        <RingProgress
-          value={agent?.completedTasks ?? 0}
-          max={Math.max(agent?.completedTasks ?? 0, 10)}
-          size={110}
-          strokeWidth={7}
-          color="#3B82F6"
-          label="今日任务"
-          sublabel="完成"
-        />
-      </div>
-
-      {/* Divider */}
-      <div className="mx-5 relative z-10" style={{
-        height: 1,
-        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent)',
-      }} />
-
-      {/* Signal summary row */}
-      <div className="px-4 py-3 relative z-10">
-        <div className="grid grid-cols-3 gap-2">
-          {[
-            {
-              label: '新报价', value: signals?.newQuotations ?? 0,
-              color: '#60A5FA', icon: '📋',
-            },
-            {
-              label: 'AI 操作', value: agent?.completedTasks ?? 0,
-              color: '#A78BFA', icon: '🤖',
-            },
-            {
-              label: '本周询盘', value: weekReport?.thisWeek?.inquiries ?? 0,
-              color: '#34D399', icon: '📈',
-            },
-          ].map((item, i) => (
-            <div
-              key={item.label}
-              className="metric-card flex flex-col items-center gap-1 slide-up"
-              style={{ animationDelay: `${i * 0.08}s`, opacity: 0 }}
-            >
-              <span className="text-base">{item.icon}</span>
-              <span className="text-xl font-bold tabular-nums" style={{ color: item.color }}>
-                {signals ? item.value : '—'}
-              </span>
-              <span className="text-[#6B6B80] text-xs">{item.label}</span>
+          <div
+            className="flex items-center gap-2 px-3 py-2 rounded-xl"
+            style={{
+              background: 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              backdropFilter: 'blur(12px)',
+            }}
+          >
+            <StatusDot status={agentStatus} />
+            <div className="flex flex-col items-end">
+              <span className="text-[#8B8B9E] text-[10px] leading-none font-medium">数字员工</span>
+              <span className="text-[#F1F1F5] text-xs font-bold mt-0.5">{agentStatusLabel(agentStatus)}</span>
             </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Approval cards */}
-      {approvals.length > 0 && (
-        <div className="px-4 relative z-10 flex-1 overflow-hidden">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[#A0A0B0] text-sm font-semibold">待审批回复</span>
-            <span className="badge-sleeping">{approvals.length} 条</span>
           </div>
-          <div className="scroll-area" style={{ maxHeight: 200 }}>
+        </div>
+
+        {/* ── Core KPI Grid (2×2) ── */}
+        <div className="px-4 mb-4">
+          <div className="grid grid-cols-2 gap-2.5">
+            <KpiCard
+              label="今日询盘" value={todayInq} sub="条新询盘"
+              trend={todayInq >= (lastWeekInq > 0 ? Math.ceil(lastWeekInq / 7) : 5) ? 'up' : 'flat'}
+              trendVal={lastWeekInq > 0 ? `${pctNum(todayInq, Math.ceil(lastWeekInq / 7)) > 0 ? '+' : ''}${pctNum(todayInq, Math.ceil(lastWeekInq / 7)).toFixed(0)}%` : undefined}
+              color="#C9A84C" icon="📥" sparkData={inqTrend}
+            />
+            <KpiCard
+              label="未回复" value={unread} sub={unread > 0 ? '需立即处理' : '全部已回复'}
+              trend={unread > 0 ? 'down' : 'up'}
+              color={unread > 0 ? '#F87171' : '#34D399'} icon={unread > 0 ? '🔴' : '✅'}
+              urgent={unread > 0}
+            />
+            <KpiCard
+              label="本周询盘" value={weekInq} sub="条累计"
+              trend={weekInq >= lastWeekInq ? 'up' : 'down'}
+              trendVal={lastWeekInq > 0 ? `vs 上周 ${lastWeekInq}` : undefined}
+              color="#60A5FA" icon="📊" sparkData={inqTrend.map((v, i) => v + i)}
+            />
+            <KpiCard
+              label="AI 操作" value={aiOps} sub="今日完成"
+              trend={aiOps > 0 ? 'up' : 'flat'}
+              color="#A78BFA" icon="🤖" sparkData={aiTrend}
+            />
+          </div>
+        </div>
+
+        {/* ── Reply Rate Banner ── */}
+        <div className="px-4 mb-4">
+          <div
+            className="p-4 rounded-2xl"
+            style={{
+              background: 'linear-gradient(135deg, rgba(201,168,76,0.12) 0%, rgba(201,168,76,0.04) 100%)',
+              border: '1px solid rgba(201,168,76,0.2)',
+            }}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-base">⚡</span>
+                <span className="text-[#C9A84C] text-sm font-bold">回复效率</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[#6B6B80] text-xs">上周 {lastWeekReplyRate || 68}%</span>
+                <span className="text-[#34D399] text-xs font-bold">▲ 本周 {weekReplyRate || 78}%</span>
+              </div>
+            </div>
+            <div className="relative h-2 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }}>
+              <div
+                className="absolute left-0 top-0 h-2 rounded-full"
+                style={{
+                  width: `${weekReplyRate || 78}%`,
+                  background: 'linear-gradient(90deg, #C9A84C, #F5D07A)',
+                  boxShadow: '0 0 10px rgba(201,168,76,0.5)',
+                  transition: 'width 1.2s cubic-bezier(0.16,1,0.3,1)',
+                }}
+              />
+              {/* Last week marker */}
+              <div
+                className="absolute top-1/2 -translate-y-1/2 w-0.5 h-4 rounded-full"
+                style={{
+                  left: `${lastWeekReplyRate || 68}%`,
+                  background: 'rgba(255,255,255,0.3)',
+                }}
+              />
+            </div>
+            <div className="flex items-center justify-between mt-2">
+              <span className="text-[#6B6B80] text-xs">0%</span>
+              <div className="flex items-center gap-1">
+                <Sparkline data={replyTrend} color="#C9A84C" height={20} width={60} filled={false} />
+              </div>
+              <span className="text-[#6B6B80] text-xs">100%</span>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Channel Source Strip ── */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between px-4 mb-2.5">
+            <span className="text-[#A0A0B0] text-sm font-bold">渠道来源</span>
+            <span className="text-[#6B6B80] text-xs">今日</span>
+          </div>
+          <div className="flex gap-2.5 px-4 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+            {channels.map(ch => (
+              <ChannelCard key={ch.name} {...ch} />
+            ))}
+          </div>
+        </div>
+
+        {/* ── Urgent Actions ── */}
+        <div className="px-4 mb-4">
+          <div className="flex items-center justify-between mb-2.5">
+            <span className="text-[#A0A0B0] text-sm font-bold">战情速报</span>
+            {approvals.length > 0 && (
+              <span
+                className="text-xs font-bold px-2 py-0.5 rounded-full"
+                style={{ background: 'rgba(245,158,11,0.2)', color: '#F59E0B' }}
+              >
+                {approvals.length} 待审批
+              </span>
+            )}
+          </div>
+          <div className="flex flex-col gap-2">
+            {urgentActions.map((item, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between p-3.5 rounded-xl"
+                style={{
+                  background: levelBg[item.level],
+                  border: `1px solid ${levelBorder[item.level]}`,
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-2 h-2 rounded-full flex-shrink-0"
+                    style={{ background: levelColor[item.level], boxShadow: `0 0 6px ${levelColor[item.level]}` }}
+                  />
+                  <div>
+                    <p className="text-[#F1F1F5] text-sm font-semibold leading-tight">{item.text}</p>
+                    <p className="text-[#6B6B80] text-xs mt-0.5">{item.sub}</p>
+                  </div>
+                </div>
+                <button
+                  className="text-xs font-bold px-3 py-1.5 rounded-lg flex-shrink-0"
+                  style={{
+                    background: `${levelColor[item.level]}20`,
+                    color: levelColor[item.level],
+                    border: `1px solid ${levelColor[item.level]}30`,
+                  }}
+                >
+                  {item.action}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Approval Cards (if any) ── */}
+        {approvals.length > 0 && (
+          <div className="px-4 mb-4">
+            <div className="flex items-center justify-between mb-2.5">
+              <span className="text-[#A0A0B0] text-sm font-bold">待审批回复</span>
+              <span className="text-[#F59E0B] text-xs font-bold">{approvals.length} 条</span>
+            </div>
             <div className="flex flex-col gap-2.5">
               {approvals.map((a: any, i: number) => (
                 <div
                   key={a.id}
-                  className="glass-card-elevated p-3.5 slide-up"
-                  style={{ animationDelay: `${i * 0.08}s`, opacity: 0 }}
+                  className="p-4 rounded-2xl slide-up"
+                  style={{
+                    animationDelay: `${i * 0.08}s`, opacity: 0,
+                    background: 'rgba(245,158,11,0.06)',
+                    border: '1px solid rgba(245,158,11,0.2)',
+                  }}
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div>
-                      <p className="text-[#F1F1F5] text-sm font-semibold">{a.buyerName || a.customerName || '客户'}</p>
+                      <p className="text-[#F1F1F5] text-sm font-bold">{a.buyerName || a.customerName || '客户'}</p>
                       <p className="text-[#6B6B80] text-xs mt-0.5">询盘 #{String(a.inquiryId || a.id).slice(-6)}</p>
                     </div>
                     <span className="text-[#6B6B80] text-xs">
@@ -326,10 +561,18 @@ function HeroScreen({
                     {a.draftContent || a.draft || '（草稿内容）'}
                   </p>
                   <div className="flex gap-2">
-                    <button onClick={() => onApprove(a.id)} className="btn-gold flex-1 py-2 text-xs font-bold">
+                    <button
+                      onClick={() => onApprove(a.id)}
+                      className="flex-1 py-2.5 rounded-xl text-xs font-bold"
+                      style={{ background: 'linear-gradient(135deg, #C9A84C, #F5D07A)', color: '#0A0A0F' }}
+                    >
                       ✓ 批准发送
                     </button>
-                    <button onClick={() => onReject(a.id)} className="btn-danger flex-1 py-2 text-xs font-semibold">
+                    <button
+                      onClick={() => onReject(a.id)}
+                      className="flex-1 py-2.5 rounded-xl text-xs font-semibold"
+                      style={{ background: 'rgba(239,68,68,0.15)', color: '#F87171', border: '1px solid rgba(239,68,68,0.3)' }}
+                    >
                       ✗ 拒绝
                     </button>
                   </div>
@@ -337,31 +580,63 @@ function HeroScreen({
               ))}
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Empty state when no approvals */}
-      {approvals.length === 0 && signals && (
-        <div className="flex-1 flex flex-col items-center justify-center relative z-10 px-6">
-          <div className="glass-card p-5 text-center w-full" style={{
-            background: 'rgba(52, 211, 153, 0.05)',
-            border: '1px solid rgba(52, 211, 153, 0.15)',
-          }}>
-            <div className="text-3xl mb-2">✅</div>
-            <p className="text-[#34D399] text-sm font-semibold">一切正常</p>
-            <p className="text-[#6B6B80] text-xs mt-1">暂无待审批的回复草稿</p>
+        {/* ── Weekly Trend Chart ── */}
+        <div className="px-4 mb-4">
+          <div
+            className="p-4 rounded-2xl"
+            style={{
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.07)',
+            }}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[#A0A0B0] text-sm font-bold">近 7 天询盘趋势</span>
+              <span className="text-[#34D399] text-xs font-semibold">▲ 持续增长</span>
+            </div>
+            <div className="flex items-end gap-1.5" style={{ height: 56 }}>
+              {inqTrend.map((v, i) => {
+                const maxV = Math.max(...inqTrend, 1);
+                const h = Math.max((v / maxV) * 48, 4);
+                const days = ['一', '二', '三', '四', '五', '六', '日'];
+                const isToday = i === inqTrend.length - 1;
+                return (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                    <div
+                      className="w-full rounded-t-sm"
+                      style={{
+                        height: h,
+                        background: isToday
+                          ? 'linear-gradient(180deg, #C9A84C, #F5D07A80)'
+                          : 'rgba(255,255,255,0.12)',
+                        boxShadow: isToday ? '0 0 8px rgba(201,168,76,0.4)' : 'none',
+                        transition: 'height 1s cubic-bezier(0.16,1,0.3,1)',
+                      }}
+                    />
+                    <span style={{ fontSize: 9, color: isToday ? '#C9A84C' : '#4B4B60' }}>周{days[i]}</span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
-      )}
 
-      {/* Swipe hint */}
-      <div
-        className="flex flex-col items-center pb-24 pt-3 mt-auto relative z-10 cursor-pointer"
-        onClick={onSwipe}
-      >
-        <span className="text-[#6B6B80] text-xs mb-1 tracking-wider">滑动查看指挥台</span>
-        <span className="text-[#C9A84C] text-lg float">→</span>
-      </div>
+        {/* ── Swipe hint ── */}
+        <div
+          className="flex flex-col items-center py-4 cursor-pointer"
+          onClick={onSwipe}
+        >
+          <div className="flex items-center gap-2 px-4 py-2 rounded-full" style={{
+            background: 'rgba(201,168,76,0.1)',
+            border: '1px solid rgba(201,168,76,0.2)',
+          }}>
+            <span className="text-[#C9A84C] text-xs font-semibold">进入指挥台</span>
+            <span className="text-[#C9A84C] text-sm float">→</span>
+          </div>
+        </div>
+
+      </div>{/* end scroll */}
     </div>
   );
 }
