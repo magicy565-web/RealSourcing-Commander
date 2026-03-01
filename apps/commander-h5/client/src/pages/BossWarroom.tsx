@@ -9,7 +9,7 @@
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation } from 'wouter';
-import { bossApi } from '../lib/api';
+import { bossApi, multiAccountApi, openclawApi } from '../lib/api';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function pctNum(a: number, b: number): number {
@@ -289,12 +289,139 @@ function ChannelCard({
   );
 }
 
-// ─── Screen 0: Hero War Report (REDESIGNED) ───────────────────────────────────
+// ─── Screen 0: Hero War Report — Apple/Linear Bento Grid ──────────────────────
+
+// Bento SVG Icons (精致线条图标，替代 emoji)
+function IconInbox() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+      <path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z" />
+    </svg>
+  );
+}
+function IconAlertCircle() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="8" x2="12" y2="12" />
+      <line x1="12" y1="16" x2="12.01" y2="16" />
+    </svg>
+  );
+}
+function IconTrendingUp() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+      <polyline points="17 6 23 6 23 12" />
+    </svg>
+  );
+}
+function IconCpu() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="4" width="16" height="16" rx="2" />
+      <rect x="9" y="9" width="6" height="6" />
+      <line x1="9" y1="1" x2="9" y2="4" /><line x1="15" y1="1" x2="15" y2="4" />
+      <line x1="9" y1="20" x2="9" y2="23" /><line x1="15" y1="20" x2="15" y2="23" />
+      <line x1="20" y1="9" x2="23" y2="9" /><line x1="20" y1="14" x2="23" y2="14" />
+      <line x1="1" y1="9" x2="4" y2="9" /><line x1="1" y1="14" x2="4" y2="14" />
+    </svg>
+  );
+}
+function IconMonitor() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="3" width="20" height="14" rx="2" />
+      <line x1="8" y1="21" x2="16" y2="21" />
+      <line x1="12" y1="17" x2="12" y2="21" />
+    </svg>
+  );
+}
+function IconZap() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </svg>
+  );
+}
+function IconCheckCircle() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+      <polyline points="22 4 12 14.01 9 11.01" />
+    </svg>
+  );
+}
+function IconActivity() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+    </svg>
+  );
+}
+function IconGlobe() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+    </svg>
+  );
+}
+function IconArrowRight() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="5" y1="12" x2="19" y2="12" />
+      <polyline points="12 5 19 12 12 19" />
+    </svg>
+  );
+}
+
+// Bento Card 基础容器
+function BentoCard({
+  children, className = '', style = {}, onClick,
+  accentColor = 'rgba(255,255,255,0.06)',
+  borderColor = 'rgba(255,255,255,0.09)',
+  glow,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  style?: React.CSSProperties;
+  onClick?: () => void;
+  accentColor?: string;
+  borderColor?: string;
+  glow?: string;
+}) {
+  return (
+    <div
+      onClick={onClick}
+      className={`relative overflow-hidden rounded-[20px] ${onClick ? 'cursor-pointer active:scale-[0.98]' : ''} ${className}`}
+      style={{
+        background: accentColor,
+        border: `1px solid ${borderColor}`,
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        transition: 'transform 0.15s ease',
+        ...style,
+      }}
+    >
+      {glow && (
+        <div className="absolute inset-0 pointer-events-none" style={{
+          background: `radial-gradient(ellipse at top right, ${glow} 0%, transparent 60%)`,
+        }} />
+      )}
+      {children}
+    </div>
+  );
+}
+
 function HeroScreen({
-  data, approvals, onApprove, onReject, onSwipe,
+  data, approvals, onApprove, onReject, onSwipe, openclawData,
 }: {
   data: any; approvals: any[]; onApprove: (id: string) => void;
   onReject: (id: string) => void; onSwipe: () => void;
+  openclawData: any;
 }) {
   const now = new Date();
   const hour = now.getHours();
@@ -309,338 +436,538 @@ function HeroScreen({
 
   const todayInq = signals?.newInquiries ?? 0;
   const unread = signals?.unread ?? 0;
-  const newQuotes = signals?.newQuotations ?? 0;
   const aiOps = agent?.completedTasks ?? 0;
   const weekInq = weekReport?.thisWeek?.inquiries ?? 0;
   const lastWeekInq = weekReport?.lastWeek?.inquiries ?? 0;
   const weekReplyRate = weekReport?.thisWeek?.replyRate ?? 0;
   const lastWeekReplyRate = weekReport?.lastWeek?.replyRate ?? 0;
 
-  // 模拟 7 天趋势数据（实际项目中从 API 获取）
   const inqTrend = [lastWeekInq > 0 ? Math.round(lastWeekInq / 7) : 2, 3, 5, 4, 6, 4, todayInq || 5];
   const replyTrend = [lastWeekReplyRate || 60, 65, 70, 68, 72, 75, weekReplyRate || 78];
   const aiTrend = [0, 1, 2, 1, 3, 2, aiOps || 3];
 
+  // OpenClaw 数据
+  const ocStatus = openclawData?.status ?? 'offline';
+  const ocInstances = openclawData?.instances ?? 1;
+  const ocOpsToday = openclawData?.opsToday ?? 0;
+  const ocOpsLimit = openclawData?.opsLimit ?? 200;
+  const ocUtilization = ocOpsLimit > 0 ? Math.round((ocOpsToday / ocOpsLimit) * 100) : 0;
+  const ocIsActive = ['online', 'working', 'active'].includes(ocStatus);
+
   // 渠道数据
   const channels = [
-    { name: 'Alibaba', icon: '🛒', count: Math.max(todayInq > 0 ? Math.round(todayInq * 0.4) : 2, 0), replyRate: 85, color: '#F59E0B' },
-    { name: 'LinkedIn', icon: '💼', count: Math.max(todayInq > 0 ? Math.round(todayInq * 0.25) : 1, 0), replyRate: 72, color: '#60A5FA' },
-    { name: 'WhatsApp', icon: '💬', count: Math.max(todayInq > 0 ? Math.round(todayInq * 0.15) : 1, 0), replyRate: 91, color: '#34D399' },
-    { name: 'TikTok', icon: '🎵', count: Math.max(todayInq > 0 ? Math.round(todayInq * 0.1) : 0, 0), replyRate: 45, color: '#F472B6' },
-    { name: 'SEO官网', icon: '🌐', count: Math.max(todayInq > 0 ? Math.round(todayInq * 0.1) : 1, 0), replyRate: 95, color: '#A78BFA' },
+    { name: 'Alibaba', abbr: 'Ali', count: Math.max(todayInq > 0 ? Math.round(todayInq * 0.4) : 2, 0), replyRate: 85, color: '#F59E0B', bg: 'rgba(245,158,11,0.12)' },
+    { name: 'LinkedIn', abbr: 'In', count: Math.max(todayInq > 0 ? Math.round(todayInq * 0.25) : 1, 0), replyRate: 72, color: '#60A5FA', bg: 'rgba(96,165,250,0.12)' },
+    { name: 'WhatsApp', abbr: 'WA', count: Math.max(todayInq > 0 ? Math.round(todayInq * 0.15) : 1, 0), replyRate: 91, color: '#34D399', bg: 'rgba(52,211,153,0.12)' },
+    { name: 'TikTok', abbr: 'TT', count: Math.max(todayInq > 0 ? Math.round(todayInq * 0.1) : 1, 0), replyRate: 45, color: '#F472B6', bg: 'rgba(244,114,182,0.12)' },
   ];
 
   // 紧急待办
   const urgentActions: Array<{ level: 'red' | 'orange' | 'green'; text: string; sub: string; action: string }> = [
     ...(unread > 0 ? [{ level: 'red' as const, text: `${unread} 条询盘未回复`, sub: '最长等待 3 小时', action: '立即处理' }] : []),
     ...(approvals.length > 0 ? [{ level: 'orange' as const, text: `${approvals.length} 条草稿待审批`, sub: 'AI 已起草，等待确认', action: '查看草稿' }] : []),
-    ...(weekReplyRate < 70 ? [{ level: 'orange' as const, text: '本周回复率偏低', sub: `当前 ${weekReplyRate}%，建议提速`, action: '查看详情' }] : []),
+    ...(weekReplyRate > 0 && weekReplyRate < 70 ? [{ level: 'orange' as const, text: '本周回复率偏低', sub: `当前 ${weekReplyRate}%，建议提速`, action: '查看详情' }] : []),
     ...(unread === 0 && approvals.length === 0 ? [{ level: 'green' as const, text: '今日运营状态良好', sub: '所有询盘均已及时处理', action: '查看报告' }] : []),
-  ].slice(0, 3);
+  ].slice(0, 2);
 
   const levelColor = { red: '#F87171', orange: '#F59E0B', green: '#34D399' };
-  const levelBg = { red: 'rgba(239,68,68,0.1)', orange: 'rgba(245,158,11,0.1)', green: 'rgba(52,211,153,0.08)' };
-  const levelBorder = { red: 'rgba(239,68,68,0.25)', orange: 'rgba(245,158,11,0.25)', green: 'rgba(52,211,153,0.2)' };
+  const levelBg = { red: 'rgba(239,68,68,0.08)', orange: 'rgba(245,158,11,0.08)', green: 'rgba(52,211,153,0.06)' };
+  const levelBorder = { red: 'rgba(239,68,68,0.2)', orange: 'rgba(245,158,11,0.2)', green: 'rgba(52,211,153,0.18)' };
 
   return (
     <div className="relative flex flex-col h-full overflow-hidden" style={{
-      background: 'linear-gradient(160deg, #08080F 0%, #0C0C1A 35%, #09090F 70%, #0A0A14 100%)',
+      background: 'linear-gradient(155deg, #070710 0%, #0B0B18 40%, #080810 100%)',
     }}>
-      {/* ── Ambient background glows ── */}
+      {/* ── Ambient glows ── */}
       <div className="absolute pointer-events-none" style={{
-        top: -120, left: '30%',
-        width: 360, height: 360,
-        background: 'radial-gradient(circle, rgba(201,168,76,0.18) 0%, transparent 65%)',
-        filter: 'blur(70px)',
+        top: -80, left: '20%', width: 320, height: 320,
+        background: 'radial-gradient(circle, rgba(201,168,76,0.14) 0%, transparent 65%)',
+        filter: 'blur(60px)',
       }} />
       <div className="absolute pointer-events-none" style={{
-        top: '55%', right: -80,
-        width: 260, height: 260,
-        background: 'radial-gradient(circle, rgba(59,130,246,0.12) 0%, transparent 65%)',
-        filter: 'blur(55px)',
+        top: '45%', right: -60, width: 240, height: 240,
+        background: 'radial-gradient(circle, rgba(59,130,246,0.1) 0%, transparent 65%)',
+        filter: 'blur(50px)',
       }} />
       <div className="absolute pointer-events-none" style={{
-        bottom: 80, left: -60,
-        width: 220, height: 220,
-        background: 'radial-gradient(circle, rgba(168,85,247,0.10) 0%, transparent 65%)',
-        filter: 'blur(45px)',
+        bottom: 100, left: -40, width: 200, height: 200,
+        background: 'radial-gradient(circle, rgba(52,211,153,0.08) 0%, transparent 65%)',
+        filter: 'blur(40px)',
       }} />
 
       {/* ── Scrollable content ── */}
-      <div className="flex-1 overflow-y-auto scroll-area relative z-10" style={{ paddingBottom: 80 }}>
+      <div className="flex-1 overflow-y-auto scroll-area relative z-10" style={{ paddingBottom: 90 }}>
 
         {/* ── Header ── */}
-        <div className="flex items-start justify-between px-5 pt-12 pb-4">
+        <div className="flex items-start justify-between px-5 pt-12 pb-5">
           <div>
-            <p className="text-[#6B6B80] text-xs font-medium tracking-widest uppercase mb-1">{dateStr}</p>
-            <p className="text-[#F1F1F5] text-xl font-black tracking-tight">{greeting}，老板</p>
-            <p className="text-[#6B6B80] text-xs mt-0.5">今日战报 · 实时更新</p>
+            <p className="text-[#5A5A72] text-[11px] font-semibold tracking-[0.12em] uppercase mb-1.5">{dateStr}</p>
+            <p className="text-white text-[22px] font-bold tracking-tight leading-tight">{greeting}，老板</p>
           </div>
+          {/* Agent status pill */}
           <div
-            className="flex items-center gap-2 px-3 py-2 rounded-xl"
+            className="flex items-center gap-2 px-3.5 py-2 rounded-2xl"
             style={{
-              background: 'rgba(255,255,255,0.06)',
+              background: 'rgba(255,255,255,0.05)',
               border: '1px solid rgba(255,255,255,0.1)',
-              backdropFilter: 'blur(12px)',
+              backdropFilter: 'blur(16px)',
             }}
           >
-            <StatusDot status={agentStatus} />
-            <div className="flex flex-col items-end">
-              <span className="text-[#8B8B9E] text-[10px] leading-none font-medium">数字员工</span>
-              <span className="text-[#F1F1F5] text-xs font-bold mt-0.5">{agentStatusLabel(agentStatus)}</span>
+            <div style={{
+              width: 7, height: 7, borderRadius: '50%',
+              background: agentStatusColor(agentStatus),
+              boxShadow: `0 0 8px ${agentStatusColor(agentStatus)}`,
+            }} />
+            <div className="flex flex-col">
+              <span className="text-[#5A5A72] text-[9px] font-semibold tracking-widest uppercase leading-none">数字员工</span>
+              <span className="text-white text-[11px] font-bold mt-0.5">{agentStatusLabel(agentStatus)}</span>
             </div>
           </div>
         </div>
 
-        {/* ── Core KPI Grid (2×2) ── */}
-        <div className="px-4 mb-4">
-          <div className="grid grid-cols-2 gap-2.5">
-            <KpiCard
-              label="今日询盘" value={todayInq} sub="条新询盘"
-              trend={todayInq >= (lastWeekInq > 0 ? Math.ceil(lastWeekInq / 7) : 5) ? 'up' : 'flat'}
-              trendVal={lastWeekInq > 0 ? `${pctNum(todayInq, Math.ceil(lastWeekInq / 7)) > 0 ? '+' : ''}${pctNum(todayInq, Math.ceil(lastWeekInq / 7)).toFixed(0)}%` : undefined}
-              color="#C9A84C" icon="📥" sparkData={inqTrend}
-            />
-            <KpiCard
-              label="未回复" value={unread} sub={unread > 0 ? '需立即处理' : '全部已回复'}
-              trend={unread > 0 ? 'down' : 'up'}
-              color={unread > 0 ? '#F87171' : '#34D399'} icon={unread > 0 ? '🔴' : '✅'}
-              urgent={unread > 0}
-            />
-            <KpiCard
-              label="本周询盘" value={weekInq} sub="条累计"
-              trend={weekInq >= lastWeekInq ? 'up' : 'down'}
-              trendVal={lastWeekInq > 0 ? `vs 上周 ${lastWeekInq}` : undefined}
-              color="#60A5FA" icon="📊" sparkData={inqTrend.map((v, i) => v + i)}
-            />
-            <KpiCard
-              label="AI 操作" value={aiOps} sub="今日完成"
-              trend={aiOps > 0 ? 'up' : 'flat'}
-              color="#A78BFA" icon="🤖" sparkData={aiTrend}
-            />
-          </div>
-        </div>
+        {/* ── BENTO GRID ── */}
+        <div className="px-4 flex flex-col gap-3">
 
-        {/* ── Reply Rate Banner ── */}
-        <div className="px-4 mb-4">
-          <div
-            className="p-4 rounded-2xl"
-            style={{
-              background: 'linear-gradient(135deg, rgba(201,168,76,0.12) 0%, rgba(201,168,76,0.04) 100%)',
-              border: '1px solid rgba(201,168,76,0.2)',
-            }}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-base">⚡</span>
-                <span className="text-[#C9A84C] text-sm font-bold">回复效率</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[#6B6B80] text-xs">上周 {lastWeekReplyRate || 68}%</span>
-                <span className="text-[#34D399] text-xs font-bold">▲ 本周 {weekReplyRate || 78}%</span>
-              </div>
-            </div>
-            <div className="relative h-2 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }}>
-              <div
-                className="absolute left-0 top-0 h-2 rounded-full"
-                style={{
-                  width: `${weekReplyRate || 78}%`,
-                  background: 'linear-gradient(90deg, #C9A84C, #F5D07A)',
-                  boxShadow: '0 0 10px rgba(201,168,76,0.5)',
-                  transition: 'width 1.2s cubic-bezier(0.16,1,0.3,1)',
-                }}
-              />
-              {/* Last week marker */}
-              <div
-                className="absolute top-1/2 -translate-y-1/2 w-0.5 h-4 rounded-full"
-                style={{
-                  left: `${lastWeekReplyRate || 68}%`,
-                  background: 'rgba(255,255,255,0.3)',
-                }}
-              />
-            </div>
-            <div className="flex items-center justify-between mt-2">
-              <span className="text-[#6B6B80] text-xs">0%</span>
-              <div className="flex items-center gap-1">
-                <Sparkline data={replyTrend} color="#C9A84C" height={20} width={60} filled={false} />
-              </div>
-              <span className="text-[#6B6B80] text-xs">100%</span>
-            </div>
-          </div>
-        </div>
+          {/* Row 1: 今日询盘（大卡 2/3）+ 未回复（小卡 1/3）*/}
+          <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
 
-        {/* ── Channel Source Strip ── */}
-        <div className="mb-4">
-          <div className="flex items-center justify-between px-4 mb-2.5">
-            <span className="text-[#A0A0B0] text-sm font-bold">渠道来源</span>
-            <span className="text-[#6B6B80] text-xs">今日</span>
-          </div>
-          <div className="flex gap-2.5 px-4 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-            {channels.map(ch => (
-              <ChannelCard key={ch.name} {...ch} />
-            ))}
-          </div>
-        </div>
-
-        {/* ── Urgent Actions ── */}
-        <div className="px-4 mb-4">
-          <div className="flex items-center justify-between mb-2.5">
-            <span className="text-[#A0A0B0] text-sm font-bold">战情速报</span>
-            {approvals.length > 0 && (
-              <span
-                className="text-xs font-bold px-2 py-0.5 rounded-full"
-                style={{ background: 'rgba(245,158,11,0.2)', color: '#F59E0B' }}
-              >
-                {approvals.length} 待审批
-              </span>
-            )}
-          </div>
-          <div className="flex flex-col gap-2">
-            {urgentActions.map((item, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between p-3.5 rounded-xl"
-                style={{
-                  background: levelBg[item.level],
-                  border: `1px solid ${levelBorder[item.level]}`,
-                }}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-2 h-2 rounded-full flex-shrink-0"
-                    style={{ background: levelColor[item.level], boxShadow: `0 0 6px ${levelColor[item.level]}` }}
-                  />
-                  <div>
-                    <p className="text-[#F1F1F5] text-sm font-semibold leading-tight">{item.text}</p>
-                    <p className="text-[#6B6B80] text-xs mt-0.5">{item.sub}</p>
-                  </div>
+            {/* 今日询盘 — 大卡 */}
+            <BentoCard
+              accentColor="rgba(201,168,76,0.08)"
+              borderColor="rgba(201,168,76,0.18)"
+              glow="rgba(201,168,76,0.15)"
+              style={{ padding: '18px 16px 14px' }}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center justify-center rounded-xl" style={{
+                  width: 36, height: 36,
+                  background: 'rgba(201,168,76,0.15)',
+                  color: '#C9A84C',
+                }}>
+                  <IconInbox />
                 </div>
-                <button
-                  className="text-xs font-bold px-3 py-1.5 rounded-lg flex-shrink-0"
-                  style={{
-                    background: `${levelColor[item.level]}20`,
-                    color: levelColor[item.level],
-                    border: `1px solid ${levelColor[item.level]}30`,
-                  }}
-                >
-                  {item.action}
-                </button>
+                {lastWeekInq > 0 && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{
+                    background: 'rgba(52,211,153,0.12)',
+                    color: '#34D399',
+                  }}>
+                    ▲ {pctNum(todayInq, Math.ceil(lastWeekInq / 7)) > 0 ? '+' : ''}{pctNum(todayInq, Math.ceil(lastWeekInq / 7)).toFixed(0)}%
+                  </span>
+                )}
               </div>
-            ))}
-          </div>
-        </div>
+              <div className="text-[38px] font-black tabular-nums leading-none" style={{ color: '#C9A84C' }}>
+                {data ? todayInq : <span className="shimmer inline-block w-12 h-9 rounded-lg" />}
+              </div>
+              <div className="mt-1.5 flex items-end justify-between">
+                <div>
+                  <p className="text-[#8B8B9E] text-[11px] font-medium">今日询盘</p>
+                  <p className="text-[#5A5A72] text-[10px] mt-0.5">条新询盘</p>
+                </div>
+                <Sparkline data={inqTrend} color="#C9A84C" height={32} width={64} />
+              </div>
+            </BentoCard>
 
-        {/* ── Approval Cards (if any) ── */}
-        {approvals.length > 0 && (
-          <div className="px-4 mb-4">
-            <div className="flex items-center justify-between mb-2.5">
-              <span className="text-[#A0A0B0] text-sm font-bold">待审批回复</span>
-              <span className="text-[#F59E0B] text-xs font-bold">{approvals.length} 条</span>
+            {/* 未回复 — 小卡 */}
+            <BentoCard
+              accentColor={unread > 0 ? 'rgba(239,68,68,0.08)' : 'rgba(52,211,153,0.06)'}
+              borderColor={unread > 0 ? 'rgba(239,68,68,0.2)' : 'rgba(52,211,153,0.15)'}
+              glow={unread > 0 ? 'rgba(239,68,68,0.12)' : 'rgba(52,211,153,0.1)'}
+              style={{ padding: '18px 16px 14px' }}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center justify-center rounded-xl" style={{
+                  width: 36, height: 36,
+                  background: unread > 0 ? 'rgba(239,68,68,0.15)' : 'rgba(52,211,153,0.12)',
+                  color: unread > 0 ? '#F87171' : '#34D399',
+                }}>
+                  {unread > 0 ? <IconAlertCircle /> : <IconCheckCircle />}
+                </div>
+              </div>
+              <div className="text-[38px] font-black tabular-nums leading-none" style={{ color: unread > 0 ? '#F87171' : '#34D399' }}>
+                {data ? unread : <span className="shimmer inline-block w-10 h-9 rounded-lg" />}
+              </div>
+              <div className="mt-1.5">
+                <p className="text-[#8B8B9E] text-[11px] font-medium">未回复</p>
+                <p className="text-[#5A5A72] text-[10px] mt-0.5">{unread > 0 ? '需处理' : '全部已回'}</p>
+              </div>
+            </BentoCard>
+          </div>
+
+          {/* Row 2: OpenClaw 云电脑 — 全宽大板块 */}
+          <BentoCard
+            accentColor="rgba(96,165,250,0.07)"
+            borderColor="rgba(96,165,250,0.2)"
+            glow="rgba(96,165,250,0.12)"
+            style={{ padding: '20px 20px 18px' }}
+          >
+            {/* 顶部：图标 + 标题 + 状态 */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center rounded-2xl" style={{
+                  width: 44, height: 44,
+                  background: 'linear-gradient(135deg, rgba(96,165,250,0.2) 0%, rgba(59,130,246,0.1) 100%)',
+                  border: '1px solid rgba(96,165,250,0.25)',
+                  color: '#60A5FA',
+                }}>
+                  <IconMonitor />
+                </div>
+                <div>
+                  <p className="text-white text-[15px] font-bold leading-tight">OpenClaw</p>
+                  <p className="text-[#5A5A72] text-[11px] mt-0.5">云端自动化引擎</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{
+                background: ocIsActive ? 'rgba(52,211,153,0.1)' : 'rgba(239,68,68,0.1)',
+                border: `1px solid ${ocIsActive ? 'rgba(52,211,153,0.25)' : 'rgba(239,68,68,0.25)'}`,
+              }}>
+                <div style={{
+                  width: 6, height: 6, borderRadius: '50%',
+                  background: ocIsActive ? '#34D399' : '#F87171',
+                  boxShadow: `0 0 6px ${ocIsActive ? '#34D399' : '#F87171'}`,
+                }} />
+                <span className="text-[11px] font-bold" style={{ color: ocIsActive ? '#34D399' : '#F87171' }}>
+                  {ocIsActive ? '运行中' : '离线'}
+                </span>
+              </div>
             </div>
-            <div className="flex flex-col gap-2.5">
-              {approvals.map((a: any, i: number) => (
-                <div
-                  key={a.id}
-                  className="p-4 rounded-2xl slide-up"
-                  style={{
-                    animationDelay: `${i * 0.08}s`, opacity: 0,
-                    background: 'rgba(245,158,11,0.06)',
-                    border: '1px solid rgba(245,158,11,0.2)',
-                  }}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <p className="text-[#F1F1F5] text-sm font-bold">{a.buyerName || a.customerName || '客户'}</p>
-                      <p className="text-[#6B6B80] text-xs mt-0.5">询盘 #{String(a.inquiryId || a.id).slice(-6)}</p>
-                    </div>
-                    <span className="text-[#6B6B80] text-xs">
-                      {new Date(a.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-                  <p className="text-[#A0A0B0] text-xs leading-relaxed line-clamp-2 mb-3">
-                    {a.draftContent || a.draft || '（草稿内容）'}
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => onApprove(a.id)}
-                      className="flex-1 py-2.5 rounded-xl text-xs font-bold"
-                      style={{ background: 'linear-gradient(135deg, #C9A84C, #F5D07A)', color: '#0A0A0F' }}
-                    >
-                      ✓ 批准发送
-                    </button>
-                    <button
-                      onClick={() => onReject(a.id)}
-                      className="flex-1 py-2.5 rounded-xl text-xs font-semibold"
-                      style={{ background: 'rgba(239,68,68,0.15)', color: '#F87171', border: '1px solid rgba(239,68,68,0.3)' }}
-                    >
-                      ✗ 拒绝
-                    </button>
-                  </div>
+
+            {/* 三个核心指标 */}
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              {[
+                { label: '实例数', value: ocInstances, unit: '个', color: '#60A5FA' },
+                { label: '今日操作', value: ocOpsToday, unit: '次', color: '#A78BFA' },
+                { label: '利用率', value: `${ocUtilization}%`, unit: '', color: ocUtilization > 80 ? '#F87171' : '#34D399' },
+              ].map(item => (
+                <div key={item.label} className="flex flex-col items-center py-3 rounded-2xl" style={{
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.07)',
+                }}>
+                  <span className="text-[22px] font-black tabular-nums leading-none" style={{ color: item.color }}>
+                    {item.value}
+                  </span>
+                  <span className="text-[#5A5A72] text-[10px] mt-1.5 font-medium">{item.label}</span>
                 </div>
               ))}
             </div>
-          </div>
-        )}
 
-        {/* ── Weekly Trend Chart ── */}
-        <div className="px-4 mb-4">
-          <div
-            className="p-4 rounded-2xl"
-            style={{
-              background: 'rgba(255,255,255,0.03)',
-              border: '1px solid rgba(255,255,255,0.07)',
-            }}
+            {/* 利用率进度条 */}
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[#8B8B9E] text-[11px] font-medium">操作配额</span>
+                <span className="text-[#8B8B9E] text-[11px]">{ocOpsToday} / {ocOpsLimit}</span>
+              </div>
+              <div className="h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.07)' }}>
+                <div className="h-1.5 rounded-full" style={{
+                  width: `${Math.min(ocUtilization, 100)}%`,
+                  background: ocUtilization > 80
+                    ? 'linear-gradient(90deg, #F87171, #F59E0B)'
+                    : 'linear-gradient(90deg, #60A5FA, #A78BFA)',
+                  boxShadow: `0 0 8px ${ocUtilization > 80 ? 'rgba(248,113,113,0.4)' : 'rgba(96,165,250,0.4)'}`,
+                  transition: 'width 1s cubic-bezier(0.16,1,0.3,1)',
+                }} />
+              </div>
+            </div>
+
+            {/* 进入按钮 */}
+            <button
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-[13px]"
+              style={{
+                background: 'linear-gradient(135deg, rgba(96,165,250,0.2) 0%, rgba(59,130,246,0.12) 100%)',
+                border: '1px solid rgba(96,165,250,0.3)',
+                color: '#60A5FA',
+              }}
+            >
+              <IconMonitor />
+              <span>进入 OpenClaw 控制台</span>
+              <IconArrowRight />
+            </button>
+          </BentoCard>
+
+          {/* Row 3: 本周询盘 + AI 操作 */}
+          <div className="grid grid-cols-2 gap-3">
+            <BentoCard
+              accentColor="rgba(167,139,250,0.07)"
+              borderColor="rgba(167,139,250,0.18)"
+              glow="rgba(167,139,250,0.12)"
+              style={{ padding: '16px 14px 14px' }}
+            >
+              <div className="flex items-center justify-center rounded-xl mb-3" style={{
+                width: 34, height: 34,
+                background: 'rgba(167,139,250,0.15)',
+                color: '#A78BFA',
+              }}>
+                <IconTrendingUp />
+              </div>
+              <div className="text-[32px] font-black tabular-nums leading-none" style={{ color: '#A78BFA' }}>
+                {data ? weekInq : <span className="shimmer inline-block w-10 h-8 rounded-lg" />}
+              </div>
+              <div className="mt-2 flex items-end justify-between">
+                <div>
+                  <p className="text-[#8B8B9E] text-[11px] font-medium">本周询盘</p>
+                  {lastWeekInq > 0 && (
+                    <p className="text-[#5A5A72] text-[10px] mt-0.5">上周 {lastWeekInq} 条</p>
+                  )}
+                </div>
+                <Sparkline data={inqTrend.map((v, i) => v + i)} color="#A78BFA" height={28} width={52} />
+              </div>
+            </BentoCard>
+
+            <BentoCard
+              accentColor="rgba(52,211,153,0.06)"
+              borderColor="rgba(52,211,153,0.15)"
+              glow="rgba(52,211,153,0.1)"
+              style={{ padding: '16px 14px 14px' }}
+            >
+              <div className="flex items-center justify-center rounded-xl mb-3" style={{
+                width: 34, height: 34,
+                background: 'rgba(52,211,153,0.12)',
+                color: '#34D399',
+              }}>
+                <IconCpu />
+              </div>
+              <div className="text-[32px] font-black tabular-nums leading-none" style={{ color: '#34D399' }}>
+                {data ? aiOps : <span className="shimmer inline-block w-10 h-8 rounded-lg" />}
+              </div>
+              <div className="mt-2 flex items-end justify-between">
+                <div>
+                  <p className="text-[#8B8B9E] text-[11px] font-medium">AI 操作</p>
+                  <p className="text-[#5A5A72] text-[10px] mt-0.5">今日完成</p>
+                </div>
+                <Sparkline data={aiTrend} color="#34D399" height={28} width={52} />
+              </div>
+            </BentoCard>
+          </div>
+
+          {/* Row 4: 回复效率 — 全宽 */}
+          <BentoCard
+            accentColor="rgba(201,168,76,0.06)"
+            borderColor="rgba(201,168,76,0.15)"
+            style={{ padding: '16px 18px' }}
           >
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[#A0A0B0] text-sm font-bold">近 7 天询盘趋势</span>
-              <span className="text-[#34D399] text-xs font-semibold">▲ 持续增长</span>
+              <div className="flex items-center gap-2">
+                <div style={{ color: '#C9A84C' }}><IconZap /></div>
+                <span className="text-[#C9A84C] text-[13px] font-bold">回复效率</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[#5A5A72] text-[11px]">上周 {lastWeekReplyRate || 68}%</span>
+                <span className="text-[#34D399] text-[11px] font-bold">本周 {weekReplyRate || 78}%</span>
+              </div>
             </div>
-            <div className="flex items-end gap-1.5" style={{ height: 56 }}>
+            <div className="relative h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.07)' }}>
+              <div className="absolute left-0 top-0 h-1.5 rounded-full" style={{
+                width: `${weekReplyRate || 78}%`,
+                background: 'linear-gradient(90deg, #C9A84C, #F5D07A)',
+                boxShadow: '0 0 8px rgba(201,168,76,0.5)',
+                transition: 'width 1.2s cubic-bezier(0.16,1,0.3,1)',
+              }} />
+              <div className="absolute top-1/2 -translate-y-1/2 w-px h-3.5" style={{
+                left: `${lastWeekReplyRate || 68}%`,
+                background: 'rgba(255,255,255,0.25)',
+              }} />
+            </div>
+            <div className="flex items-center justify-between mt-2">
+              <span className="text-[#5A5A72] text-[10px]">0%</span>
+              <Sparkline data={replyTrend} color="#C9A84C" height={18} width={56} filled={false} />
+              <span className="text-[#5A5A72] text-[10px]">100%</span>
+            </div>
+          </BentoCard>
+
+          {/* Row 5: 渠道来源 — 4个小卡横排 */}
+          <div>
+            <div className="flex items-center justify-between mb-2.5">
+              <span className="text-[#8B8B9E] text-[12px] font-semibold tracking-wide">渠道来源</span>
+              <div className="flex items-center gap-1" style={{ color: '#5A5A72' }}>
+                <IconGlobe />
+                <span className="text-[10px]">今日</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {channels.map(ch => (
+                <BentoCard
+                  key={ch.name}
+                  accentColor={ch.bg}
+                  borderColor={`${ch.color}25`}
+                  style={{ padding: '12px 10px' }}
+                >
+                  {/* 渠道缩写徽章 */}
+                  <div className="flex items-center justify-center w-8 h-8 rounded-xl mb-2 mx-auto font-black text-[11px]" style={{
+                    background: `${ch.color}20`,
+                    color: ch.color,
+                    border: `1px solid ${ch.color}30`,
+                  }}>
+                    {ch.abbr}
+                  </div>
+                  <div className="text-center">
+                    <div className="text-[22px] font-black tabular-nums leading-none" style={{ color: ch.color }}>{ch.count}</div>
+                    <div className="text-[9px] text-[#5A5A72] mt-1 truncate">{ch.name}</div>
+                  </div>
+                  {/* 回复率迷你进度条 */}
+                  <div className="mt-2 h-0.5 rounded-full" style={{ background: 'rgba(255,255,255,0.07)' }}>
+                    <div className="h-0.5 rounded-full" style={{
+                      width: `${ch.replyRate}%`,
+                      background: ch.color,
+                    }} />
+                  </div>
+                  <div className="text-center mt-1">
+                    <span className="text-[9px] font-semibold" style={{ color: ch.color }}>{ch.replyRate}%</span>
+                  </div>
+                </BentoCard>
+              ))}
+            </div>
+          </div>
+
+          {/* Row 6: 战情速报 */}
+          {urgentActions.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-2.5">
+                <span className="text-[#8B8B9E] text-[12px] font-semibold tracking-wide">战情速报</span>
+                {approvals.length > 0 && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{
+                    background: 'rgba(245,158,11,0.12)',
+                    color: '#F59E0B',
+                    border: '1px solid rgba(245,158,11,0.2)',
+                  }}>
+                    {approvals.length} 待审批
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-col gap-2">
+                {urgentActions.map((item, i) => (
+                  <BentoCard
+                    key={i}
+                    accentColor={levelBg[item.level]}
+                    borderColor={levelBorder[item.level]}
+                    style={{ padding: '14px 16px' }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div style={{ color: levelColor[item.level] }}>
+                          {item.level === 'red' ? <IconAlertCircle /> : item.level === 'green' ? <IconCheckCircle /> : <IconActivity />}
+                        </div>
+                        <div>
+                          <p className="text-white text-[13px] font-semibold leading-tight">{item.text}</p>
+                          <p className="text-[#5A5A72] text-[11px] mt-0.5">{item.sub}</p>
+                        </div>
+                      </div>
+                      <button
+                        className="text-[11px] font-bold px-3 py-1.5 rounded-xl flex-shrink-0"
+                        style={{
+                          background: `${levelColor[item.level]}15`,
+                          color: levelColor[item.level],
+                          border: `1px solid ${levelColor[item.level]}25`,
+                        }}
+                      >
+                        {item.action}
+                      </button>
+                    </div>
+                  </BentoCard>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Row 7: 近 7 天趋势 — SVG 折线图 */}
+          <BentoCard
+            accentColor="rgba(255,255,255,0.03)"
+            borderColor="rgba(255,255,255,0.07)"
+            style={{ padding: '16px 18px 14px' }}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[#8B8B9E] text-[12px] font-semibold">近 7 天询盘趋势</span>
+              <span className="text-[#34D399] text-[11px] font-bold">▲ 持续增长</span>
+            </div>
+            {/* 柱状图 */}
+            <div className="flex items-end gap-1.5" style={{ height: 52 }}>
               {inqTrend.map((v, i) => {
                 const maxV = Math.max(...inqTrend, 1);
-                const h = Math.max((v / maxV) * 48, 4);
+                const h = Math.max((v / maxV) * 44, 4);
                 const days = ['一', '二', '三', '四', '五', '六', '日'];
                 const isToday = i === inqTrend.length - 1;
                 return (
                   <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                    <div
-                      className="w-full rounded-t-sm"
-                      style={{
-                        height: h,
-                        background: isToday
-                          ? 'linear-gradient(180deg, #C9A84C, #F5D07A80)'
-                          : 'rgba(255,255,255,0.12)',
-                        boxShadow: isToday ? '0 0 8px rgba(201,168,76,0.4)' : 'none',
-                        transition: 'height 1s cubic-bezier(0.16,1,0.3,1)',
-                      }}
-                    />
-                    <span style={{ fontSize: 9, color: isToday ? '#C9A84C' : '#4B4B60' }}>周{days[i]}</span>
+                    <div className="w-full rounded-t-md" style={{
+                      height: h,
+                      background: isToday
+                        ? 'linear-gradient(180deg, #C9A84C 0%, rgba(201,168,76,0.3) 100%)'
+                        : 'rgba(255,255,255,0.09)',
+                      boxShadow: isToday ? '0 0 10px rgba(201,168,76,0.35)' : 'none',
+                    }} />
+                    <span style={{ fontSize: 9, color: isToday ? '#C9A84C' : '#3A3A52', fontWeight: isToday ? 700 : 400 }}>周{days[i]}</span>
                   </div>
                 );
               })}
             </div>
-          </div>
-        </div>
+          </BentoCard>
 
-        {/* ── Swipe hint ── */}
-        <div
-          className="flex flex-col items-center py-4 cursor-pointer"
-          onClick={onSwipe}
-        >
-          <div className="flex items-center gap-2 px-4 py-2 rounded-full" style={{
-            background: 'rgba(201,168,76,0.1)',
-            border: '1px solid rgba(201,168,76,0.2)',
-          }}>
-            <span className="text-[#C9A84C] text-xs font-semibold">进入指挥台</span>
-            <span className="text-[#C9A84C] text-sm float">→</span>
-          </div>
-        </div>
+          {/* Row 8: 审批卡片 */}
+          {approvals.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-2.5">
+                <span className="text-[#8B8B9E] text-[12px] font-semibold tracking-wide">待审批回复</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{
+                  background: 'rgba(245,158,11,0.12)', color: '#F59E0B',
+                  border: '1px solid rgba(245,158,11,0.2)',
+                }}>{approvals.length} 条</span>
+              </div>
+              <div className="flex flex-col gap-2.5">
+                {approvals.map((a: any, i: number) => (
+                  <BentoCard
+                    key={a.id}
+                    accentColor="rgba(245,158,11,0.05)"
+                    borderColor="rgba(245,158,11,0.18)"
+                    style={{ padding: '16px', animationDelay: `${i * 0.08}s` }}
+                    className="slide-up"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <p className="text-white text-[13px] font-bold">{a.buyerName || a.customerName || '客户'}</p>
+                        <p className="text-[#5A5A72] text-[11px] mt-0.5">询盘 #{String(a.inquiryId || a.id).slice(-6)}</p>
+                      </div>
+                      <span className="text-[#5A5A72] text-[11px]">
+                        {new Date(a.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <p className="text-[#8B8B9E] text-[12px] leading-relaxed line-clamp-2 mb-3">
+                      {a.draftContent || a.draft || '（草稿内容）'}
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => onApprove(a.id)}
+                        className="flex-1 py-2.5 rounded-2xl text-[12px] font-bold"
+                        style={{ background: 'linear-gradient(135deg, #C9A84C, #F5D07A)', color: '#0A0A0F' }}
+                      >✓ 批准发送</button>
+                      <button
+                        onClick={() => onReject(a.id)}
+                        className="flex-1 py-2.5 rounded-2xl text-[12px] font-semibold"
+                        style={{ background: 'rgba(239,68,68,0.1)', color: '#F87171', border: '1px solid rgba(239,68,68,0.25)' }}
+                      >✗ 拒绝</button>
+                    </div>
+                  </BentoCard>
+                ))}
+              </div>
+            </div>
+          )}
 
+          {/* Row 9: 进入指挥台 */}
+          <button
+            onClick={onSwipe}
+            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-[13px] mb-2"
+            style={{
+              background: 'rgba(201,168,76,0.08)',
+              border: '1px solid rgba(201,168,76,0.2)',
+              color: '#C9A84C',
+            }}
+          >
+            <span>进入指挥台</span>
+            <IconArrowRight />
+          </button>
+
+        </div>{/* end bento grid */}
       </div>{/* end scroll */}
     </div>
   );
 }
-
 // ─── Screen 1: Command Center ─────────────────────────────────────────────────
 // 指令实验室阶段颜色
 const PHASE_COLORS: Record<string, string> = {
@@ -1213,13 +1540,13 @@ function PageIndicator({ screen, total }: { screen: number; total: number }) {
 export default function BossWarroom() {
   const [, navigate] = useLocation();
   const [screen, setScreen] = useState(0);
-  const [data, setData] = useState<any>(null);
+   const [data, setData] = useState<any>(null);
   const [approvals, setApprovals] = useState<any[]>([]);
+  const [openclawData, setOpenclawData] = useState<any>(null);
   const [transitioning, setTransitioning] = useState(false);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
-
   const fetchData = useCallback(async () => {
     try {
       const [warroomRes, approvalsRes] = await Promise.all([
@@ -1232,12 +1559,34 @@ export default function BossWarroom() {
       console.error('Warroom fetch error', e);
     }
   }, []);
+  const fetchOpenclawData = useCallback(async () => {
+    try {
+      const res = await openclawApi.status();
+      const instances = await multiAccountApi.getInstances();
+      const instanceList = instances?.instances ?? [];
+      const activeCount = instanceList.filter((i: any) =>
+        ['online', 'working', 'active'].includes(i.status)
+      ).length;
+      setOpenclawData({
+        status: res?.instance?.status ?? 'offline',
+        instances: instanceList.length || 1,
+        activeInstances: activeCount,
+        opsToday: res?.instance?.opsToday ?? 0,
+        opsLimit: res?.instance?.opsLimit ?? 200,
+      });
+    } catch (e) {
+      // OpenClaw data is optional, fail silently
+      setOpenclawData({ status: 'offline', instances: 0, activeInstances: 0, opsToday: 0, opsLimit: 200 });
+    }
+  }, []);
 
   useEffect(() => {
     fetchData();
+    fetchOpenclawData();
     const iv = setInterval(fetchData, 30000);
-    return () => clearInterval(iv);
-  }, [fetchData]);
+    const iv2 = setInterval(fetchOpenclawData, 60000);
+    return () => { clearInterval(iv); clearInterval(iv2); };
+  }, [fetchData, fetchOpenclawData]);
 
   const handleApprove = async (id: string) => {
     try {
@@ -1303,6 +1652,7 @@ export default function BossWarroom() {
             onApprove={handleApprove}
             onReject={handleReject}
             onSwipe={() => goToScreen(1)}
+            openclawData={openclawData}
           />
         </div>
         <div style={{ width: '33.333%', height: '100dvh', flexShrink: 0 }}>
