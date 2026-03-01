@@ -718,6 +718,34 @@ function StatusView({ onGoFeed, onGoInquiries, isEnterprise = false }: { onGoFee
           </div>
           <ChevronRight className="w-4 h-4 text-slate-600 flex-shrink-0" />
         </button>
+        {/* Phase 5: 多账号协同管理 */}
+        <button onClick={() => navigate("/multi-account")}
+          className="w-full text-left rounded-xl p-3.5 flex items-center gap-3 active:scale-95 transition-all"
+          style={{background:"oklch(0.19 0.02 250)", border:"1px solid oklch(1 0 0 / 10%)"}}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{background:"linear-gradient(135deg, #7c3aed, #6d28d9)"}}>
+            <span className="text-base">🕸️</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white">多账号协同管理</p>
+            <p className="text-xs text-slate-400">OpenClaw 集群 · 智能路由 · 风险熳断</p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-slate-600 flex-shrink-0" />
+        </button>
+        {/* Phase 5: 商业化闭环 */}
+        <button onClick={() => navigate("/roi")}
+          className="w-full text-left rounded-xl p-3.5 flex items-center gap-3 active:scale-95 transition-all"
+          style={{background:"oklch(0.19 0.02 250)", border:"1px solid oklch(1 0 0 / 10%)"}}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{background:"linear-gradient(135deg, #10b981, #059669)"}}>
+            <span className="text-base">📊</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white">ROI 与商业闭环</p>
+            <p className="text-xs text-slate-400">工时节省 · 成交漏斗 · 飞书每日战报</p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-slate-600 flex-shrink-0" />
+        </button>
         {/* 更多任务 */}
         <button onClick={() => setShowLaunch(true)}
           className="w-full py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-semibold text-slate-400 border border-dashed border-white/15 hover:border-white/25 hover:text-white transition-all active:scale-98">

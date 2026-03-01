@@ -27,6 +27,9 @@ import TaskQueue from "./pages/TaskQueue";
 import FeedPage from "./pages/FeedPage";
 import AdminPage from "./pages/AdminPage";
 import VideoFeedPlayer from "./pages/VideoFeedPlayer";
+// Phase 5
+import MultiAccountManager from "./pages/MultiAccountManager";
+import ROICalculator from "./pages/ROICalculator";
 
 // ─── 受保护路由 ───────────────────────────────────────────────
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -128,6 +131,9 @@ function Router() {
       <Route path="/geo">{() => <ProtectedRoute component={GeoOptimizer} />}</Route>
       <Route path="/style-training">{() => <ProtectedRoute component={StyleTrainingPage} />}</Route>
       <Route path="/task-queue">{() => <ProtectedRoute component={TaskQueuePage} />}</Route>
+      {/* Phase 5 新增路由 */}
+      <Route path="/multi-account">{() => <ProtectedRoute component={MultiAccountManager} />}</Route>
+      <Route path="/roi">{() => <ProtectedRoute component={ROICalculator} />}</Route>
       {/* Phase 3 新增路由 */}
       <Route path="/video-feed">{() => <ProtectedRoute component={VideoFeedPlayerWrapper} />}</Route>
       <Route path="/feed">{() => <ProtectedRoute component={FeedPageWrapper} />}</Route>

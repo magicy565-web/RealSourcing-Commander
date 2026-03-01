@@ -12,6 +12,7 @@ import {
   Eye, Tag
 } from "lucide-react";
 import { toast } from "sonner";
+import { geoApi } from "../lib/api";
 
 // ─── 类型 ─────────────────────────────────────────────────────
 
@@ -384,6 +385,20 @@ function GeoWizard({ onClose }: { onClose: () => void }) {
 export default function GeoOptimizer() {
   const [, navigate] = useLocation();
   const [showCreate, setShowCreate] = useState(false);
+  const [marketSummary, setMarketSummary] = useState<any>(null);
+  const [topMarkets, setTopMarkets] = useState<any[]>([]);
+  const [loadingInsight, setLoadingInsight] = useState(false);
+
+  useEffect(() => {
+    setLoadingInsight(true);
+    Promise.all([
+      geoApi.getMarketSummary().catch(() => null),
+      geoApi.getTopMarkets().catch(() => null),
+    ]).then(([summaryRes, marketsRes]) => {
+      if (summaryRes) setMarketSummary(summaryRes.summary);
+      if (marketsRes) setTopMarkets(marketsRes.markets ?? []);
+    }).finally(() => setLoadingInsight(false));
+  }, []);
 
   return (
     <div className="min-h-screen flex items-start justify-center sm:py-8" style={{background:"oklch(0.10 0.02 250)"}}>
@@ -499,6 +514,70 @@ export default function GeoOptimizer() {
             ))}
           </div>
 
+          {/* 市场洞察区块 */}
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 mt-5">市场洞察</p>
+          {loadingInsight ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin"
+                style={{ borderColor: "#f97316", borderTopColor: "transparent" }} />
+            </div>
+          ) : (
+            <div className="space-y-3 mb-5">
+              {marketSummary && (
+                <div className="rounded-2xl p-4"
+                  style={{ background: "oklch(0.19 0.02 250)", border: "1px solid #f9731625" }}>
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    {[
+                      { label: "覆盖国家", value: marketSummary.totalCountries ?? topMarkets.length, color: "#f97316" },
+                      { label: "询盘总量", value: marketSummary.totalInquiries ?? "—", color: "#10b981" },
+                      { label: "平均询盘值", value: marketSummary.avgInquiryValue ? `$${marketSummary.avgInquiryValue}` : "—", color: "#8b5cf6" },
+                    ].map(s => (
+                      <div key={s.label} className="rounded-xl p-2.5 text-center"
+                        style={{ background: "oklch(0.22 0.02 250)" }}>
+                        <p className="text-xs text-slate-500 mb-0.5">{s.label}</p>
+                        <p className="text-base font-black" style={{ color: s.color }}>{s.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {marketSummary.topRegion && (
+                    <div className="flex items-center gap-2 px-1">
+                      <TrendingUp className="w-3.5 h-3.5 text-orange-400 flex-shrink-0" />
+                      <span className="text-xs text-slate-400">
+                        最活跃区域：<span className="text-orange-400 font-semibold">{marketSummary.topRegion}</span>
+                        {marketSummary.topRegionPct && <span className="text-slate-500"> · 占比 {marketSummary.topRegionPct}%</span>}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+              {topMarkets.length > 0 && (
+                <div className="rounded-2xl overflow-hidden"
+                  style={{ background: "oklch(0.19 0.02 250)", border: "1px solid oklch(1 0 0 / 8%)" }}>
+                  <div className="px-4 py-3 flex items-center gap-2"
+                    style={{ borderBottom: "1px solid oklch(1 0 0 / 6%)" }}>
+                    <Globe className="w-3.5 h-3.5 text-orange-400" />
+                    <span className="text-xs font-semibold text-white">热门目标市场 TOP 8</span>
+                  </div>
+                  <div className="px-4 py-2">
+                    {topMarkets.slice(0, 8).map((m: any, i: number) => (
+                      <div key={m.country} className="flex items-center gap-3 py-2"
+                        style={{ borderBottom: i < Math.min(topMarkets.length, 8) - 1 ? "1px solid oklch(1 0 0 / 5%)" : "none" }}>
+                        <span className="text-xs font-bold text-slate-500 w-4 text-right flex-shrink-0">{i + 1}</span>
+                        <span className="text-sm flex-shrink-0">{m.flag ?? "🌍"}</span>
+                        <span className="text-xs font-semibold text-white flex-1">{m.country}</span>
+                        <div className="flex items-center gap-2">
+                          <div className="w-16 h-1.5 rounded-full overflow-hidden" style={{ background: "oklch(0.25 0.02 250)" }}>
+                            <div className="h-full rounded-full" style={{ width: `${m.pct ?? 0}%`, background: "#f97316" }} />
+                          </div>
+                          <span className="text-xs font-mono text-orange-400 w-8 text-right">{m.count}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           {/* 支持的引擎列表 */}
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">支持的 AI 搜索引擎</p>
           <div className="grid grid-cols-2 gap-2">

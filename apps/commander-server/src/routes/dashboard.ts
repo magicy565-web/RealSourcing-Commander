@@ -188,3 +188,60 @@ dashboard.get("/report", (c) => {
 });
 
 export default dashboard;
+
+// ─── Phase 5: 成交漏斗 ────────────────────────────────────────
+dashboard.get("/funnel", (c) => {
+  const { tenantId } = c.get("user") as any;
+
+  const stages = [
+    { key: "unread", label: "新询盘", color: "#6366f1" },
+    { key: "unquoted", label: "待报价", color: "#f59e0b" },
+    { key: "quoted", label: "已报价", color: "#3b82f6" },
+    { key: "no_reply", label: "待跟进", color: "#f97316" },
+    { key: "contracted", label: "已成交", color: "#10b981" },
+    { key: "transferred", label: "已转人工", color: "#64748b" },
+    { key: "expired", label: "已过期", color: "#ef4444" },
+  ];
+
+  const counts = db.prepare(`
+    SELECT status, COUNT(*) as count, SUM(estimated_value) as value
+    FROM inquiries WHERE tenant_id = ? GROUP BY status
+  `).all(tenantId) as any[];
+
+  const countMap: Record<string, { count: number; value: number }> = {};
+  for (const row of counts) countMap[row.status] = { count: row.count, value: row.value ?? 0 };
+
+  const total = Object.values(countMap).reduce((s, v) => s + v.count, 0);
+  const funnelData = stages.map(stage => ({
+    ...stage,
+    count: countMap[stage.key]?.count ?? 0,
+    value: countMap[stage.key]?.value ?? 0,
+    percentage: total > 0 ? Math.round(((countMap[stage.key]?.count ?? 0) / total) * 100) : 0,
+  }));
+
+  const contracted = countMap["contracted"]?.count ?? 0;
+  const quoted = countMap["quoted"]?.count ?? 0;
+
+  return c.json({
+    funnel: funnelData,
+    conversionRates: {
+      inquiryToQuote: total > 0 ? Math.round(((quoted + contracted) / total) * 100) : 0,
+      quoteToContract: (quoted + contracted) > 0 ? Math.round((contracted / (quoted + contracted)) * 100) : 0,
+      overallConversion: total > 0 ? Math.round((contracted / total) * 100) : 0,
+    },
+    totalInquiries: total,
+    totalDealValue: countMap["contracted"]?.value ?? 0,
+  });
+});
+
+// ─── Phase 5: 手动触发飞书每日战报推送 ───────────────────────────
+dashboard.post("/daily-report/push", async (c) => {
+  const { tenantId } = c.get("user") as any;
+  try {
+    const { pushDailyReport } = await import("../services/dailyReport.js");
+    await pushDailyReport(tenantId);
+    return c.json({ success: true, message: "战报已推送到飞书" });
+  } catch (e: any) {
+    return c.json({ error: "推送失败", message: e.message }, 500);
+  }
+});

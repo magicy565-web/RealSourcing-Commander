@@ -452,6 +452,145 @@ export const videoFeedApi = {
   },
 };
 
+// ─── Phase 5: 社交媒体管理 API ────────────────────────────────
+export const socialApi = {
+  getAccounts: () =>
+    request<{ accounts: any[] }>("/social/accounts"),
+
+  getMessages: (params?: { status?: string; intent?: string; platform?: string; limit?: string }) => {
+    const qs = params ? "?" + new URLSearchParams(params as any).toString() : "";
+    return request<{ messages: any[]; total: number }>(`/social/messages${qs}`);
+  },
+
+  getAccountMessages: (accountId: string, params?: { status?: string; intent?: string }) => {
+    const qs = params ? "?" + new URLSearchParams(params as any).toString() : "";
+    return request<{ messages: any[]; total: number }>(`/social/accounts/${accountId}/messages${qs}`);
+  },
+
+  analyze: (msgId: string) =>
+    request<{ success: boolean; analysis: any }>(`/social/messages/${msgId}/analyze`, { method: "POST" }),
+
+  generateReply: (msgId: string) =>
+    request<{ success: boolean; draftEn: string; draftZh: string }>(
+      `/social/messages/${msgId}/generate-reply`, { method: "POST" }
+    ),
+
+  reply: (msgId: string, content: string) =>
+    request<{ success: boolean; repliedAt: string }>(`/social/messages/${msgId}/reply`, {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    }),
+
+  convert: (msgId: string) =>
+    request<{ success: boolean; inquiryId: string }>(`/social/messages/${msgId}/convert`, { method: "POST" }),
+
+  batchAnalyze: (accountId?: string) =>
+    request<{ success: boolean; processed: number }>("/social/messages/batch-analyze", {
+      method: "POST",
+      body: JSON.stringify({ accountId }),
+    }),
+
+  getStats: () =>
+    request<{ overall: any; byPlatform: any[] }>("/social/stats"),
+};
+
+// ─── Phase 5: GEO 市场洞察 API ────────────────────────────────
+export const geoApi = {
+  getHeatmap: (product?: string) => {
+    const qs = product ? `?product=${encodeURIComponent(product)}` : "";
+    return request<{ heatmap: any[]; regionSummary: any[]; totalCountries: number; totalInquiries: number }>(`/geo/heatmap${qs}`);
+  },
+
+  getCompetitors: (market?: string) => {
+    const qs = market ? `?market=${encodeURIComponent(market)}` : "";
+    return request<{ market: string; competitors: any[]; ourAdvantages: any[]; marketOpportunity: any; availableMarkets: string[] }>(`/geo/competitors${qs}`);
+  },
+
+  getStrategy: (country: string, product: string, estimatedValue?: number) =>
+    request<{ success: boolean; country: string; region: string; product: string; strategy: any }>("/geo/strategy", {
+      method: "POST",
+      body: JSON.stringify({ country, product, estimatedValue }),
+    }),
+
+  getMarketSummary: () =>
+    request<{ summary: any; topCountries: any[]; regionDistribution: any[] }>("/geo/market-summary"),
+
+  getTopMarkets: () =>
+    request<{ markets: any[] }>("/geo/top-markets"),
+};
+
+// ─── Phase 5: 多账号管理 API ──────────────────────────────────
+export const multiAccountApi = {
+  getInstances: () =>
+    request<{ instances: any[]; summary: any }>("/multi-account/instances"),
+
+  createInstance: (data: { name: string; apiEndpoint?: string; mode?: string; priority?: number; proxyUrl?: string; tags?: string[] }) =>
+    request<{ success: boolean; instance: any }>("/multi-account/instances", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  getInstance: (id: string) =>
+    request<{ instance: any; logs: any[]; todayStats: any }>(`/multi-account/instances/${id}`),
+
+  updateStatus: (id: string, status: string) =>
+    request<{ success: boolean; status: string }>(`/multi-account/instances/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    }),
+
+  deleteInstance: (id: string) =>
+    request<{ success: boolean }>(`/multi-account/instances/${id}`, { method: "DELETE" }),
+
+  addAccount: (instanceId: string, data: { platform: string; accountName: string; accountType?: string; dailyOpsLimit?: number }) =>
+    request<{ success: boolean; accountId: string }>(`/multi-account/instances/${instanceId}/accounts`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  routeTask: (platform: string, taskType?: string) =>
+    request<{ success: boolean; routedTo?: any; error?: string }>("/multi-account/route-task", {
+      method: "POST",
+      body: JSON.stringify({ platform, taskType }),
+    }),
+
+  getHealth: () =>
+    request<{ overallHealth: string; instances: any[]; summary: any }>("/multi-account/health"),
+
+  triggerCircuitBreaker: (id: string, action: "trigger" | "reset", reason?: string, sleepMinutes?: number) =>
+    request<{ success: boolean; action: string; sleepUntil?: string; message: string }>(`/multi-account/circuit-breaker/${id}`, {
+      method: "POST",
+      body: JSON.stringify({ action, reason, sleepMinutes }),
+    }),
+};
+
+// ─── Phase 5: ROI 计算器 API ──────────────────────────────────
+export const roiApi = {
+  getSummary: () =>
+    request<{ roi: any; business: any; efficiency: any }>("/roi/summary"),
+
+  getCalculator: () =>
+    request<{ breakdown: any[]; total: any; assumptions: any }>("/roi/calculator"),
+
+  getFunnel: () =>
+    request<{ funnel: any[]; conversionRates: any; totalInquiries: number; totalPipelineValue: number; totalDealValue: number }>("/roi/funnel"),
+
+  updateFunnelStage: (id: string, data: { status?: string; dealValue?: number; funnelStage?: string }) =>
+    request<{ success: boolean; status?: string; updatedAt: string }>(`/roi/funnel/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+};
+
+// ─── Phase 5: Dashboard 扩展 API ─────────────────────────────
+export const dashboardExtApi = {
+  getFunnel: () =>
+    request<{ funnel: any[]; conversionRates: any; totalInquiries: number; totalDealValue: number }>("/dashboard/funnel"),
+
+  pushDailyReport: () =>
+    request<{ success: boolean; message: string }>("/dashboard/daily-report/push", { method: "POST" }),
+};
+
 // ─── 类型定义 ─────────────────────────────────────────────────────
 export interface UserInfo {
   id: string;

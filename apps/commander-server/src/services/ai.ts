@@ -14,7 +14,7 @@ const dashscope = new OpenAI({
 const MODEL = process.env.DASHSCOPE_MODEL ?? "qwen-plus";
 
 // ─── 通用 Chat 调用 ───────────────────────────────────────────
-async function chat(
+export async function chat(
   systemPrompt: string,
   userPrompt: string,
   options: { temperature?: number; maxTokens?: number } = {}
