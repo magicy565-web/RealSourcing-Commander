@@ -933,37 +933,647 @@ function BottomTabBar({
   );
 }
 
-// ─── Screen 0: 炫酷首页 ──────────────────────────────────────────────────────
+// ─── 全屏轮播卡片 1：今日询盘 ────────────────────────────────────────────────
+function SlideInquiries({ data }: { data: any }) {
+  const signals = data?.signals ?? null;
+  const todayInq = signals?.newInquiries ?? 0;
+  const unread = signals?.unread ?? 0;
+  const replied = todayInq - unread;
+  const replyRate = todayInq > 0 ? Math.round((replied / todayInq) * 100) : 0;
+  const channels = [
+    { name: 'Alibaba', count: Math.max(Math.round(todayInq * 0.4), 2), color: '#F59E0B' },
+    { name: 'LinkedIn', count: Math.max(Math.round(todayInq * 0.25), 1), color: '#60A5FA' },
+    { name: 'WhatsApp', count: Math.max(Math.round(todayInq * 0.2), 1), color: '#34D399' },
+    { name: 'TikTok', count: Math.max(Math.round(todayInq * 0.15), 1), color: '#F472B6' },
+  ];
+  const total = channels.reduce((s, c) => s + c.count, 0);
+
+  return (
+    <div className="relative w-full h-full overflow-hidden" style={{
+      background: 'linear-gradient(145deg, #0D0D1A 0%, #111128 60%, #0A0A18 100%)',
+    }}>
+      {/* 插画背景 — 半透明叠加 */}
+      <div className="absolute inset-0" style={{ zIndex: 0 }}>
+        <img
+          src="/card-inquiries.png"
+          alt=""
+          className="absolute right-0 top-0 h-full w-auto object-cover"
+          style={{ opacity: 0.22, mixBlendMode: 'lighten', transform: 'scale(1.05)', transformOrigin: 'right center' }}
+        />
+        {/* 左侧渐变遮罩，确保文字可读 */}
+        <div className="absolute inset-0" style={{
+          background: 'linear-gradient(90deg, rgba(13,13,26,0.98) 0%, rgba(13,13,26,0.85) 45%, rgba(13,13,26,0.3) 75%, rgba(13,13,26,0.1) 100%)',
+        }} />
+        {/* 底部渐变遮罩 */}
+        <div className="absolute inset-0" style={{
+          background: 'linear-gradient(180deg, transparent 40%, rgba(13,13,26,0.95) 100%)',
+        }} />
+      </div>
+
+      {/* 金色光晕 */}
+      <div className="absolute pointer-events-none" style={{
+        top: -80, left: '15%', width: 280, height: 280,
+        background: 'radial-gradient(circle, rgba(201,168,76,0.2) 0%, transparent 65%)',
+        filter: 'blur(50px)', zIndex: 1,
+      }} />
+
+      {/* 内容 */}
+      <div className="relative z-10 flex flex-col justify-between h-full px-6 pt-6 pb-6">
+        {/* 顶部标签 */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div style={{
+              width: 8, height: 8, borderRadius: '50%',
+              background: '#C9A84C',
+              boxShadow: '0 0 12px #C9A84C, 0 0 24px rgba(201,168,76,0.5)',
+              animation: 'pulse-dot 2s ease-in-out infinite',
+            }} />
+            <span className="text-[#C9A84C] text-[11px] font-bold tracking-[0.2em] uppercase">今日询盘</span>
+          </div>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{
+            background: unread > 0 ? 'rgba(239,68,68,0.15)' : 'rgba(0,245,160,0.12)',
+            border: `1px solid ${unread > 0 ? 'rgba(239,68,68,0.3)' : 'rgba(0,245,160,0.25)'}`,
+          }}>
+            <div style={{
+              width: 5, height: 5, borderRadius: '50%',
+              background: unread > 0 ? '#F87171' : '#00F5A0',
+              boxShadow: `0 0 8px ${unread > 0 ? '#F87171' : '#00F5A0'}`,
+            }} />
+            <span className="text-[10px] font-bold" style={{ color: unread > 0 ? '#F87171' : '#00F5A0' }}>
+              {unread > 0 ? `${unread} 待回复` : '全部已回'}
+            </span>
+          </div>
+        </div>
+
+        {/* 超大核心数字 */}
+        <div className="flex-1 flex flex-col justify-center">
+          <div className="flex items-end gap-3 mb-2">
+            <span className="font-black tabular-nums leading-none" style={{
+              fontSize: 96,
+              background: 'linear-gradient(135deg, #F5D07A 0%, #C9A84C 50%, #E8B84B 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              filter: 'drop-shadow(0 0 30px rgba(201,168,76,0.5))',
+              lineHeight: 1,
+            }}>
+              {data ? <CountUp target={todayInq} duration={1500} /> : '—'}
+            </span>
+            <div className="pb-4">
+              <p className="text-white text-[18px] font-bold">条询盘</p>
+              <p className="text-[#5A5A72] text-[12px]">今日收获</p>
+            </div>
+          </div>
+
+          {/* 回复进度条 */}
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[#6B6B80] text-[11px]">回复进度</span>
+              <span className="text-[#C9A84C] text-[13px] font-bold">{replyRate}%</span>
+            </div>
+            <div className="h-2.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+              <div style={{
+                height: '100%',
+                width: `${replyRate}%`,
+                background: 'linear-gradient(90deg, #C9A84C, #F5D07A)',
+                borderRadius: 4,
+                boxShadow: '0 0 16px rgba(201,168,76,0.7)',
+                transition: 'width 1.5s cubic-bezier(0.16,1,0.3,1)',
+              }} />
+            </div>
+          </div>
+        </div>
+
+        {/* 底部：三指标 + 渠道 */}
+        <div>
+          {/* 三个关键指标 */}
+          <div className="grid grid-cols-3 gap-2.5 mb-4">
+            {[
+              { label: '未回复', value: unread, color: unread > 0 ? '#F87171' : '#00F5A0' },
+              { label: '已回复', value: replied, color: '#34D399' },
+              { label: '回复率', value: `${replyRate}%`, color: '#C9A84C' },
+            ].map(item => (
+              <div key={item.label} className="flex flex-col items-center py-3 rounded-2xl" style={{
+                background: 'rgba(0,0,0,0.4)',
+                backdropFilter: 'blur(12px)',
+                border: `1px solid ${item.color}25`,
+              }}>
+                <span className="text-[24px] font-black tabular-nums" style={{
+                  color: item.color,
+                  textShadow: `0 0 20px ${item.color}60`,
+                }}>
+                  {data ? item.value : '—'}
+                </span>
+                <span className="text-[#5A5A72] text-[10px] mt-0.5 font-medium">{item.label}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* 渠道分布 */}
+          <div>
+            <p className="text-[#5A5A72] text-[10px] font-semibold tracking-wider uppercase mb-2">渠道分布</p>
+            <div className="flex gap-1.5 mb-2">
+              {channels.map(ch => (
+                <div key={ch.name} style={{ flex: `${(ch.count / total) * 100} 0 0` }}>
+                  <div style={{
+                    height: 4, borderRadius: 2,
+                    background: ch.color,
+                    boxShadow: `0 0 8px ${ch.color}80`,
+                  }} />
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-3">
+              {channels.map(ch => (
+                <div key={ch.name} className="flex items-center gap-1">
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: ch.color }} />
+                  <span className="text-[10px]" style={{ color: '#6B6B80' }}>{ch.name}</span>
+                  <span className="text-[10px] font-bold" style={{ color: ch.color }}>{ch.count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── 全屏轮播卡片 2：待回复 ───────────────────────────────────────────────────
+function SlidePending({ data }: { data: any }) {
+  const unread = data?.signals?.unread ?? 0;
+  const urgentItems = [
+    { name: 'Hans Mueller', country: '🇩🇪', product: '太阳能板 200W', time: '2h 前', platform: 'Alibaba', color: '#F59E0B' },
+    { name: 'Sarah Johnson', country: '🇺🇸', product: 'LED 灯带定制', time: '3h 前', platform: 'LinkedIn', color: '#60A5FA' },
+    { name: 'Nguyen Van A', country: '🇻🇳', product: '充电宝 OEM', time: '4h 前', platform: 'WhatsApp', color: '#34D399' },
+  ];
+
+  return (
+    <div className="relative w-full h-full overflow-hidden" style={{
+      background: 'linear-gradient(145deg, #140808 0%, #1A0D0D 60%, #0F0808 100%)',
+    }}>
+      {/* 插画背景 */}
+      <div className="absolute inset-0" style={{ zIndex: 0 }}>
+        <img
+          src="/card-pending.png"
+          alt=""
+          className="absolute right-0 top-0 h-full w-auto object-cover"
+          style={{ opacity: 0.28, mixBlendMode: 'lighten', transform: 'scale(1.05)', transformOrigin: 'right center' }}
+        />
+        <div className="absolute inset-0" style={{
+          background: 'linear-gradient(90deg, rgba(20,8,8,0.98) 0%, rgba(20,8,8,0.88) 45%, rgba(20,8,8,0.35) 75%, rgba(20,8,8,0.1) 100%)',
+        }} />
+        <div className="absolute inset-0" style={{
+          background: 'linear-gradient(180deg, transparent 35%, rgba(20,8,8,0.97) 100%)',
+        }} />
+      </div>
+
+      {/* 红色光晕 */}
+      <div className="absolute pointer-events-none" style={{
+        top: -60, left: '20%', width: 260, height: 260,
+        background: 'radial-gradient(circle, rgba(239,68,68,0.2) 0%, transparent 65%)',
+        filter: 'blur(50px)', zIndex: 1,
+      }} />
+
+      <div className="relative z-10 flex flex-col justify-between h-full px-6 pt-6 pb-6">
+        {/* 顶部标签 */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div style={{
+              width: 8, height: 8, borderRadius: '50%',
+              background: '#F87171',
+              boxShadow: '0 0 12px #F87171, 0 0 24px rgba(239,68,68,0.5)',
+              animation: 'pulse-dot 1s ease-in-out infinite',
+            }} />
+            <span className="text-[#F87171] text-[11px] font-bold tracking-[0.2em] uppercase">待回复</span>
+          </div>
+          {unread > 0 && (
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full" style={{
+              background: 'rgba(239,68,68,0.2)',
+              border: '1px solid rgba(239,68,68,0.4)',
+            }}>
+              <span className="text-[#F87171] text-[11px] font-bold">紧急处理</span>
+            </div>
+          )}
+        </div>
+
+        {/* 核心数字 */}
+        <div className="flex-1 flex flex-col justify-center">
+          <div className="flex items-end gap-3 mb-3">
+            <span className="font-black tabular-nums leading-none" style={{
+              fontSize: 96,
+              background: 'linear-gradient(135deg, #FCA5A5 0%, #EF4444 50%, #DC2626 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              filter: 'drop-shadow(0 0 30px rgba(239,68,68,0.6))',
+              lineHeight: 1,
+            }}>
+              {data ? <CountUp target={unread} duration={1200} /> : '—'}
+            </span>
+            <div className="pb-4">
+              <p className="text-white text-[18px] font-bold">条待回复</p>
+              <p className="text-[#7A3A3A] text-[12px]">需要处理</p>
+            </div>
+          </div>
+
+          {/* 紧急程度说明 */}
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl mb-2" style={{
+            background: 'rgba(239,68,68,0.1)',
+            border: '1px solid rgba(239,68,68,0.2)',
+          }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F87171" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <span className="text-[#F87171] text-[11px] font-medium">超过 2 小时未回复将影响 Alibaba 排名</span>
+          </div>
+        </div>
+
+        {/* 待回复列表 */}
+        <div>
+          <p className="text-[#5A3A3A] text-[10px] font-semibold tracking-wider uppercase mb-2.5">最紧急询盘</p>
+          <div className="flex flex-col gap-2">
+            {urgentItems.slice(0, unread > 0 ? Math.min(unread, 3) : 3).map((item, i) => (
+              <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-2xl" style={{
+                background: 'rgba(0,0,0,0.45)',
+                backdropFilter: 'blur(12px)',
+                border: '1px solid rgba(239,68,68,0.15)',
+              }}>
+                <div className="flex items-center justify-center rounded-full text-[13px] font-black flex-shrink-0" style={{
+                  width: 36, height: 36,
+                  background: `linear-gradient(135deg, ${item.color}30, ${item.color}15)`,
+                  border: `1px solid ${item.color}30`,
+                  color: item.color,
+                }}>
+                  {item.name[0]}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-white text-[12px] font-semibold truncate">{item.name}</span>
+                    <span className="text-[11px]">{item.country}</span>
+                  </div>
+                  <p className="text-[#6B6B80] text-[10px] truncate">{item.product}</p>
+                </div>
+                <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{
+                    background: `${item.color}15`, color: item.color,
+                  }}>{item.platform}</span>
+                  <span className="text-[#5A3A3A] text-[9px]">{item.time}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── 全屏轮播卡片 3：消息通知 ─────────────────────────────────────────────────
+function SlideNotifications({ data }: { data: any }) {
+  const notifications = [
+    { type: 'inquiry', icon: '📨', title: '新询盘来自德国', desc: 'Hans Mueller 询问太阳能板 200W 的 MOQ 和价格', time: '5分钟前', color: '#F59E0B', unread: true },
+    { type: 'reply', icon: '💬', title: 'OpenClaw 已回复 3 条询盘', desc: '自动生成并发送了专业回复，等待买家确认', time: '12分钟前', color: '#A78BFA', unread: true },
+    { type: 'alert', icon: '⚡', title: 'LinkedIn 开发信发送完成', desc: '今日 8 条开发信已发送，预计 2-3 天内收到回复', time: '1小时前', color: '#60A5FA', unread: false },
+    { type: 'tip', icon: '🎯', title: '欧洲市场活跃时段开始', desc: '当前是德国、荷兰买家的工作时间，建议优先处理欧洲询盘', time: '2小时前', color: '#34D399', unread: false },
+  ];
+  const unreadCount = notifications.filter(n => n.unread).length;
+
+  return (
+    <div className="relative w-full h-full overflow-hidden" style={{
+      background: 'linear-gradient(145deg, #080D18 0%, #0A1020 60%, #080A18 100%)',
+    }}>
+      {/* 插画背景 */}
+      <div className="absolute inset-0" style={{ zIndex: 0 }}>
+        <img
+          src="/card-notifications.png"
+          alt=""
+          className="absolute right-0 top-0 h-full w-auto object-cover"
+          style={{ opacity: 0.25, mixBlendMode: 'lighten', transform: 'scale(1.05)', transformOrigin: 'right center' }}
+        />
+        <div className="absolute inset-0" style={{
+          background: 'linear-gradient(90deg, rgba(8,13,24,0.98) 0%, rgba(8,13,24,0.88) 45%, rgba(8,13,24,0.35) 75%, rgba(8,13,24,0.1) 100%)',
+        }} />
+        <div className="absolute inset-0" style={{
+          background: 'linear-gradient(180deg, transparent 30%, rgba(8,13,24,0.97) 100%)',
+        }} />
+      </div>
+
+      {/* 蓝色光晕 */}
+      <div className="absolute pointer-events-none" style={{
+        top: -60, left: '20%', width: 260, height: 260,
+        background: 'radial-gradient(circle, rgba(59,130,246,0.2) 0%, transparent 65%)',
+        filter: 'blur(50px)', zIndex: 1,
+      }} />
+
+      <div className="relative z-10 flex flex-col justify-between h-full px-6 pt-6 pb-6">
+        {/* 顶部标签 */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div style={{
+              width: 8, height: 8, borderRadius: '50%',
+              background: '#60A5FA',
+              boxShadow: '0 0 12px #60A5FA, 0 0 24px rgba(96,165,250,0.5)',
+              animation: 'pulse-dot 2s ease-in-out infinite',
+            }} />
+            <span className="text-[#60A5FA] text-[11px] font-bold tracking-[0.2em] uppercase">消息通知</span>
+          </div>
+          {unreadCount > 0 && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{
+              background: 'rgba(96,165,250,0.15)',
+              border: '1px solid rgba(96,165,250,0.3)',
+            }}>
+              <span className="text-[#60A5FA] text-[11px] font-bold">{unreadCount} 条未读</span>
+            </div>
+          )}
+        </div>
+
+        {/* 核心数字 */}
+        <div className="flex-1 flex flex-col justify-center">
+          <div className="flex items-end gap-3 mb-4">
+            <span className="font-black tabular-nums leading-none" style={{
+              fontSize: 96,
+              background: 'linear-gradient(135deg, #93C5FD 0%, #3B82F6 50%, #1D4ED8 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              filter: 'drop-shadow(0 0 30px rgba(59,130,246,0.5))',
+              lineHeight: 1,
+            }}>
+              <CountUp target={notifications.length} duration={1000} />
+            </span>
+            <div className="pb-4">
+              <p className="text-white text-[18px] font-bold">条通知</p>
+              <p className="text-[#3A4A6A] text-[12px]">{unreadCount} 条未读</p>
+            </div>
+          </div>
+        </div>
+
+        {/* 通知列表 */}
+        <div>
+          <div className="flex flex-col gap-2">
+            {notifications.slice(0, 4).map((notif, i) => (
+              <div key={i} className="flex items-start gap-3 px-3 py-2.5 rounded-2xl" style={{
+                background: notif.unread ? `${notif.color}0A` : 'rgba(0,0,0,0.35)',
+                backdropFilter: 'blur(12px)',
+                border: `1px solid ${notif.unread ? `${notif.color}25` : 'rgba(255,255,255,0.05)'}`,
+              }}>
+                <div className="flex items-center justify-center rounded-xl flex-shrink-0 text-base" style={{
+                  width: 34, height: 34,
+                  background: `${notif.color}15`,
+                  border: `1px solid ${notif.color}25`,
+                }}>
+                  {notif.icon}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[12px] font-semibold truncate" style={{ color: notif.unread ? 'white' : '#6B6B80' }}>{notif.title}</p>
+                    <span className="text-[9px] flex-shrink-0" style={{ color: '#3A4A6A' }}>{notif.time}</span>
+                  </div>
+                  <p className="text-[10px] leading-relaxed truncate" style={{ color: '#4A5A7A' }}>{notif.desc}</p>
+                </div>
+                {notif.unread && (
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: notif.color, flexShrink: 0, marginTop: 4 }} />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── 全屏轮播卡片 4：OpenClaw 任务状态 ───────────────────────────────────────
+function SlideOpenClaw({ data, openclawData }: { data: any; openclawData: any }) {
+  const agent = openclawData ?? data?.agent ?? null;
+  const status = agent?.instance?.status ?? 'working';
+  const isActive = ['online', 'working', 'active'].includes(status);
+  const completedTasks = agent?.completedTasks ?? 24;
+  const opsToday = agent?.opsToday ?? 0;
+  const currentTask = '跟进 WhatsApp 未回复客户';
+
+  const tasks = [
+    { text: '扫描 Alibaba 新询盘 × 12', status: 'done', platform: 'Alibaba', color: '#F59E0B' },
+    { text: '分析买家意向，生成回复草稿', status: 'done', platform: 'AI', color: '#A78BFA' },
+    { text: '发送 LinkedIn 开发信 × 8', status: 'done', platform: 'LinkedIn', color: '#60A5FA' },
+    { text: '跟进 WhatsApp 未回复客户', status: 'running', platform: 'WhatsApp', color: '#34D399' },
+    { text: '生成今日市场分析报告', status: 'pending', platform: 'AI', color: '#A78BFA' },
+  ];
+
+  return (
+    <div className="relative w-full h-full overflow-hidden" style={{
+      background: 'linear-gradient(145deg, #0D0A1A 0%, #130D28 60%, #0A0818 100%)',
+    }}>
+      {/* 插画背景 */}
+      <div className="absolute inset-0" style={{ zIndex: 0 }}>
+        <img
+          src="/card-openclaw.png"
+          alt=""
+          className="absolute right-0 top-0 h-full w-auto object-cover"
+          style={{ opacity: 0.18, mixBlendMode: 'screen', transform: 'scale(1.05)', transformOrigin: 'right center' }}
+        />
+        <div className="absolute inset-0" style={{
+          background: 'linear-gradient(90deg, rgba(13,10,26,0.98) 0%, rgba(13,10,26,0.88) 45%, rgba(13,10,26,0.35) 75%, rgba(13,10,26,0.1) 100%)',
+        }} />
+        <div className="absolute inset-0" style={{
+          background: 'linear-gradient(180deg, transparent 30%, rgba(13,10,26,0.97) 100%)',
+        }} />
+      </div>
+
+      {/* 紫色光晕 */}
+      <div className="absolute pointer-events-none" style={{
+        top: -60, left: '20%', width: 260, height: 260,
+        background: 'radial-gradient(circle, rgba(124,58,237,0.25) 0%, transparent 65%)',
+        filter: 'blur(50px)', zIndex: 1,
+      }} />
+
+      <div className="relative z-10 flex flex-col justify-between h-full px-6 pt-6 pb-6">
+        {/* 顶部：OpenClaw 品牌 */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="relative" style={{ width: 44, height: 44 }}>
+              <div className="absolute inset-0 rounded-2xl" style={{
+                background: 'linear-gradient(135deg, rgba(124,58,237,0.4) 0%, rgba(0,245,160,0.2) 100%)',
+                border: '1px solid rgba(124,58,237,0.5)',
+              }} />
+              <img
+                src="/openclaw-mascot.png"
+                alt="OpenClaw"
+                className="absolute inset-0 w-full h-full object-contain p-1"
+                style={{
+                  filter: isActive ? 'drop-shadow(0 0 8px rgba(0,245,160,0.7))' : 'grayscale(0.5)',
+                  animation: isActive ? 'float 3s ease-in-out infinite' : 'none',
+                }}
+              />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-white text-[16px] font-black">Open</span>
+                <span className="text-[16px] font-black" style={{
+                  background: 'linear-gradient(135deg, #FF6B35, #F59E0B)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                }}>Claw</span>
+              </div>
+              <p className="text-[#5A4A7A] text-[10px]">AI 自动化引擎</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{
+            background: isActive ? 'rgba(0,245,160,0.12)' : 'rgba(239,68,68,0.12)',
+            border: `1px solid ${isActive ? 'rgba(0,245,160,0.3)' : 'rgba(239,68,68,0.3)'}`,
+          }}>
+            <div style={{
+              width: 6, height: 6, borderRadius: '50%',
+              background: isActive ? '#00F5A0' : '#F87171',
+              boxShadow: `0 0 8px ${isActive ? '#00F5A0' : '#F87171'}`,
+              animation: isActive ? 'pulse-dot 1.5s ease-in-out infinite' : 'none',
+            }} />
+            <span className="text-[11px] font-bold" style={{ color: isActive ? '#00F5A0' : '#F87171' }}>
+              {isActive ? '运行中' : '离线'}
+            </span>
+          </div>
+        </div>
+
+        {/* 核心数字 */}
+        <div className="flex-1 flex flex-col justify-center">
+          <div className="flex items-end gap-3 mb-3">
+            <span className="font-black tabular-nums leading-none" style={{
+              fontSize: 96,
+              background: 'linear-gradient(135deg, #C4B5FD 0%, #7C3AED 50%, #5B21B6 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              filter: 'drop-shadow(0 0 30px rgba(124,58,237,0.6))',
+              lineHeight: 1,
+            }}>
+              <CountUp target={completedTasks} duration={1400} />
+            </span>
+            <div className="pb-4">
+              <p className="text-white text-[18px] font-bold">个任务</p>
+              <p className="text-[#4A3A6A] text-[12px]">今日完成</p>
+            </div>
+          </div>
+
+          {/* 当前任务 */}
+          {isActive && (
+            <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl mb-2" style={{
+              background: 'rgba(124,58,237,0.12)',
+              border: '1px solid rgba(124,58,237,0.3)',
+            }}>
+              <div style={{ width: 18, height: 18, borderRadius: '50%', border: '2px solid rgba(124,58,237,0.4)', borderTopColor: '#A78BFA', animation: 'spin 1s linear infinite', flexShrink: 0 }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-[#A78BFA] text-[10px] font-bold uppercase tracking-wider mb-0.5">正在执行</p>
+                <p className="text-white text-[12px] font-medium truncate">{currentTask}</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 任务流 */}
+        <div>
+          <p className="text-[#4A3A6A] text-[10px] font-semibold tracking-wider uppercase mb-2">今日任务流</p>
+          <div className="flex flex-col gap-1.5">
+            {tasks.map((task, i) => {
+              const isDone = task.status === 'done';
+              const isRunning = task.status === 'running';
+              return (
+                <div key={i} className="flex items-center gap-2.5 px-3 py-2 rounded-xl" style={{
+                  background: isRunning ? 'rgba(124,58,237,0.1)' : isDone ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.2)',
+                  backdropFilter: 'blur(8px)',
+                  border: isRunning ? '1px solid rgba(124,58,237,0.25)' : '1px solid rgba(255,255,255,0.04)',
+                }}>
+                  <div style={{ width: 16, height: 16, flexShrink: 0 }}>
+                    {isDone && (
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <circle cx="8" cy="8" r="7" fill="rgba(0,245,160,0.15)" stroke="#00F5A0" strokeWidth="1.2" />
+                        <path d="M5 8l2.5 2.5 4-4" stroke="#00F5A0" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                    {isRunning && (
+                      <div style={{ width: 16, height: 16, borderRadius: '50%', border: '1.5px solid rgba(124,58,237,0.3)', borderTopColor: '#A78BFA', animation: 'spin 1s linear infinite' }} />
+                    )}
+                    {task.status === 'pending' && (
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <circle cx="8" cy="8" r="7" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.1)" strokeWidth="1.2" />
+                        <circle cx="8" cy="8" r="1.5" fill="rgba(255,255,255,0.15)" />
+                      </svg>
+                    )}
+                  </div>
+                  <p className="flex-1 text-[11px] font-medium truncate" style={{
+                    color: isDone ? '#4A3A6A' : isRunning ? '#DDD0FF' : '#3A2A5A',
+                  }}>{task.text}</p>
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0" style={{
+                    background: `${task.color}12`, color: task.color,
+                  }}>{task.platform}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Screen 0: 炫酷首页（全屏轮播） ─────────────────────────────────────────
 function HomeScreen({
   data, openclawData, onNavigate,
 }: {
   data: any; openclawData: any; onNavigate: (path: string) => void;
 }) {
+  const [activeSlide, setActiveSlide] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState(0);
+  const [dragDelta, setDragDelta] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const totalSlides = 4;
+
   const now = new Date();
   const hour = now.getHours();
   const greeting = hour < 6 ? '凌晨好' : hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上好';
 
+  // 触摸/鼠标滑动处理
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    setIsDragging(true);
+    setDragStart(e.touches[0].clientX);
+    setDragDelta(0);
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!isDragging) return;
+    const delta = e.touches[0].clientX - dragStart;
+    setDragDelta(delta);
+  }, [isDragging, dragStart]);
+
+  const handleTouchEnd = useCallback(() => {
+    if (Math.abs(dragDelta) > 50) {
+      if (dragDelta < 0 && activeSlide < totalSlides - 1) {
+        setActiveSlide(s => s + 1);
+      } else if (dragDelta > 0 && activeSlide > 0) {
+        setActiveSlide(s => s - 1);
+      }
+    }
+    setIsDragging(false);
+    setDragDelta(0);
+  }, [dragDelta, activeSlide, totalSlides]);
+
+  const slideColors = ['#C9A84C', '#EF4444', '#3B82F6', '#7C3AED'];
+  const slideLabels = ['今日询盘', '待回复', '通知', 'AI 任务'];
+
   return (
     <div className="relative flex flex-col h-full" style={{
-      background: 'linear-gradient(180deg, #050508 0%, #08080F 100%)',
+      background: '#050508',
     }}>
-      {/* 全局背景光晕 */}
-      <div className="absolute pointer-events-none" style={{
-        top: -100, left: '10%', width: 300, height: 300,
-        background: 'radial-gradient(circle, rgba(201,168,76,0.1) 0%, transparent 65%)',
-        filter: 'blur(60px)',
-      }} />
-      <div className="absolute pointer-events-none" style={{
-        top: '40%', right: -60, width: 250, height: 250,
-        background: 'radial-gradient(circle, rgba(124,58,237,0.08) 0%, transparent 65%)',
-        filter: 'blur(50px)',
-      }} />
-
       {/* 状态栏 */}
-      <StatusBar />
+      <div className="relative z-50">
+        <StatusBar />
+      </div>
 
       {/* 顶部问候栏 */}
-      <div className="flex items-center justify-between px-5 pb-4 relative z-20">
+      <div className="flex items-center justify-between px-5 pb-3 relative z-20">
         <div>
           <p className="text-[#5A5A72] text-[11px] font-medium tracking-wider uppercase">{greeting}</p>
           <p className="text-white text-[20px] font-black tracking-tight leading-tight">指挥台 <span style={{
@@ -974,7 +1584,6 @@ function HomeScreen({
           }}>LIVE</span></p>
         </div>
         <div className="flex items-center gap-2">
-          {/* 通知按钮 */}
           <button
             onClick={() => onNavigate('/notifications')}
             className="relative flex items-center justify-center rounded-full active:scale-90 transition-transform"
@@ -993,7 +1602,6 @@ function HomeScreen({
               </div>
             )}
           </button>
-          {/* 用户头像 */}
           <div className="relative" style={{ width: 38, height: 38 }}>
             <div className="w-full h-full rounded-full flex items-center justify-center text-sm font-black" style={{
               background: 'linear-gradient(135deg, #C9A84C 0%, #F5D07A 100%)',
@@ -1006,22 +1614,79 @@ function HomeScreen({
         </div>
       </div>
 
-      {/* 可滚动内容区 */}
-      <div className="flex-1 overflow-y-auto scroll-area" style={{ paddingBottom: 90 }}>
-        <div className="flex flex-col gap-4 pb-4">
+      {/* 轮播卡片区域 — 占据剩余全部高度 */}
+      <div
+        ref={containerRef}
+        className="flex-1 relative overflow-hidden"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+      >
+        {/* 卡片轨道 */}
+        <div
+          className="flex h-full"
+          style={{
+            width: `${totalSlides * 100}%`,
+            transform: `translateX(calc(${-activeSlide * (100 / totalSlides)}% + ${isDragging ? dragDelta / totalSlides : 0}px))`,
+            transition: isDragging ? 'none' : 'transform 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+          }}
+        >
+          {/* 卡片 1 */}
+          <div style={{ width: `${100 / totalSlides}%`, height: '100%' }}>
+            <SlideInquiries data={data} />
+          </div>
+          {/* 卡片 2 */}
+          <div style={{ width: `${100 / totalSlides}%`, height: '100%' }}>
+            <SlidePending data={data} />
+          </div>
+          {/* 卡片 3 */}
+          <div style={{ width: `${100 / totalSlides}%`, height: '100%' }}>
+            <SlideNotifications data={data} />
+          </div>
+          {/* 卡片 4 */}
+          <div style={{ width: `${100 / totalSlides}%`, height: '100%' }}>
+            <SlideOpenClaw data={data} openclawData={openclawData} />
+          </div>
+        </div>
 
-          {/* ① 今日战报 */}
-          <WarReportCard data={data} />
+        {/* 分页指示器 — 右侧竖排 */}
+        <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-50">
+          {Array.from({ length: totalSlides }).map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setActiveSlide(i)}
+              style={{
+                width: i === activeSlide ? 4 : 4,
+                height: i === activeSlide ? 28 : 8,
+                borderRadius: 2,
+                background: i === activeSlide ? slideColors[i] : 'rgba(255,255,255,0.2)',
+                boxShadow: i === activeSlide ? `0 0 12px ${slideColors[i]}` : 'none',
+                transition: 'all 0.3s cubic-bezier(0.16,1,0.3,1)',
+                border: 'none',
+                padding: 0,
+              }}
+            />
+          ))}
+        </div>
 
-          {/* ② OpenClaw AI 状态 */}
-          <OpenClawCard data={data} openclawData={openclawData} />
-
-          {/* ③ 今日 vs 昨日 */}
-          <CompareCard data={data} />
-
-          {/* ④ AI 今日建议 */}
-          <AiAdviceCard data={data} />
-
+        {/* 底部标签提示 */}
+        <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2 z-50 px-8">
+          {Array.from({ length: totalSlides }).map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setActiveSlide(i)}
+              className="flex-1 py-1.5 rounded-full text-[10px] font-bold transition-all"
+              style={{
+                background: i === activeSlide ? `${slideColors[i]}20` : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${i === activeSlide ? `${slideColors[i]}50` : 'rgba(255,255,255,0.08)'}`,
+                color: i === activeSlide ? slideColors[i] : '#3A3A52',
+                backdropFilter: 'blur(8px)',
+              }}
+            >
+              {slideLabels[i]}
+            </button>
+          ))}
         </div>
       </div>
     </div>
