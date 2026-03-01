@@ -1,394 +1,335 @@
 /**
- * Phase 6 — 极简老板指挥台（War Room）
+ * BossWarroom — 全屏沉浸式老板指挥台
+ * APEX COMMANDER v2 Design System — Enhanced Edition
  *
- * 三大核心模块：
- * 1. 今日信号   — 新询盘 / 未回复 / 待审批 / 新报价
- * 2. 数字员工   — OpenClaw 状态 / 账号健康 / 今日完成量
- * 3. 经营周报   — 本周 vs 上周 对比（询盘、回复率、成单额）
- *
- * 操作入口：
- * - 老板指令输入框（自然语言 → AI 结构化 → OpenClaw 任务）
- * - 待审批回复草稿列表（一键批准 / 拒绝）
+ * 三屏滑动架构（左右水平滑动）：
+ *   Screen 0 (Hero):    今日战报 + 核心数字 + 紧急信号 + 审批操作
+ *   Screen 1 (Command): 数字员工状态 + 老板指令下达 + 快捷指令
+ *   Screen 2 (Report):  经营周报对比 + ROI 摘要
  */
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useLocation } from 'wouter';
+import { bossApi } from '../lib/api';
 
-import { useState, useEffect, useCallback } from "react";
-import { useLocation } from "wouter";
-import {
-  bossApi,
-  type WaRoomData,
-  type PendingApproval,
-  type BossCommand,
-  type Inquiry,
-} from "../lib/api";
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function pctNum(a: number, b: number): number {
+  if (b === 0) return 0;
+  return ((a - b) / b) * 100;
+}
+function agentStatusLabel(s: string): string {
+  const map: Record<string, string> = {
+    online: '执行中', working: '执行中', active: '执行中',
+    sleeping: '休眠中', paused: '已暂停',
+    offline: '离线', error: '异常',
+  };
+  return map[s] || s;
+}
+function agentStatusBadgeClass(s: string): string {
+  if (['online', 'working', 'active'].includes(s)) return 'badge-working';
+  if (s === 'sleeping') return 'badge-sleeping';
+  return 'badge-offline';
+}
+function agentStatusColor(s: string): string {
+  if (['online', 'working', 'active'].includes(s)) return '#3B82F6';
+  if (s === 'sleeping') return '#F5D07A';
+  return '#EF4444';
+}
 
-// ─── 常量 ──────────────────────────────────────────────────────
-const PLATFORM_ICON: Record<string, string> = {
-  linkedin: "💼", facebook: "📘", tiktok: "🎵",
-  whatsapp: "💬", instagram: "📸", alibaba: "🛒",
-};
-const PLATFORM_COLOR: Record<string, string> = {
-  linkedin: "#0077b5", facebook: "#1877f2", tiktok: "#fe2c55",
-  whatsapp: "#25d366", instagram: "#e1306c", alibaba: "#ff6900",
-};
-const STATUS_INFO: Record<string, { label: string; color: string; dot: string }> = {
-  online:   { label: "运行中", color: "#10b981", dot: "bg-green-400" },
-  offline:  { label: "离线",   color: "#6b7280", dot: "bg-gray-400" },
-  sleeping: { label: "休眠中", color: "#f59e0b", dot: "bg-amber-400" },
-  paused:   { label: "已暂停", color: "#ef4444", dot: "bg-red-400" },
-};
-const HEALTH_COLOR: Record<string, string> = {
-  normal: "#10b981", warning: "#f59e0b", error: "#ef4444",
-};
-const QUICK_CMDS = [
-  "今天重点跑欧洲市场",
-  "推广 LED 照明产品",
-  "加强跟进催单",
-  "立即生成今日战报",
-];
+// ─── Sub-components ───────────────────────────────────────────────────────────
+function Skeleton({ w = 'w-full', h = 'h-4' }: { w?: string; h?: string }) {
+  return <div className={`shimmer rounded-lg ${w} ${h}`} />;
+}
 
-// ─── 子组件 ────────────────────────────────────────────────────
-function GrowthBadge({ value }: { value: number }) {
-  if (value === 0) return <span className="text-gray-400 text-xs">持平</span>;
-  const up = value > 0;
+function Trend({ current, previous }: { current: number; previous: number }) {
+  const diff = pctNum(current, previous);
+  if (previous === 0) return <span className="text-[#6B6B80] text-xs">—</span>;
+  const up = diff >= 0;
   return (
-    <span className={`text-xs font-medium ${up ? "text-green-500" : "text-red-500"}`}>
-      {up ? "▲" : "▼"} {Math.abs(value)}%
+    <span className={`text-xs font-semibold flex items-center gap-0.5 ${up ? 'text-[#34D399]' : 'text-[#F87171]'}`}>
+      <span>{up ? '▲' : '▼'}</span>
+      <span>{Math.abs(diff).toFixed(1)}%</span>
     </span>
   );
 }
 
-function PulsingDot({ className }: { className: string }) {
+function StatusDot({ status }: { status: string }) {
+  const color = agentStatusColor(status);
   return (
-    <span className="relative flex h-2.5 w-2.5">
-      <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-50 ${className}`} />
-      <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${className}`} />
-    </span>
+    <span
+      className="pulse-dot inline-block rounded-full flex-shrink-0"
+      style={{ width: 8, height: 8, background: color }}
+    />
   );
 }
 
-// ─── 主组件 ───────────────────────────────────────────────────
-export default function BossWarroom() {
-  const [, navigate] = useLocation();
-  const [warroom, setWarroom] = useState<WaRoomData | null>(null);
-  const [approvals, setApprovals] = useState<PendingApproval[]>([]);
-  const [commands, setCommands] = useState<BossCommand[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [commandInput, setCommandInput] = useState("");
-  const [sending, setSending] = useState(false);
-  const [cmdFeedback, setCmdFeedback] = useState<{ type: "ok" | "err"; msg: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<"signals" | "agent" | "report">("signals");
-  const [approvalLoading, setApprovalLoading] = useState<string | null>(null);
-  const [rejectModal, setRejectModal] = useState<{ id: string; buyerName: string } | null>(null);
-  const [rejectReason, setRejectReason] = useState("");
-
-  const load = useCallback(async () => {
-    try {
-      const [wr, ap, cmds] = await Promise.all([
-        bossApi.getWarroom(),
-        bossApi.getPendingApprovals("pending"),
-        bossApi.getCommands(5),
-      ]);
-      setWarroom(wr);
-      setApprovals(ap.approvals ?? []);
-      setCommands(cmds.commands ?? []);
-    } catch (e) {
-      console.error("Warroom load failed", e);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-    const timer = setInterval(load, 30_000);
-    return () => clearInterval(timer);
-  }, [load]);
-
-  const sendCommand = async () => {
-    if (!commandInput.trim() || sending) return;
-    setSending(true);
-    setCmdFeedback(null);
-    try {
-      const res = await bossApi.sendCommand(commandInput.trim());
-      setCmdFeedback({ type: "ok", msg: `✅ 指令已下达 — ${res.message}` });
-      setCommandInput("");
-      setTimeout(() => { load(); setCmdFeedback(null); }, 3000);
-    } catch (e: any) {
-      setCmdFeedback({ type: "err", msg: `❌ 下达失败：${e.message}` });
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const handleApprove = async (id: string) => {
-    setApprovalLoading(id);
-    try {
-      await bossApi.approve(id);
-      setApprovals(prev => prev.filter(a => a.id !== id));
-      setWarroom(prev => prev ? {
-        ...prev,
-        signals: {
-          ...prev.signals,
-          pendingApprovals: Math.max(0, prev.signals.pendingApprovals - 1),
-        },
-      } : prev);
-    } catch (e: any) {
-      alert(`批准失败：${e.message}`);
-    } finally {
-      setApprovalLoading(null);
-    }
-  };
-
-  const handleReject = async () => {
-    if (!rejectModal) return;
-    setApprovalLoading(rejectModal.id);
-    try {
-      await bossApi.reject(rejectModal.id, rejectReason || "老板拒绝");
-      setApprovals(prev => prev.filter(a => a.id !== rejectModal.id));
-      setRejectModal(null);
-      setRejectReason("");
-    } catch (e: any) {
-      alert(`拒绝失败：${e.message}`);
-    } finally {
-      setApprovalLoading(null);
-    }
-  };
-
-  // ── Loading 状态 ─────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-gray-400 text-sm">加载战报数据...</p>
+/** 环形进度条 */
+function RingProgress({
+  value, max, size = 120, strokeWidth = 8, color = '#C9A84C', label, sublabel,
+}: {
+  value: number; max: number; size?: number; strokeWidth?: number;
+  color?: string; label: string; sublabel?: string;
+}) {
+  const r = (size - strokeWidth) / 2;
+  const circ = 2 * Math.PI * r;
+  const pct = max > 0 ? Math.min(value / max, 1) : 0;
+  const offset = circ * (1 - pct);
+  return (
+    <div className="flex flex-col items-center gap-1" style={{ width: size }}>
+      <div className="relative" style={{ width: size, height: size }}>
+        <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+          <circle
+            cx={size / 2} cy={size / 2} r={r}
+            fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={strokeWidth}
+          />
+          <circle
+            cx={size / 2} cy={size / 2} r={r}
+            fill="none" stroke={color} strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            strokeDasharray={circ}
+            strokeDashoffset={offset}
+            style={{ transition: 'stroke-dashoffset 1s cubic-bezier(0.16,1,0.3,1)' }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-2xl font-black tabular-nums" style={{ color }}>{value}</span>
+          {sublabel && <span className="text-[#6B6B80] text-xs mt-0.5">{sublabel}</span>}
         </div>
       </div>
-    );
-  }
+      <span className="text-[#A0A0B0] text-xs font-medium">{label}</span>
+    </div>
+  );
+}
 
-  // ── 数据解构（带兜底） ────────────────────────────────────────
-  const signals = warroom?.signals ?? {
-    newInquiries: 0, unread: 0, pendingApprovals: 0, newQuotations: 0,
-    latestInquiries: [], hasUrgent: false,
-  };
-  const agent = warroom?.agent ?? {
-    instance: null, accounts: [], todayTasks: 0, completedTasks: 0, pendingCommands: 0,
-  };
-  const weekReport = warroom?.weekReport ?? {
-    lastWeek: { inquiries: 0, replied: 0, contracted: 0, contractedValue: 0, highValue: 0, replyRate: 0 },
-    thisWeek: { inquiries: 0, replied: 0, contracted: 0, contractedValue: 0, highValue: 0, replyRate: 0 },
-    growth: { inquiries: 0, replied: 0, contracted: 0, contractedValue: 0, highValue: 0 },
-  };
-
-  const instanceStatus = agent.instance?.status ?? "offline";
-  const statusInfo = STATUS_INFO[instanceStatus] ?? STATUS_INFO.offline;
-
-  // ── 渲染 ─────────────────────────────────────────────────────
+/** 横向对比条 */
+function CompareBar({
+  label, thisWeek, lastWeek, color = '#C9A84C',
+}: {
+  label: string; thisWeek: number; lastWeek: number; color?: string;
+}) {
+  const maxVal = Math.max(thisWeek, lastWeek, 1);
+  const thisPct = (thisWeek / maxVal) * 100;
+  const lastPct = (lastWeek / maxVal) * 100;
+  const up = thisWeek >= lastWeek;
   return (
-    <div className="min-h-screen bg-gray-50 pb-8">
-
-      {/* ── 顶部 Header ─────────────────────────────────────── */}
-      <div className="bg-white border-b border-gray-100 px-4 pt-safe pt-4 pb-3 sticky top-0 z-20 shadow-sm">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigate("/")}
-              className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 transition"
-            >
-              ←
-            </button>
-            <div>
-              <h1 className="text-base font-bold text-gray-900 leading-tight">指挥台</h1>
-              <p className="text-xs text-gray-400">
-                {new Date().toLocaleDateString("zh-CN", {
-                  month: "long", day: "numeric", weekday: "short",
-                })}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {signals.hasUrgent && (
-              <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full font-medium animate-pulse">
-                高价值线索 ⚡
-              </span>
-            )}
-            <div className="flex items-center gap-1.5 bg-gray-50 px-2.5 py-1 rounded-full border border-gray-100">
-              {instanceStatus === "online"
-                ? <PulsingDot className="bg-green-400" />
-                : <span className={`w-2 h-2 rounded-full ${statusInfo.dot}`} />
-              }
-              <span className="text-xs text-gray-500">{statusInfo.label}</span>
-            </div>
+    <div className="mb-4">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[#A0A0B0] text-xs font-medium">{label}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[#6B6B80] text-xs">{lastWeek}</span>
+          <span className={`text-xs font-bold ${up ? 'text-[#34D399]' : 'text-[#F87171]'}`}>
+            {up ? '▲' : '▼'} {thisWeek}
+          </span>
+        </div>
+      </div>
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-2">
+          <span className="text-[#6B6B80] text-xs w-8 text-right">本周</span>
+          <div className="flex-1 h-2 rounded-full" style={{ background: 'rgba(255,255,255,0.07)' }}>
+            <div
+              className="h-2 rounded-full"
+              style={{
+                width: `${thisPct}%`,
+                background: color,
+                transition: 'width 1s cubic-bezier(0.16,1,0.3,1)',
+                boxShadow: `0 0 8px ${color}60`,
+              }}
+            />
           </div>
         </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[#6B6B80] text-xs w-8 text-right">上周</span>
+          <div className="flex-1 h-2 rounded-full" style={{ background: 'rgba(255,255,255,0.07)' }}>
+            <div
+              className="h-2 rounded-full"
+              style={{
+                width: `${lastPct}%`,
+                background: 'rgba(255,255,255,0.20)',
+                transition: 'width 1s cubic-bezier(0.16,1,0.3,1)',
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-        {/* 快速信号栏 */}
-        <div className="grid grid-cols-4 gap-0 bg-gray-50 rounded-2xl p-2">
+// ─── Screen 0: Hero War Report ────────────────────────────────────────────────
+function HeroScreen({
+  data, approvals, onApprove, onReject, onSwipe,
+}: {
+  data: any; approvals: any[]; onApprove: (id: string) => void;
+  onReject: (id: string) => void; onSwipe: () => void;
+}) {
+  const now = new Date();
+  const hour = now.getHours();
+  const greeting = hour < 6 ? '凌晨好' : hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上好';
+  const dateStr = now.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' });
+  const signals = data?.signals ?? null;
+  const agent = data?.agent ?? null;
+  const agentStatus = agent?.instance?.status ?? 'offline';
+  const weekReport = data?.weekReport ?? null;
+
+  const todayInq = signals?.newInquiries ?? 0;
+  const lastWeekInq = weekReport?.lastWeek?.inquiries ?? 0;
+  const dailyTarget = lastWeekInq > 0 ? Math.ceil(lastWeekInq / 7) : 5;
+
+  return (
+    <div className="relative flex flex-col h-full overflow-hidden" style={{
+      background: 'linear-gradient(180deg, #0A0A0F 0%, #0D0D18 40%, #0A0A12 100%)',
+    }}>
+      {/* Background glow orbs */}
+      <div className="absolute pointer-events-none" style={{
+        top: -100, left: '50%', transform: 'translateX(-50%)',
+        width: 400, height: 400,
+        background: 'radial-gradient(circle, rgba(201,168,76,0.15) 0%, transparent 65%)',
+        filter: 'blur(60px)',
+      }} />
+      <div className="absolute pointer-events-none" style={{
+        bottom: 120, right: -80,
+        width: 280, height: 280,
+        background: 'radial-gradient(circle, rgba(59,130,246,0.10) 0%, transparent 65%)',
+        filter: 'blur(50px)',
+      }} />
+      <div className="absolute pointer-events-none" style={{
+        top: '40%', left: -60,
+        width: 200, height: 200,
+        background: 'radial-gradient(circle, rgba(168,85,247,0.08) 0%, transparent 65%)',
+        filter: 'blur(40px)',
+      }} />
+
+      {/* Status bar */}
+      <div className="flex items-center justify-between px-5 pt-12 pb-3 relative z-10">
+        <div>
+          <p className="text-[#6B6B80] text-xs font-medium tracking-wide">{dateStr}</p>
+          <p className="text-[#F1F1F5] text-lg font-bold mt-0.5">{greeting}，老板</p>
+        </div>
+        <div className="flex items-center gap-2 glass-card px-3 py-2 glow-pulse">
+          <StatusDot status={agentStatus} />
+          <div className="flex flex-col items-end">
+            <span className="text-[#A0A0B0] text-xs leading-none">数字员工</span>
+            <span className="text-[#F1F1F5] text-xs font-semibold mt-0.5">{agentStatusLabel(agentStatus)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Hero section: Ring progress + key numbers */}
+      <div className="flex items-center justify-around px-6 py-4 relative z-10">
+        <RingProgress
+          value={todayInq}
+          max={Math.max(dailyTarget, todayInq)}
+          size={110}
+          strokeWidth={7}
+          color="#C9A84C"
+          label="今日询盘"
+          sublabel="条"
+        />
+        <div className="flex flex-col items-center gap-3">
+          <div className="flex flex-col items-center">
+            <span className="text-[#6B6B80] text-xs mb-0.5">未回复</span>
+            <span className="text-3xl font-black tabular-nums" style={{
+              color: (signals?.unread ?? 0) > 0 ? '#F87171' : '#6B6B80',
+            }}>
+              {signals ? signals.unread ?? 0 : '—'}
+            </span>
+            {(signals?.unread ?? 0) > 0 && (
+              <span className="text-[#F87171] text-xs font-semibold">需处理</span>
+            )}
+          </div>
+          <div className="w-px h-8" style={{ background: 'rgba(255,255,255,0.08)' }} />
+          <div className="flex flex-col items-center">
+            <span className="text-[#6B6B80] text-xs mb-0.5">待审批</span>
+            <span className="text-3xl font-black tabular-nums" style={{
+              color: approvals.length > 0 ? '#F5D07A' : '#6B6B80',
+            }}>
+              {approvals.length}
+            </span>
+            {approvals.length > 0 && (
+              <span className="text-[#F5D07A] text-xs font-semibold">待操作</span>
+            )}
+          </div>
+        </div>
+        <RingProgress
+          value={agent?.completedTasks ?? 0}
+          max={Math.max(agent?.completedTasks ?? 0, 10)}
+          size={110}
+          strokeWidth={7}
+          color="#3B82F6"
+          label="今日任务"
+          sublabel="完成"
+        />
+      </div>
+
+      {/* Divider */}
+      <div className="mx-5 relative z-10" style={{
+        height: 1,
+        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent)',
+      }} />
+
+      {/* Signal summary row */}
+      <div className="px-4 py-3 relative z-10">
+        <div className="grid grid-cols-3 gap-2">
           {[
-            { label: "新询盘", value: signals.newInquiries, color: "#3b82f6" },
-            { label: "未回复", value: signals.unread, color: signals.unread > 0 ? "#ef4444" : "#9ca3af" },
-            { label: "待审批", value: signals.pendingApprovals, color: signals.pendingApprovals > 0 ? "#f59e0b" : "#9ca3af" },
-            { label: "新报价", value: signals.newQuotations, color: "#10b981" },
-          ].map(item => (
-            <div key={item.label} className="text-center py-1">
-              <div className="text-2xl font-bold tabular-nums" style={{ color: item.color }}>
-                {item.value}
-              </div>
-              <div className="text-xs text-gray-400 mt-0.5">{item.label}</div>
+            {
+              label: '新报价', value: signals?.newQuotations ?? 0,
+              color: '#60A5FA', icon: '📋',
+            },
+            {
+              label: 'AI 操作', value: agent?.completedTasks ?? 0,
+              color: '#A78BFA', icon: '🤖',
+            },
+            {
+              label: '本周询盘', value: weekReport?.thisWeek?.inquiries ?? 0,
+              color: '#34D399', icon: '📈',
+            },
+          ].map((item, i) => (
+            <div
+              key={item.label}
+              className="metric-card flex flex-col items-center gap-1 slide-up"
+              style={{ animationDelay: `${i * 0.08}s`, opacity: 0 }}
+            >
+              <span className="text-base">{item.icon}</span>
+              <span className="text-xl font-bold tabular-nums" style={{ color: item.color }}>
+                {signals ? item.value : '—'}
+              </span>
+              <span className="text-[#6B6B80] text-xs">{item.label}</span>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="px-4 space-y-4 mt-4">
-
-        {/* ── 老板指令输入框 ───────────────────────────────── */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-7 h-7 bg-blue-500 rounded-lg flex items-center justify-center text-white text-sm">
-              🎯
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-gray-800 leading-tight">下达指令</p>
-              <p className="text-xs text-gray-400">AI 自动解析并分配给数字员工执行</p>
-            </div>
+      {/* Approval cards */}
+      {approvals.length > 0 && (
+        <div className="px-4 relative z-10 flex-1 overflow-hidden">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[#A0A0B0] text-sm font-semibold">待审批回复</span>
+            <span className="badge-sleeping">{approvals.length} 条</span>
           </div>
-
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={commandInput}
-              onChange={e => setCommandInput(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && sendCommand()}
-              placeholder="例：今天重点跑欧洲市场..."
-              className="flex-1 text-sm border border-gray-200 rounded-xl px-3 py-2.5 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition bg-gray-50"
-            />
-            <button
-              onClick={sendCommand}
-              disabled={sending || !commandInput.trim()}
-              className="bg-blue-500 hover:bg-blue-600 active:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition whitespace-nowrap shadow-sm"
-            >
-              {sending ? "⏳" : "下达"}
-            </button>
-          </div>
-
-          {cmdFeedback && (
-            <div className={`mt-2 text-xs px-3 py-2 rounded-lg ${
-              cmdFeedback.type === "ok"
-                ? "bg-green-50 text-green-600"
-                : "bg-red-50 text-red-500"
-            }`}>
-              {cmdFeedback.msg}
-            </div>
-          )}
-
-          {/* 快捷指令 */}
-          <div className="flex flex-wrap gap-1.5 mt-3">
-            {QUICK_CMDS.map(cmd => (
-              <button
-                key={cmd}
-                onClick={() => setCommandInput(cmd)}
-                className="text-xs bg-gray-100 hover:bg-blue-50 hover:text-blue-600 text-gray-500 px-2.5 py-1 rounded-full transition"
-              >
-                {cmd}
-              </button>
-            ))}
-          </div>
-
-          {/* 最近指令 */}
-          {commands.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-gray-50 space-y-2">
-              <p className="text-xs text-gray-400 font-medium">最近指令</p>
-              {commands.slice(0, 3).map(cmd => (
-                <div key={cmd.id} className="flex items-center gap-2 text-xs">
-                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                    cmd.status === "dispatched" ? "bg-green-400" :
-                    cmd.status === "failed" ? "bg-red-400" : "bg-amber-400"
-                  }`} />
-                  <span className="text-gray-600 flex-1 truncate">{cmd.raw_input}</span>
-                  <span className="text-gray-300 flex-shrink-0 text-right">
-                    {cmd.structured?.humanReadable ??
-                      (cmd.status === "dispatched" ? "已分配" :
-                       cmd.status === "failed" ? "失败" : "处理中")}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* ── 待审批回复草稿 ───────────────────────────────── */}
-        {approvals.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-sm border border-amber-100 overflow-hidden">
-            <div className="flex items-center gap-2 px-4 pt-4 pb-2">
-              <div className="w-7 h-7 bg-amber-500 rounded-lg flex items-center justify-center text-white text-sm">
-                ✍️
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-gray-800 leading-tight">待审批回复</p>
-                <p className="text-xs text-gray-400">批准后 OpenClaw 将自动发送</p>
-              </div>
-              <span className="bg-amber-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                {approvals.length}
-              </span>
-            </div>
-
-            <div className="divide-y divide-gray-50">
-              {approvals.map(ap => (
-                <div key={ap.id} className="px-4 py-3">
-                  {/* 买家信息 */}
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-xs font-semibold text-gray-800">
-                          {ap.buyer_name ?? "未知买家"}
-                        </span>
-                        {ap.buyer_company && (
-                          <span className="text-xs text-gray-400">· {ap.buyer_company}</span>
-                        )}
-                        {ap.platform && (
-                          <span className="text-xs" style={{ color: PLATFORM_COLOR[ap.platform] ?? "#6b7280" }}>
-                            {PLATFORM_ICON[ap.platform] ?? "🌐"} {ap.platform}
-                          </span>
-                        )}
-                      </div>
-                      {ap.product_name && (
-                        <p className="text-xs text-gray-400 mt-0.5 truncate">{ap.product_name}</p>
-                      )}
+          <div className="scroll-area" style={{ maxHeight: 200 }}>
+            <div className="flex flex-col gap-2.5">
+              {approvals.map((a: any, i: number) => (
+                <div
+                  key={a.id}
+                  className="glass-card-elevated p-3.5 slide-up"
+                  style={{ animationDelay: `${i * 0.08}s`, opacity: 0 }}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <p className="text-[#F1F1F5] text-sm font-semibold">{a.buyerName || a.customerName || '客户'}</p>
+                      <p className="text-[#6B6B80] text-xs mt-0.5">询盘 #{String(a.inquiryId || a.id).slice(-6)}</p>
                     </div>
-                    {(ap.confidence_score ?? 0) >= 80 && (
-                      <span className="text-xs bg-green-50 text-green-600 px-1.5 py-0.5 rounded-full flex-shrink-0 font-medium">
-                        高价值
-                      </span>
-                    )}
+                    <span className="text-[#6B6B80] text-xs">
+                      {new Date(a.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
                   </div>
-
-                  {/* 回复内容预览 */}
-                  <div className="bg-gray-50 rounded-xl px-3 py-2.5 mb-3 border border-gray-100">
-                    <p className="text-xs text-gray-700 line-clamp-3 leading-relaxed">
-                      {ap.content_en}
-                    </p>
-                    {ap.content_zh && (
-                      <p className="text-xs text-gray-400 mt-1.5 line-clamp-2 leading-relaxed border-t border-gray-100 pt-1.5">
-                        {ap.content_zh}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* 操作按钮 */}
+                  <p className="text-[#A0A0B0] text-xs leading-relaxed line-clamp-2 mb-3">
+                    {a.draftContent || a.draft || '（草稿内容）'}
+                  </p>
                   <div className="flex gap-2">
-                    <button
-                      onClick={() => handleApprove(ap.id)}
-                      disabled={approvalLoading === ap.id}
-                      className="flex-1 bg-green-500 hover:bg-green-600 active:bg-green-700 disabled:bg-gray-200 disabled:text-gray-400 text-white text-sm font-semibold py-2.5 rounded-xl transition shadow-sm"
-                    >
-                      {approvalLoading === ap.id ? "处理中..." : "✓ 批准发送"}
+                    <button onClick={() => onApprove(a.id)} className="btn-gold flex-1 py-2 text-xs font-bold">
+                      ✓ 批准发送
                     </button>
-                    <button
-                      onClick={() => setRejectModal({ id: ap.id, buyerName: ap.buyer_name ?? "该买家" })}
-                      disabled={approvalLoading === ap.id}
-                      className="flex-1 bg-gray-100 hover:bg-red-50 hover:text-red-500 active:bg-red-100 text-gray-500 text-sm font-semibold py-2.5 rounded-xl transition"
-                    >
+                    <button onClick={() => onReject(a.id)} className="btn-danger flex-1 py-2 text-xs font-semibold">
                       ✗ 拒绝
                     </button>
                   </div>
@@ -396,407 +337,532 @@ export default function BossWarroom() {
               ))}
             </div>
           </div>
-        )}
-
-        {/* ── 三模块 Tab ───────────────────────────────────── */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          {/* Tab 导航 */}
-          <div className="flex border-b border-gray-100">
-            {([
-              { key: "signals", label: "📥 今日信号" },
-              { key: "agent",   label: "🤖 数字员工" },
-              { key: "report",  label: "📊 经营周报" },
-            ] as const).map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`flex-1 text-xs font-semibold py-3 transition ${
-                  activeTab === tab.key
-                    ? "text-blue-600 border-b-2 border-blue-500 bg-blue-50/50"
-                    : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {/* ── Tab: 今日信号 ─────────────────────────────── */}
-          {activeTab === "signals" && (
-            <div className="p-4 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { label: "今日新询盘", value: signals.newInquiries, accent: "#3b82f6", sub: "条" },
-                  { label: "未回复询盘", value: signals.unread, accent: signals.unread > 0 ? "#ef4444" : "#10b981", sub: "条" },
-                  { label: "待审批草稿", value: signals.pendingApprovals, accent: signals.pendingApprovals > 0 ? "#f59e0b" : "#10b981", sub: "条" },
-                  { label: "今日新报价", value: signals.newQuotations, accent: "#8b5cf6", sub: "条" },
-                ].map(item => (
-                  <div key={item.label} className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                    <p className="text-xs text-gray-400 mb-1">{item.label}</p>
-                    <p className="text-2xl font-bold tabular-nums" style={{ color: item.accent }}>
-                      {item.value}
-                      <span className="text-sm font-normal text-gray-400 ml-0.5">{item.sub}</span>
-                    </p>
-                  </div>
-                ))}
-              </div>
-
-              {/* 最新待处理询盘 */}
-              {(signals.latestInquiries ?? []).length > 0 && (
-                <div>
-                  <p className="text-xs text-gray-400 font-semibold mb-2">最新待处理询盘</p>
-                  <div className="space-y-2">
-                    {(signals.latestInquiries as Inquiry[]).map((inq) => (
-                      <div key={inq.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-gray-700 truncate">
-                            {inq.buyerName ?? (inq as any).buyer_name ?? "未知"}{" "}
-                            <span className="font-normal text-gray-400">
-                              · {inq.buyerCompany ?? (inq as any).buyer_company ?? ""}
-                            </span>
-                          </p>
-                          <p className="text-xs text-gray-400 truncate mt-0.5">
-                            {inq.productName ?? (inq as any).product_name}{" "}
-                            · {inq.buyerCountry ?? (inq as any).buyer_country}
-                          </p>
-                        </div>
-                        <div className="text-right flex-shrink-0">
-                          <div className="text-xs font-bold text-blue-500">
-                            {inq.confidenceScore ?? (inq as any).confidence_score}分
-                          </div>
-                          {((inq.estimatedValue ?? (inq as any).estimated_value) ?? 0) > 0 && (
-                            <div className="text-xs text-gray-400">
-                              ${(((inq.estimatedValue ?? (inq as any).estimated_value) ?? 0) / 1000).toFixed(0)}K
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {signals.newInquiries === 0 && signals.unread === 0 && (
-                <div className="text-center py-8 text-gray-300">
-                  <div className="text-4xl mb-2">✅</div>
-                  <p className="text-sm font-medium">今日无待处理事项</p>
-                  <p className="text-xs mt-1">数字员工正在为您持续获客</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ── Tab: 数字员工 ─────────────────────────────── */}
-          {activeTab === "agent" && (
-            <div className="p-4 space-y-4">
-              {agent.instance ? (
-                <>
-                  {/* 实例状态卡 */}
-                  <div className="border border-gray-100 rounded-xl p-4 bg-gray-50/50">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        {instanceStatus === "online"
-                          ? <PulsingDot className="bg-green-400" />
-                          : <span className={`w-2.5 h-2.5 rounded-full ${statusInfo.dot}`} />
-                        }
-                        <span className="text-sm font-bold text-gray-800">{agent.instance.name}</span>
-                      </div>
-                      <span
-                        className="text-xs font-semibold px-2.5 py-1 rounded-full"
-                        style={{ background: `${statusInfo.color}18`, color: statusInfo.color }}
-                      >
-                        {statusInfo.label}
-                      </span>
-                    </div>
-
-                    {/* 进度条 */}
-                    <div className="mb-4">
-                      <div className="flex justify-between text-xs text-gray-400 mb-1.5">
-                        <span>今日操作量</span>
-                        <span className="font-medium text-gray-600">
-                          {agent.instance.opsToday} / {agent.instance.opsLimit}
-                        </span>
-                      </div>
-                      <div className="h-2.5 bg-gray-200 rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{
-                            width: `${Math.min(agent.instance.utilizationRate, 100)}%`,
-                            background:
-                              agent.instance.utilizationRate > 80 ? "#ef4444" :
-                              agent.instance.utilizationRate > 60 ? "#f59e0b" : "#10b981",
-                          }}
-                        />
-                      </div>
-                      <div className="text-right text-xs text-gray-400 mt-1">
-                        已使用 {agent.instance.utilizationRate}%
-                      </div>
-                    </div>
-
-                    {/* 任务统计 */}
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                      {[
-                        { label: "今日任务", value: agent.todayTasks, color: "text-gray-800" },
-                        { label: "已完成", value: agent.completedTasks, color: "text-green-500" },
-                        { label: "待执行", value: agent.pendingCommands, color: "text-amber-500" },
-                      ].map(s => (
-                        <div key={s.label} className="bg-white rounded-lg py-2 border border-gray-100">
-                          <div className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</div>
-                          <div className="text-xs text-gray-400 mt-0.5">{s.label}</div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* 异常提示 */}
-                    {agent.instance.consecutiveFailures > 0 && (
-                      <div className="mt-3 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
-                        <p className="text-xs text-amber-600 font-medium">
-                          ⚠️ 连续失败 {agent.instance.consecutiveFailures} 次
-                          {agent.instance.sleepUntil && (
-                            <span className="font-normal">
-                              {" · "}休眠至{" "}
-                              {new Date(agent.instance.sleepUntil).toLocaleTimeString("zh-CN", {
-                                hour: "2-digit", minute: "2-digit",
-                              })}
-                            </span>
-                          )}
-                        </p>
-                      </div>
-                    )}
-
-                    {agent.instance.lastHeartbeat && (
-                      <p className="text-xs text-gray-300 mt-2 text-right">
-                        最后心跳{" "}
-                        {new Date(agent.instance.lastHeartbeat).toLocaleTimeString("zh-CN", {
-                          hour: "2-digit", minute: "2-digit",
-                        })}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* 账号健康状态 */}
-                  {agent.accounts.length > 0 && (
-                    <div>
-                      <p className="text-xs text-gray-400 font-semibold mb-2">账号健康状态</p>
-                      <div className="space-y-2.5">
-                        {agent.accounts.map((acc, i) => (
-                          <div key={i} className="flex items-center gap-3">
-                            <span className="text-base w-6 text-center">
-                              {PLATFORM_ICON[acc.platform] ?? "🌐"}
-                            </span>
-                            <span className="text-xs text-gray-600 flex-1 capitalize font-medium">
-                              {acc.platform}
-                            </span>
-                            <div className="flex items-center gap-2">
-                              <div className="w-20 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                <div
-                                  className="h-full rounded-full transition-all"
-                                  style={{
-                                    width: `${acc.usageRate}%`,
-                                    background: HEALTH_COLOR[acc.healthStatus] ?? "#10b981",
-                                  }}
-                                />
-                              </div>
-                              <span className="text-xs text-gray-400 w-8 text-right tabular-nums">
-                                {acc.usageRate}%
-                              </span>
-                            </div>
-                            <span
-                              className="w-2 h-2 rounded-full flex-shrink-0"
-                              style={{ background: HEALTH_COLOR[acc.healthStatus] ?? "#10b981" }}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="text-center py-10 text-gray-300">
-                  <div className="text-4xl mb-2">🔌</div>
-                  <p className="text-sm font-medium">OpenClaw 未连接</p>
-                  <p className="text-xs mt-1">请检查云电脑上的 OpenClaw 是否已启动</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ── Tab: 经营周报 ─────────────────────────────── */}
-          {activeTab === "report" && (
-            <div className="p-4 space-y-4">
-              {/* 成单金额高亮 */}
-              <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl p-4 text-white">
-                <p className="text-xs opacity-80 mb-1 font-medium">本周成单金额</p>
-                <div className="flex items-end gap-3">
-                  <span className="text-3xl font-bold tabular-nums">
-                    ${weekReport.thisWeek.contractedValue.toLocaleString()}
-                  </span>
-                  <div className="mb-0.5">
-                    <GrowthBadge value={weekReport.growth.contractedValue} />
-                  </div>
-                </div>
-                <p className="text-xs opacity-60 mt-1">
-                  上周 ${weekReport.lastWeek.contractedValue.toLocaleString()}
-                </p>
-              </div>
-
-              {/* 四项核心指标对比 */}
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  {
-                    label: "询盘总量",
-                    thisWeek: weekReport.thisWeek.inquiries,
-                    lastWeek: weekReport.lastWeek.inquiries,
-                    growth: weekReport.growth.inquiries,
-                    unit: "条",
-                    accent: "#3b82f6",
-                  },
-                  {
-                    label: "回复率",
-                    thisWeek: weekReport.thisWeek.replyRate,
-                    lastWeek: weekReport.lastWeek.replyRate,
-                    growth: weekReport.growth.replied,
-                    unit: "%",
-                    accent: "#10b981",
-                  },
-                  {
-                    label: "成单数",
-                    thisWeek: weekReport.thisWeek.contracted,
-                    lastWeek: weekReport.lastWeek.contracted,
-                    growth: weekReport.growth.contracted,
-                    unit: "单",
-                    accent: "#8b5cf6",
-                  },
-                  {
-                    label: "高价值线索",
-                    thisWeek: weekReport.thisWeek.highValue,
-                    lastWeek: weekReport.lastWeek.highValue,
-                    growth: weekReport.growth.highValue,
-                    unit: "条",
-                    accent: "#f59e0b",
-                  },
-                ].map(item => (
-                  <div key={item.label} className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                    <p className="text-xs text-gray-400 mb-1.5">{item.label}</p>
-                    <div className="flex items-end gap-1.5">
-                      <span className="text-xl font-bold tabular-nums" style={{ color: item.accent }}>
-                        {item.thisWeek}
-                        <span className="text-sm font-normal text-gray-400 ml-0.5">{item.unit}</span>
-                      </span>
-                      <div className="mb-0.5">
-                        <GrowthBadge value={item.growth} />
-                      </div>
-                    </div>
-                    <p className="text-xs text-gray-300 mt-1">上周 {item.lastWeek}{item.unit}</p>
-                  </div>
-                ))}
-              </div>
-
-              {/* 简化对比条形图 */}
-              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                <p className="text-xs text-gray-400 font-semibold mb-3">本周 vs 上周</p>
-                {[
-                  { label: "询盘", this: weekReport.thisWeek.inquiries, last: weekReport.lastWeek.inquiries },
-                  { label: "回复", this: weekReport.thisWeek.replied, last: weekReport.lastWeek.replied },
-                  { label: "成单", this: weekReport.thisWeek.contracted, last: weekReport.lastWeek.contracted },
-                ].map(row => {
-                  const max = Math.max(row.this, row.last, 1);
-                  return (
-                    <div key={row.label} className="flex items-center gap-2 mb-2.5 last:mb-0">
-                      <span className="text-xs text-gray-400 w-8 flex-shrink-0">{row.label}</span>
-                      <div className="flex-1 space-y-1">
-                        <div className="flex items-center gap-1.5">
-                          <div
-                            className="h-2 bg-blue-400 rounded-full transition-all duration-500"
-                            style={{ width: `${(row.this / max) * 100}%`, minWidth: row.this > 0 ? "6px" : "0" }}
-                          />
-                          <span className="text-xs text-blue-500 font-semibold tabular-nums">{row.this}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <div
-                            className="h-2 bg-gray-200 rounded-full transition-all duration-500"
-                            style={{ width: `${(row.last / max) * 100}%`, minWidth: row.last > 0 ? "6px" : "0" }}
-                          />
-                          <span className="text-xs text-gray-400 tabular-nums">{row.last}</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                <div className="flex gap-4 mt-3 pt-2 border-t border-gray-200">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-2 bg-blue-400 rounded-full" />
-                    <span className="text-xs text-gray-400">本周</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-2 bg-gray-200 rounded-full" />
-                    <span className="text-xs text-gray-400">上周</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
+      )}
 
-        {/* ── 底部快捷导航 ─────────────────────────────────── */}
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { label: "询盘管理", icon: "📋", path: "/inquiries" },
-            { label: "管理后台", icon: "⚙️", path: "/dashboard" },
-            { label: "ROI 分析", icon: "💰", path: "/roi" },
-          ].map(item => (
-            <button
-              key={item.label}
-              onClick={() => navigate(item.path)}
-              className="bg-white rounded-xl py-3 text-center shadow-sm border border-gray-100 hover:bg-gray-50 active:bg-gray-100 transition"
-            >
-              <div className="text-xl mb-1">{item.icon}</div>
-              <div className="text-xs text-gray-500 font-medium">{item.label}</div>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ── 拒绝弹窗 ─────────────────────────────────────── */}
-      {rejectModal && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-end z-50 backdrop-blur-sm"
-          onClick={() => setRejectModal(null)}
-        >
-          <div
-            className="bg-white w-full rounded-t-3xl p-5 shadow-2xl"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-4" />
-            <h3 className="font-bold text-gray-800 mb-1">拒绝回复草稿</h3>
-            <p className="text-xs text-gray-400 mb-4">
-              拒绝发送给「{rejectModal.buyerName}」的回复草稿
-            </p>
-            <textarea
-              value={rejectReason}
-              onChange={e => setRejectReason(e.target.value)}
-              placeholder="拒绝原因（可选，将记录在案）..."
-              rows={3}
-              className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 outline-none focus:border-red-300 focus:ring-2 focus:ring-red-50 resize-none mb-4 bg-gray-50"
-            />
-            <div className="flex gap-3">
-              <button
-                onClick={() => { setRejectModal(null); setRejectReason(""); }}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm font-semibold py-3 rounded-xl transition"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleReject}
-                disabled={approvalLoading === rejectModal.id}
-                className="flex-1 bg-red-500 hover:bg-red-600 disabled:bg-gray-200 text-white text-sm font-semibold py-3 rounded-xl transition shadow-sm"
-              >
-                {approvalLoading === rejectModal.id ? "处理中..." : "确认拒绝"}
-              </button>
-            </div>
+      {/* Empty state when no approvals */}
+      {approvals.length === 0 && signals && (
+        <div className="flex-1 flex flex-col items-center justify-center relative z-10 px-6">
+          <div className="glass-card p-5 text-center w-full" style={{
+            background: 'rgba(52, 211, 153, 0.05)',
+            border: '1px solid rgba(52, 211, 153, 0.15)',
+          }}>
+            <div className="text-3xl mb-2">✅</div>
+            <p className="text-[#34D399] text-sm font-semibold">一切正常</p>
+            <p className="text-[#6B6B80] text-xs mt-1">暂无待审批的回复草稿</p>
           </div>
         </div>
       )}
+
+      {/* Swipe hint */}
+      <div
+        className="flex flex-col items-center pb-24 pt-3 mt-auto relative z-10 cursor-pointer"
+        onClick={onSwipe}
+      >
+        <span className="text-[#6B6B80] text-xs mb-1 tracking-wider">滑动查看指挥台</span>
+        <span className="text-[#C9A84C] text-lg float">→</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Screen 1: Command Center ─────────────────────────────────────────────────
+function CommandScreen({ data, onBack, onNext }: { data: any; onBack: () => void; onNext: () => void }) {
+  const [command, setCommand] = useState('');
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [recent, setRecent] = useState<string[]>([]);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const quickCommands = [
+    { icon: '🌍', text: '今天重点开发欧洲市场' },
+    { icon: '⭐', text: '优先回复高价值询盘' },
+    { icon: '🇺🇸', text: '加大对美国客户的触达频率' },
+    { icon: '🔄', text: '暂停推广，专注跟进老客户' },
+  ];
+
+  const handleSend = async () => {
+    if (!command.trim()) return;
+    setSending(true);
+    try {
+      await bossApi.sendCommand(command.trim());
+      setRecent(prev => [command.trim(), ...prev.slice(0, 2)]);
+      setCommand('');
+      setSent(true);
+      setTimeout(() => setSent(false), 3000);
+    } catch (e) { console.error(e); }
+    finally { setSending(false); }
+  };
+
+  const agent = data?.agent ?? null;
+  const agentStatus = agent?.instance?.status ?? 'offline';
+  const statusColor = agentStatusColor(agentStatus);
+
+  return (
+    <div className="relative flex flex-col h-full overflow-hidden" style={{
+      background: 'linear-gradient(180deg, #080812 0%, #0A0A18 40%, #080810 100%)',
+    }}>
+      {/* Background glow */}
+      <div className="absolute pointer-events-none" style={{
+        top: -80, right: -60, width: 300, height: 300,
+        background: 'radial-gradient(circle, rgba(59,130,246,0.18) 0%, transparent 65%)',
+        filter: 'blur(60px)',
+      }} />
+      <div className="absolute pointer-events-none" style={{
+        bottom: 100, left: -40, width: 200, height: 200,
+        background: 'radial-gradient(circle, rgba(168,85,247,0.12) 0%, transparent 65%)',
+        filter: 'blur(40px)',
+      }} />
+
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 pt-12 pb-4 relative z-10">
+        <button onClick={onBack} className="flex items-center gap-1 text-[#6B6B80] text-sm active:opacity-60 transition-opacity">
+          <span>←</span>
+          <span>战报</span>
+        </button>
+        <h1 className="text-[#F1F1F5] text-base font-bold">数字员工指挥台</h1>
+        <button onClick={onNext} className="flex items-center gap-1 text-[#6B6B80] text-sm active:opacity-60 transition-opacity">
+          <span>周报</span>
+          <span>→</span>
+        </button>
+      </div>
+
+      <div className="flex-1 scroll-area px-4 pb-28 relative z-10">
+        {/* Agent status card */}
+        <div className="glass-card-elevated p-4 mb-4 slide-up" style={{
+          border: `1px solid ${statusColor}30`,
+          boxShadow: `0 0 20px ${statusColor}15`,
+        }}>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <StatusDot status={agentStatus} />
+              <span className="text-[#F1F1F5] text-sm font-bold">
+                {agent?.instance?.name || '数字员工'}
+              </span>
+            </div>
+            <span className={agentStatusBadgeClass(agentStatus)}>{agentStatusLabel(agentStatus)}</span>
+          </div>
+
+          {agent?.instance ? (
+            <>
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div className="metric-card">
+                  <p className="text-[#6B6B80] text-xs mb-1">今日完成任务</p>
+                  <p className="text-3xl font-black tabular-nums" style={{ color: '#60A5FA' }}>
+                    {agent.completedTasks ?? 0}
+                  </p>
+                </div>
+                <div className="metric-card">
+                  <p className="text-[#6B6B80] text-xs mb-1">待执行指令</p>
+                  <p className="text-3xl font-black tabular-nums text-[#F1F1F5]">
+                    {agent.pendingCommands ?? 0}
+                  </p>
+                </div>
+              </div>
+              {agent.instance.current_task && (
+                <div className="flex items-start gap-2 p-3 rounded-xl" style={{
+                  background: 'rgba(59,130,246,0.08)',
+                  border: '1px solid rgba(59,130,246,0.15)',
+                }}>
+                  <span className="text-[#60A5FA] text-xs mt-0.5">▶</span>
+                  <div>
+                    <p className="text-[#6B6B80] text-xs mb-0.5">当前执行</p>
+                    <p className="text-[#60A5FA] text-sm font-medium">{agent.instance.current_task}</p>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <Skeleton h="h-16" />
+              <Skeleton h="h-16" />
+            </div>
+          )}
+        </div>
+
+        {/* Command input */}
+        <div className="glass-card-elevated p-4 mb-4 slide-up delay-100">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[#A0A0B0] text-sm font-semibold">下达指令</p>
+            <span className="text-[#6B6B80] text-xs">AI 自动解析执行</span>
+          </div>
+          <textarea
+            ref={textareaRef}
+            value={command}
+            onChange={e => setCommand(e.target.value)}
+            placeholder="用自然语言告诉数字员工今天的重点…"
+            className="input-dark w-full resize-none text-sm leading-relaxed"
+            rows={3}
+          />
+          <button
+            onClick={handleSend}
+            disabled={!command.trim() || sending}
+            className={`btn-gold w-full py-3.5 text-sm mt-3 font-bold ${(!command.trim() || sending) ? 'opacity-50' : 'glow-pulse'}`}
+            style={{ fontSize: '0.9375rem', letterSpacing: '0.02em' }}
+          >
+            {sending ? '发送中…' : sent ? '✓ 指令已发送' : '⚡ 发送指令'}
+          </button>
+          {sent && (
+            <p className="text-[#34D399] text-xs text-center mt-2 fade-in">
+              数字员工已收到指令，正在解析执行
+            </p>
+          )}
+        </div>
+
+        {/* Recent commands */}
+        {recent.length > 0 && (
+          <div className="mb-4 slide-up delay-150">
+            <p className="text-[#6B6B80] text-xs font-medium mb-2 px-1">最近指令</p>
+            <div className="flex flex-col gap-1.5">
+              {recent.map((r, i) => (
+                <button
+                  key={i}
+                  onClick={() => setCommand(r)}
+                  className="btn-ghost text-left px-3 py-2 text-xs text-[#A0A0B0] flex items-center gap-2"
+                >
+                  <span className="text-[#C9A84C] text-xs">↩</span>
+                  <span className="line-clamp-1">{r}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Quick commands */}
+        <div className="mb-4 slide-up delay-200">
+          <p className="text-[#6B6B80] text-xs font-medium mb-2 px-1">快捷指令</p>
+          <div className="grid grid-cols-1 gap-2">
+            {quickCommands.map((q, i) => (
+              <button
+                key={i}
+                onClick={() => setCommand(q.text)}
+                className="btn-ghost text-left px-4 py-3 text-sm text-[#A0A0B0] flex items-center gap-3"
+              >
+                <span className="text-base flex-shrink-0">{q.icon}</span>
+                <span>{q.text}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Screen 2: Weekly Report ──────────────────────────────────────────────────
+function ReportScreen({ data, onBack }: { data: any; onBack: () => void }) {
+  const weekReport = data?.weekReport ?? null;
+  const roi = data?.roi ?? null;
+  const thisWeek = weekReport?.thisWeek ?? {};
+  const lastWeek = weekReport?.lastWeek ?? {};
+
+  const compareItems = [
+    { label: '询盘数', thisWeek: thisWeek.inquiries ?? 0, lastWeek: lastWeek.inquiries ?? 0, color: '#C9A84C' },
+    { label: '回复数', thisWeek: thisWeek.replies ?? 0, lastWeek: lastWeek.replies ?? 0, color: '#60A5FA' },
+    { label: '新客户', thisWeek: thisWeek.newCustomers ?? 0, lastWeek: lastWeek.newCustomers ?? 0, color: '#34D399' },
+    { label: '报价单', thisWeek: thisWeek.quotations ?? 0, lastWeek: lastWeek.quotations ?? 0, color: '#A78BFA' },
+  ];
+
+  const totalThis = (thisWeek.inquiries ?? 0) + (thisWeek.replies ?? 0);
+  const totalLast = (lastWeek.inquiries ?? 0) + (lastWeek.replies ?? 0);
+  const overallTrend = pctNum(totalThis, totalLast);
+
+  return (
+    <div className="relative flex flex-col h-full overflow-hidden" style={{
+      background: 'linear-gradient(180deg, #080A0F 0%, #0A0D16 40%, #080A10 100%)',
+    }}>
+      {/* Background glow */}
+      <div className="absolute pointer-events-none" style={{
+        top: -60, left: '30%',
+        width: 300, height: 300,
+        background: 'radial-gradient(circle, rgba(52,211,153,0.12) 0%, transparent 65%)',
+        filter: 'blur(60px)',
+      }} />
+      <div className="absolute pointer-events-none" style={{
+        bottom: 80, right: -40,
+        width: 200, height: 200,
+        background: 'radial-gradient(circle, rgba(167,139,250,0.10) 0%, transparent 65%)',
+        filter: 'blur(40px)',
+      }} />
+
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 pt-12 pb-4 relative z-10">
+        <button onClick={onBack} className="flex items-center gap-1 text-[#6B6B80] text-sm active:opacity-60 transition-opacity">
+          <span>←</span>
+          <span>指挥台</span>
+        </button>
+        <h1 className="text-[#F1F1F5] text-base font-bold">经营周报</h1>
+        <div style={{ width: 60 }} />
+      </div>
+
+      <div className="flex-1 scroll-area px-4 pb-28 relative z-10">
+        {/* Overall trend card */}
+        <div className="glass-card-elevated p-4 mb-4 slide-up" style={{
+          background: overallTrend >= 0
+            ? 'linear-gradient(135deg, rgba(52,211,153,0.08) 0%, rgba(16,185,129,0.04) 100%)'
+            : 'linear-gradient(135deg, rgba(239,68,68,0.08) 0%, rgba(220,38,38,0.04) 100%)',
+          border: `1px solid ${overallTrend >= 0 ? 'rgba(52,211,153,0.20)' : 'rgba(239,68,68,0.20)'}`,
+        }}>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[#6B6B80] text-xs mb-1">本周整体趋势</p>
+              <div className="flex items-center gap-2">
+                <span className="text-3xl font-black" style={{
+                  color: overallTrend >= 0 ? '#34D399' : '#F87171',
+                }}>
+                  {overallTrend >= 0 ? '▲' : '▼'} {Math.abs(overallTrend).toFixed(1)}%
+                </span>
+              </div>
+              <p className="text-[#6B6B80] text-xs mt-1">较上周同期</p>
+            </div>
+            <div className="text-5xl">{overallTrend >= 0 ? '📈' : '📉'}</div>
+          </div>
+        </div>
+
+        {/* Legend */}
+        {weekReport && (
+          <div className="flex items-center justify-between px-1 mb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full" style={{ background: '#C9A84C' }} />
+              <span className="text-[#6B6B80] text-xs">本周（彩色）</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full" style={{ background: 'rgba(255,255,255,0.25)' }} />
+              <span className="text-[#6B6B80] text-xs">上周（灰色）</span>
+            </div>
+          </div>
+        )}
+
+        {/* Compare bars */}
+        <div className="glass-card-elevated p-4 mb-4 slide-up delay-100">
+          <p className="text-[#A0A0B0] text-sm font-semibold mb-4">数据对比</p>
+          {weekReport ? (
+            compareItems.map((item) => (
+              <CompareBar
+                key={item.label}
+                label={item.label}
+                thisWeek={item.thisWeek}
+                lastWeek={item.lastWeek}
+                color={item.color}
+              />
+            ))
+          ) : (
+            <div className="flex flex-col gap-3">
+              {[1, 2, 3, 4].map(i => <Skeleton key={i} h="h-10" />)}
+            </div>
+          )}
+        </div>
+
+        {/* ROI summary */}
+        {roi && (
+          <div className="glass-card-elevated p-4 slide-up delay-200">
+            <p className="text-[#A0A0B0] text-sm font-semibold mb-3">AI 效率收益</p>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { label: '节省工时', value: `${roi.hoursSaved}h`, cls: 'text-gold-gradient', icon: '⏱' },
+                { label: '节省成本', value: `¥${roi.costSaved}`, cls: 'text-green-gradient', icon: '💰' },
+                { label: '转化率', value: `${roi.conversionRate}%`, cls: 'text-blue-gradient', icon: '🎯' },
+              ].map(r => (
+                <div key={r.label} className="metric-card text-center">
+                  <span className="text-lg mb-1 block">{r.icon}</span>
+                  <p className={`text-lg font-bold tabular-nums ${r.cls}`}>{r.value}</p>
+                  <p className="text-[#6B6B80] text-xs mt-1">{r.label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* No data state */}
+        {!weekReport && !roi && (
+          <div className="glass-card p-6 text-center slide-up delay-200">
+            <div className="text-4xl mb-3">📊</div>
+            <p className="text-[#A0A0B0] text-sm font-semibold">周报生成中</p>
+            <p className="text-[#6B6B80] text-xs mt-1">数据正在汇总，稍后刷新查看</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Bottom Navigation ────────────────────────────────────────────────────────
+function BottomNav({ screen, onSelect }: { screen: number; onSelect: (i: number) => void }) {
+  const tabs = [
+    { icon: '⚡', label: '战报', color: '#C9A84C' },
+    { icon: '🤖', label: '指挥', color: '#60A5FA' },
+    { icon: '📊', label: '周报', color: '#34D399' },
+  ];
+  return (
+    <div className="bottom-nav">
+      <div className="flex items-center justify-around py-3 px-4">
+        {tabs.map((t, i) => (
+          <button
+            key={i}
+            onClick={() => onSelect(i)}
+            className="flex flex-col items-center gap-1 min-w-[60px] transition-all duration-300"
+            style={{
+              opacity: screen === i ? 1 : 0.4,
+              transform: screen === i ? 'scale(1.08)' : 'scale(1)',
+            }}
+          >
+            <span className="text-xl">{t.icon}</span>
+            <span
+              className="text-xs font-semibold"
+              style={{ color: screen === i ? t.color : '#6B6B80' }}
+            >
+              {t.label}
+            </span>
+            {screen === i && (
+              <div
+                className="rounded-full"
+                style={{ width: 4, height: 4, background: t.color, marginTop: -2 }}
+              />
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Page Indicator ───────────────────────────────────────────────────────────
+function PageIndicator({ screen, total }: { screen: number; total: number }) {
+  return (
+    <div
+      className="absolute flex items-center gap-1.5 z-20"
+      style={{
+        top: 'calc(env(safe-area-inset-top, 0px) + 16px)',
+        left: '50%',
+        transform: 'translateX(-50%)',
+      }}
+    >
+      {Array.from({ length: total }).map((_, i) => (
+        <div
+          key={i}
+          className="rounded-full transition-all duration-300"
+          style={{
+            width: screen === i ? 16 : 4,
+            height: 4,
+            background: screen === i ? '#C9A84C' : 'rgba(255,255,255,0.20)',
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+export default function BossWarroom() {
+  const [, navigate] = useLocation();
+  const [screen, setScreen] = useState(0);
+  const [data, setData] = useState<any>(null);
+  const [approvals, setApprovals] = useState<any[]>([]);
+  const [transitioning, setTransitioning] = useState(false);
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      const [warroomRes, approvalsRes] = await Promise.all([
+        bossApi.getWarroom(),
+        bossApi.getPendingApprovals('pending'),
+      ]);
+      setData(warroomRes);
+      setApprovals(approvalsRes?.approvals ?? []);
+    } catch (e) {
+      console.error('Warroom fetch error', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+    const iv = setInterval(fetchData, 30000);
+    return () => clearInterval(iv);
+  }, [fetchData]);
+
+  const handleApprove = async (id: string) => {
+    try {
+      await bossApi.approve(id);
+      setApprovals(prev => prev.filter((a: any) => a.id !== id));
+    } catch (e) { console.error(e); }
+  };
+
+  const handleReject = async (id: string) => {
+    try {
+      await bossApi.reject(id, '老板拒绝');
+      setApprovals(prev => prev.filter((a: any) => a.id !== id));
+    } catch (e) { console.error(e); }
+  };
+
+  const goToScreen = (s: number) => {
+    if (transitioning || s === screen) return;
+    setTransitioning(true);
+    setScreen(s);
+    setTimeout(() => setTransitioning(false), 500);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const dx = touchStartX.current - e.changedTouches[0].clientX;
+    const dy = touchStartY.current - e.changedTouches[0].clientY;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
+      if (dx > 0 && screen < 2) goToScreen(screen + 1);
+      if (dx < 0 && screen > 0) goToScreen(screen - 1);
+    }
+  };
+
+  // Unused navigate reference kept for future back button
+  void navigate;
+
+  return (
+    <div
+      ref={containerRef}
+      className="phone-frame relative overflow-hidden"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* Page indicator dots */}
+      <PageIndicator screen={screen} total={3} />
+
+      {/* Sliding screen container */}
+      <div
+        className="flex h-full"
+        style={{
+          width: '300%',
+          transform: `translateX(-${screen * (100 / 3)}%)`,
+          transition: 'transform 0.45s cubic-bezier(0.16, 1, 0.3, 1)',
+          willChange: 'transform',
+        }}
+      >
+        <div style={{ width: '33.333%', height: '100dvh', flexShrink: 0 }}>
+          <HeroScreen
+            data={data}
+            approvals={approvals}
+            onApprove={handleApprove}
+            onReject={handleReject}
+            onSwipe={() => goToScreen(1)}
+          />
+        </div>
+        <div style={{ width: '33.333%', height: '100dvh', flexShrink: 0 }}>
+          <CommandScreen
+            data={data}
+            onBack={() => goToScreen(0)}
+            onNext={() => goToScreen(2)}
+          />
+        </div>
+        <div style={{ width: '33.333%', height: '100dvh', flexShrink: 0 }}>
+          <ReportScreen data={data} onBack={() => goToScreen(1)} />
+        </div>
+      </div>
+
+      {/* Bottom navigation */}
+      <BottomNav screen={screen} onSelect={goToScreen} />
     </div>
   );
 }

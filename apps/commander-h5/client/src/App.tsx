@@ -136,6 +136,7 @@ function Router() {
       <Route path="/multi-account">{() => <ProtectedRoute component={MultiAccountManager} />}</Route>
       <Route path="/roi">{() => <ProtectedRoute component={ROICalculator} />}</Route>
       {/* Phase 6 老板指挥台 */}
+      <Route path="/boss-warroom">{() => <ProtectedRoute component={BossWarroom} />}</Route>
       <Route path="/warroom">{() => <ProtectedRoute component={BossWarroom} />}</Route>
       {/* Phase 3 新增路由 */}
       <Route path="/video-feed">{() => <ProtectedRoute component={VideoFeedPlayerWrapper} />}</Route>

@@ -516,7 +516,7 @@ function StatusView({ onGoFeed, onGoInquiries, isEnterprise = false }: { onGoFee
           </div>
           <div className="text-right">
             <p className="text-xs text-slate-500">今日新增</p>
-            <p className="text-2xl font-bold text-orange-400 font-mono">+4</p>
+            <p className="text-2xl font-bold text-orange-400 font-mono">+{stats?.today?.newInquiries ?? pending.length}</p>
             <p className="text-xs text-slate-500">条询盘</p>
           </div>
         </div>
@@ -524,8 +524,8 @@ function StatusView({ onGoFeed, onGoInquiries, isEnterprise = false }: { onGoFee
           {[
             {label:"待处理", value:`${pending.length}`, color:"text-orange-400"},
             {label:"跟进中", value:`${following.length}`, color:"text-blue-400"},
-            {label:"AI操作", value:"28", color:"text-purple-400"},
-            {label:"积分消耗", value:"180", color:"text-teal-400"},
+            {label:"AI操作", value:`${stats?.today?.agentOps ?? instances.reduce((s, i) => s + i.todayOps, 0)}`, color:"text-purple-400"},
+            {label:"积分消耗", value:`${stats?.credits?.usedToday ?? stats?.today?.creditsUsed ?? 0}`, color:"text-teal-400"},
           ].map(s => (
             <div key={s.label} className="flex flex-col items-center py-2.5" style={{background:"oklch(0.16 0.02 250)"}}>
               <p className={`text-base font-bold font-mono ${s.color}`}>{s.value}</p>
@@ -533,12 +533,19 @@ function StatusView({ onGoFeed, onGoInquiries, isEnterprise = false }: { onGoFee
             </div>
           ))}
         </div>
-        <div className="px-4 pb-4">
+        <div className="px-4 pb-4 flex flex-col gap-2">
           <button onClick={onGoInquiries}
             className="w-full py-2.5 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 active:scale-98 transition-transform"
             style={{background:"linear-gradient(135deg, oklch(0.70 0.18 40) 0%, oklch(0.63 0.20 35) 100%)"}}>
             <Inbox className="w-4 h-4" />
             处理 {pending.length} 条待回复询盘
+            <ChevronRight className="w-4 h-4 ml-auto" />
+          </button>
+          <button onClick={() => navigate("/boss-warroom")}
+            className="w-full py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 active:scale-95 transition-all"
+            style={{background:"linear-gradient(135deg, #C9A84C 0%, #F5D07A 50%, #C9A84C 100%)", color:"#0A0A0F", boxShadow:"0 4px 20px rgba(201,168,76,0.35)"}}>
+            <Zap className="w-4 h-4" />
+            <span className="font-bold">进入老板指挥台</span>
             <ChevronRight className="w-4 h-4 ml-auto" />
           </button>
         </div>
