@@ -35,8 +35,10 @@ function mapToWarroomData(raw: WaRoomData): WarroomData {
     return Array.from({ length: 7 }, (_, i) => Math.max(0, Math.round(lastWeek + step * i)));
   };
 
-  const tiktokCount = tiktokAccount ? Math.round(tiktokAccount.usageRate * 2) : 0;
-  const metaCount   = metaAccount   ? Math.round(metaAccount.usageRate * 1.5) : 0;
+  // 平台未读数：直接使用后端字段 unreadCount（如有），否则为 0
+  // TODO: 后端 /api/v1/boss/warroom 需补充 per-platform unreadCount 字段
+  const tiktokCount = (tiktokAccount as any)?.unreadCount ?? 0;
+  const metaCount   = (metaAccount   as any)?.unreadCount ?? 0;
 
   // 总待处理 = 未读询盘 + 待审批 + 新报价
   const totalPending = signals.unread + signals.pendingApprovals + signals.newQuotations;
