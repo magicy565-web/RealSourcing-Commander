@@ -91,11 +91,18 @@ export function FluidAurora({ className }: { className?: string }) {
       }
     }
 
+    let frameCount = 0;
     function draw() {
       t += 0.004;
+      frameCount++;
 
-      // Fade trail — very dark semi-transparent fill
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.045)';
+      // 每 600 帧强制清空一次，防止颜色长时间累积漂移
+      if (frameCount % 600 === 0) {
+        ctx.clearRect(0, 0, W, H);
+      }
+
+      // Fade trail — 提高不透明度防止颜色堆积
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.12)';
       ctx.fillRect(0, 0, W, H);
 
       // Spawn new particles

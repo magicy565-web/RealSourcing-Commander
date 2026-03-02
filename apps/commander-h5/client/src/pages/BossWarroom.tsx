@@ -10,6 +10,12 @@ import { ProactiveCardStack } from '../components/ProactiveCard';
 import { VoiceInput } from '../components/VoiceInput';
 import { QuickActions, buildQuickActions } from '../components/QuickActions';
 import { hapticLight, hapticMedium, hapticSuccess, hapticSelection } from '../lib/haptics';
+import {
+  IconInquiry, IconMessage, IconReply, IconBuyer, IconGlobe, IconUrgent,
+  IconCheckCircle, IconClock, IconStar, IconFilter, IconSearch, IconSort,
+  IconTrending, IconTrendingDown, IconPackage, IconTag, IconChevronRight, IconMore,
+  IconDollar, IconShipping,
+} from '../components/AppIcons';
 import type { PlatformData, ChatMessage } from '../types/warroom';
 
 /* ─────────────────────────────────────────────────────────────────
@@ -838,6 +844,410 @@ function AIChatCard({
 }
 
 // ══════════════════════════════════════════════════════════════════
+// BENTO GRID — 信息流询盘模块
+// ══════════════════════════════════════════════════════════════════
+
+const MOCK_INQUIRIES = [
+  {
+    id: 'inq-001',
+    platform: 'tiktok',
+    platformColor: '#FE2C55',
+    platformLabel: 'TikTok',
+    buyerName: 'SunPower Solutions',
+    country: '🇻🇳',
+    countryName: 'Vietnam',
+    product: '太阳能电池板 300W',
+    amount: '$12,500',
+    qty: '500 pcs',
+    status: 'urgent' as const,
+    time: '2分钟前',
+    isNew: true,
+    trend: 'up' as const,
+  },
+  {
+    id: 'inq-002',
+    platform: 'meta',
+    platformColor: '#1877F2',
+    platformLabel: 'Meta',
+    buyerName: 'Klaus Weber',
+    country: '🇩🇪',
+    countryName: 'Germany',
+    product: 'LED 路灯 150W',
+    amount: '$8,200',
+    qty: '200 pcs',
+    status: 'pending' as const,
+    time: '18分钟前',
+    isNew: true,
+    trend: 'up' as const,
+  },
+  {
+    id: 'inq-003',
+    platform: 'linkedin',
+    platformColor: '#0A66C2',
+    platformLabel: 'LinkedIn',
+    buyerName: 'Ahmed Al-Rashid',
+    country: '🇦🇪',
+    countryName: 'UAE',
+    product: '工业储能系统 100kWh',
+    amount: '$45,000',
+    qty: '2 sets',
+    status: 'replied' as const,
+    time: '1小时前',
+    isNew: false,
+    trend: 'up' as const,
+  },
+  {
+    id: 'inq-004',
+    platform: 'shopify',
+    platformColor: '#96BF48',
+    platformLabel: 'Shopify',
+    buyerName: 'Maria Santos',
+    country: '🇧🇷',
+    countryName: 'Brazil',
+    product: '便携式充电宝 20000mAh',
+    amount: '$3,600',
+    qty: '300 pcs',
+    status: 'pending' as const,
+    time: '3小时前',
+    isNew: false,
+    trend: 'down' as const,
+  },
+  {
+    id: 'inq-005',
+    platform: 'tiktok',
+    platformColor: '#FE2C55',
+    platformLabel: 'TikTok',
+    buyerName: 'Nguyen Van Minh',
+    country: '🇻🇳',
+    countryName: 'Vietnam',
+    product: '蓝牙耳机 TWS',
+    amount: '$5,800',
+    qty: '1000 pcs',
+    status: 'urgent' as const,
+    time: '4小时前',
+    isNew: false,
+    trend: 'up' as const,
+  },
+];
+
+type InquiryStatus = 'urgent' | 'pending' | 'replied';
+
+const STATUS_CFG: Record<InquiryStatus, { label:string; color:string; bg:string; icon:React.ReactNode }> = {
+  urgent:  { label:'紧急', color:'#F87171', bg:'rgba(248,113,113,0.12)', icon: <IconUrgent size={10} color="#F87171" strokeWidth={2}/> },
+  pending: { label:'待回复', color:'#FCD34D', bg:'rgba(252,211,77,0.1)',  icon: <IconClock size={10} color="#FCD34D" strokeWidth={2}/> },
+  replied: { label:'已回复', color:'#10B981', bg:'rgba(16,185,129,0.1)', icon: <IconCheckCircle size={10} color="#10B981" strokeWidth={2}/> },
+};
+
+function InquiryRow({ inq, index }: { inq: typeof MOCK_INQUIRIES[0]; index: number }) {
+  const sc = STATUS_CFG[inq.status];
+  return (
+    <motion.div
+      initial={{ opacity:0, x:-12 }}
+      animate={{ opacity:1, x:0 }}
+      transition={{ ...SPRING_GENTLE, delay: index * 0.06 }}
+      whileTap={{ scale:0.98, backgroundColor:'rgba(255,255,255,0.03)' }}
+      onClick={() => hapticSelection()}
+      style={{
+        display:'flex', alignItems:'center', gap:12,
+        padding:'12px 0',
+        borderBottom: index < MOCK_INQUIRIES.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+        cursor:'pointer', borderRadius:4,
+      }}
+    >
+      {/* Platform badge + country flag */}
+      <div style={{ position:'relative', flexShrink:0 }}>
+        <div style={{
+          width:40, height:40, borderRadius:12,
+          background:`${inq.platformColor}18`,
+          border:`1px solid ${inq.platformColor}30`,
+          display:'flex', alignItems:'center', justifyContent:'center',
+          boxShadow:`0 0 12px ${inq.platformColor}20`,
+        }}>
+          <span style={{ fontSize:18 }}>
+            {inq.platform === 'tiktok' ? '𝕋' :
+             inq.platform === 'meta' ? 'f' :
+             inq.platform === 'linkedin' ? 'in' : '🛍'}
+          </span>
+        </div>
+        {/* Country flag badge */}
+        <div style={{
+          position:'absolute', bottom:-3, right:-3,
+          width:18, height:18, borderRadius:'50%',
+          background:C.bg, border:`1.5px solid rgba(255,255,255,0.08)`,
+          display:'flex', alignItems:'center', justifyContent:'center',
+          fontSize:10, lineHeight:1,
+        }}>
+          {inq.country}
+        </div>
+        {/* New dot */}
+        {inq.isNew && (
+          <motion.div
+            animate={{ scale:[1,1.4,1], opacity:[1,0.6,1] }}
+            transition={{ duration:1.8, repeat:Infinity }}
+            style={{
+              position:'absolute', top:-2, left:-2,
+              width:8, height:8, borderRadius:'50%',
+              background:C.red, border:`1.5px solid ${C.bg}`,
+              boxShadow:`0 0 6px ${C.red}`,
+            }}
+          />
+        )}
+      </div>
+
+      {/* Main info */}
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:3 }}>
+          <span style={{ fontSize:13.5, fontWeight:700, color:C.t1, letterSpacing:-0.3, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:140 }}>
+            {inq.buyerName}
+          </span>
+          {/* Status chip */}
+          <div style={{
+            display:'flex', alignItems:'center', gap:3,
+            padding:'2px 7px', borderRadius:50,
+            background:sc.bg, border:`1px solid ${sc.color}30`,
+            flexShrink:0,
+          }}>
+            {sc.icon}
+            <span style={{ fontSize:10, fontWeight:600, color:sc.color }}>{sc.label}</span>
+          </div>
+        </div>
+        <div style={{ fontSize:11.5, color:C.t3, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginBottom:4 }}>
+          <IconPackage size={10} color={C.t3} style={{ display:'inline', verticalAlign:'middle', marginRight:3 }}/>
+          {inq.product}
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <span style={{ fontSize:11, color:C.t3 }}>{inq.countryName}</span>
+          <span style={{ width:2, height:2, borderRadius:'50%', background:C.t3, flexShrink:0 }}/>
+          <span style={{ fontSize:11, color:C.t3 }}>{inq.time}</span>
+        </div>
+      </div>
+
+      {/* Amount + trend */}
+      <div style={{ flexShrink:0, textAlign:'right' }}>
+        <div style={{ fontSize:14, fontWeight:800, color:C.t1, letterSpacing:-0.5, fontVariantNumeric:'tabular-nums' }}>
+          {inq.amount}
+        </div>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', gap:3, marginTop:2 }}>
+          {inq.trend === 'up'
+            ? <IconTrending size={11} color={C.green}/>
+            : <IconTrendingDown size={11} color={C.red}/>
+          }
+          <span style={{ fontSize:10.5, color:inq.trend==='up'?C.green:C.red, fontWeight:600 }}>
+            {inq.qty}
+          </span>
+        </div>
+        <IconChevronRight size={13} color={C.t3} style={{ marginTop:2 }}/>
+      </div>
+    </motion.div>
+  );
+}
+
+function BentoInquiryFeed() {
+  const [activeFilter, setActiveFilter] = useState<'all'|'urgent'|'pending'|'replied'>('all');
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  const filters: Array<{ id: 'all'|'urgent'|'pending'|'replied'; label:string; count:number }> = [
+    { id:'all',     label:'全部', count: MOCK_INQUIRIES.length },
+    { id:'urgent',  label:'紧急', count: MOCK_INQUIRIES.filter(i=>i.status==='urgent').length },
+    { id:'pending', label:'待回复', count: MOCK_INQUIRIES.filter(i=>i.status==='pending').length },
+    { id:'replied', label:'已回复', count: MOCK_INQUIRIES.filter(i=>i.status==='replied').length },
+  ];
+
+  const filtered = activeFilter === 'all' ? MOCK_INQUIRIES : MOCK_INQUIRIES.filter(i=>i.status===activeFilter);
+
+  // Summary stats for Bento top row
+  const totalAmount = '$75,100';
+  const urgentCount = MOCK_INQUIRIES.filter(i=>i.status==='urgent').length;
+  const newCount    = MOCK_INQUIRIES.filter(i=>i.isNew).length;
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+
+      {/* ── Bento Top Row: 3 mini stat tiles ── */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
+        {/* Tile 1: Total inquiry value */}
+        <motion.div
+          initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }}
+          transition={{ ...SPRING_GENTLE, delay:0 }}
+          style={{
+            borderRadius:18, padding:'14px 12px',
+            background:'linear-gradient(135deg, rgba(124,58,237,0.2) 0%, rgba(67,56,202,0.12) 100%)',
+            border:'1px solid rgba(124,58,237,0.25)',
+            boxShadow:'inset 0 1px 0 rgba(167,139,250,0.12), 0 8px 24px rgba(0,0,0,0.4)',
+            position:'relative', overflow:'hidden',
+          }}
+        >
+          <div aria-hidden style={{ position:'absolute', top:-20, right:-20, width:60, height:60, borderRadius:'50%', background:'radial-gradient(circle, rgba(124,58,237,0.3) 0%, transparent 70%)', filter:'blur(12px)' }}/>
+          <IconDollar size={14} color={C.PL} style={{ marginBottom:6 }}/>
+          <div style={{ fontSize:16, fontWeight:900, color:C.t1, letterSpacing:-0.8, fontVariantNumeric:'tabular-nums' }}>{totalAmount}</div>
+          <div style={{ fontSize:9.5, color:C.t3, marginTop:2, fontWeight:400 }}>潜在成交额</div>
+        </motion.div>
+
+        {/* Tile 2: Urgent count */}
+        <motion.div
+          initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }}
+          transition={{ ...SPRING_GENTLE, delay:0.05 }}
+          style={{
+            borderRadius:18, padding:'14px 12px',
+            background:'linear-gradient(135deg, rgba(248,113,113,0.15) 0%, rgba(239,68,68,0.08) 100%)',
+            border:'1px solid rgba(248,113,113,0.2)',
+            boxShadow:'inset 0 1px 0 rgba(248,113,113,0.1), 0 8px 24px rgba(0,0,0,0.4)',
+            position:'relative', overflow:'hidden',
+          }}
+        >
+          <div aria-hidden style={{ position:'absolute', top:-20, right:-20, width:60, height:60, borderRadius:'50%', background:'radial-gradient(circle, rgba(248,113,113,0.25) 0%, transparent 70%)', filter:'blur(12px)' }}/>
+          <IconUrgent size={14} color={C.red} style={{ marginBottom:6 }}/>
+          <div style={{ fontSize:16, fontWeight:900, color:C.t1, letterSpacing:-0.8, fontVariantNumeric:'tabular-nums' }}>{urgentCount}</div>
+          <div style={{ fontSize:9.5, color:C.t3, marginTop:2, fontWeight:400 }}>紧急询盘</div>
+        </motion.div>
+
+        {/* Tile 3: New today */}
+        <motion.div
+          initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }}
+          transition={{ ...SPRING_GENTLE, delay:0.1 }}
+          style={{
+            borderRadius:18, padding:'14px 12px',
+            background:'linear-gradient(135deg, rgba(16,185,129,0.15) 0%, rgba(5,150,105,0.08) 100%)',
+            border:'1px solid rgba(16,185,129,0.2)',
+            boxShadow:'inset 0 1px 0 rgba(16,185,129,0.1), 0 8px 24px rgba(0,0,0,0.4)',
+            position:'relative', overflow:'hidden',
+          }}
+        >
+          <div aria-hidden style={{ position:'absolute', top:-20, right:-20, width:60, height:60, borderRadius:'50%', background:'radial-gradient(circle, rgba(16,185,129,0.25) 0%, transparent 70%)', filter:'blur(12px)' }}/>
+          <IconMessage size={14} color={C.green} style={{ marginBottom:6 }}/>
+          <div style={{ fontSize:16, fontWeight:900, color:C.t1, letterSpacing:-0.8, fontVariantNumeric:'tabular-nums' }}>{newCount}</div>
+          <div style={{ fontSize:9.5, color:C.t3, marginTop:2, fontWeight:400 }}>今日新增</div>
+        </motion.div>
+      </div>
+
+      {/* ── Bento Main Card: Inquiry Feed ── */}
+      <Card accentColor="rgba(124,58,237,0.6)">
+        {/* Header */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 18px 10px' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <div style={{
+              width:30, height:30, borderRadius:10,
+              background:'linear-gradient(135deg, rgba(124,58,237,0.3), rgba(67,56,202,0.2))',
+              border:'1px solid rgba(124,58,237,0.3)',
+              display:'flex', alignItems:'center', justifyContent:'center',
+            }}>
+              <IconInquiry size={14} color={C.PL}/>
+            </div>
+            <div>
+              <div style={{ fontSize:14, fontWeight:700, color:C.t1, letterSpacing:-0.3 }}>信息流询盘</div>
+              <div style={{ fontSize:10, color:C.t3, marginTop:1 }}>共 {MOCK_INQUIRIES.length} 条 · 实时同步</div>
+            </div>
+          </div>
+          <div style={{ display:'flex', gap:6 }}>
+            <motion.button
+              whileTap={{ scale:0.9 }}
+              transition={SPRING_SNAPPY}
+              onClick={() => { setSearchOpen(v=>!v); hapticLight(); }}
+              style={{
+                width:30, height:30, borderRadius:'50%',
+                background: searchOpen ? 'rgba(124,58,237,0.2)' : C.s1,
+                border:`1px solid ${searchOpen ? 'rgba(124,58,237,0.4)' : C.b1}`,
+                cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center',
+              } as React.CSSProperties}
+            >
+              <IconSearch size={13} color={searchOpen ? C.PL : C.t2}/>
+            </motion.button>
+            <motion.button
+              whileTap={{ scale:0.9 }}
+              transition={SPRING_SNAPPY}
+              onClick={() => hapticLight()}
+              style={{
+                width:30, height:30, borderRadius:'50%',
+                background:C.s1, border:`1px solid ${C.b1}`,
+                cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center',
+              } as React.CSSProperties}
+            >
+              <IconSort size={13} color={C.t2}/>
+            </motion.button>
+          </div>
+        </div>
+
+        {/* Filter chips */}
+        <div style={{ display:'flex', gap:6, padding:'0 18px 12px', overflowX:'auto', scrollbarWidth:'none' }}>
+          {filters.map(f => (
+            <motion.button
+              key={f.id}
+              whileTap={{ scale:0.94 }}
+              transition={SPRING_SNAPPY}
+              onClick={() => { setActiveFilter(f.id); hapticSelection(); }}
+              style={{
+                flexShrink:0, padding:'5px 12px', borderRadius:50, cursor:'pointer',
+                fontFamily:'inherit', fontSize:11.5, fontWeight:600, letterSpacing:-0.2,
+                background: activeFilter===f.id ? 'linear-gradient(135deg, rgba(124,58,237,0.3), rgba(67,56,202,0.2))' : C.s1,
+                border: activeFilter===f.id ? '1px solid rgba(124,58,237,0.45)' : `1px solid ${C.b1}`,
+                color: activeFilter===f.id ? C.PL : C.t2,
+                boxShadow: activeFilter===f.id ? '0 2px 10px rgba(124,58,237,0.2)' : 'none',
+                display:'flex', alignItems:'center', gap:5,
+              } as React.CSSProperties}
+            >
+              {f.label}
+              <span style={{
+                fontSize:10, fontWeight:700,
+                color: activeFilter===f.id ? C.PL : C.t3,
+                background: activeFilter===f.id ? 'rgba(124,58,237,0.2)' : 'rgba(255,255,255,0.06)',
+                padding:'1px 5px', borderRadius:50,
+              }}>{f.count}</span>
+            </motion.button>
+          ))}
+        </div>
+
+        <div style={{ height:1, background:'linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent)', margin:'0 18px' }}/>
+
+        {/* Inquiry list */}
+        <div style={{ padding:'4px 18px 8px' }}>
+          <AnimatePresence mode="popLayout">
+            {filtered.map((inq, i) => (
+              <InquiryRow key={inq.id} inq={inq} index={i}/>
+            ))}
+          </AnimatePresence>
+        </div>
+
+        {/* Footer CTA */}
+        <div style={{ padding:'4px 18px 16px', display:'flex', gap:8 }}>
+          <motion.button
+            whileTap={{ scale:0.96 }}
+            transition={SPRING_SNAPPY}
+            onClick={() => hapticMedium()}
+            style={{
+              flex:1, padding:'10px 0', borderRadius:14, cursor:'pointer',
+              fontFamily:'inherit', fontSize:12.5, fontWeight:700, letterSpacing:-0.3,
+              background:'linear-gradient(135deg, rgba(124,58,237,0.28), rgba(67,56,202,0.2))',
+              border:'1px solid rgba(124,58,237,0.4)',
+              color:C.PL,
+              boxShadow:'0 4px 16px rgba(124,58,237,0.2), inset 0 1px 0 rgba(167,139,250,0.15)',
+              display:'flex', alignItems:'center', justifyContent:'center', gap:6,
+            } as React.CSSProperties}
+          >
+            <IconReply size={13} color={C.PL}/>
+            批量回复
+          </motion.button>
+          <motion.button
+            whileTap={{ scale:0.96 }}
+            transition={SPRING_SNAPPY}
+            onClick={() => hapticLight()}
+            style={{
+              padding:'10px 16px', borderRadius:14, cursor:'pointer',
+              fontFamily:'inherit', fontSize:12.5, fontWeight:600,
+              background:C.s1, border:`1px solid ${C.b1}`,
+              color:C.t2,
+              display:'flex', alignItems:'center', justifyContent:'center', gap:6,
+            } as React.CSSProperties}
+          >
+            <IconFilter size={13} color={C.t2}/>
+            筛选
+          </motion.button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
 // Pull-to-Refresh Indicator
 // ══════════════════════════════════════════════════════════════════
 function PullIndicator({ indicatorRef }: { indicatorRef: React.RefObject<HTMLDivElement | null> }) {
@@ -1028,6 +1438,9 @@ export default function BossWarroom() {
             <LinkedInCard key="linkedin" platform={linkedin} isLoading={isLoading}/>,
             <ShopifyCard  key="shopify"  platform={shopify}  isLoading={isLoading}/>]}
         </SwipeableCards>
+
+        {/* Bento Grid — 信息流询盘 */}
+        <BentoInquiryFeed/>
 
         {/* AI Chat card */}
         <AIChatCard
