@@ -844,8 +844,23 @@ function AIChatCard({
 }
 
 // ══════════════════════════════════════════════════════════════════
-// BENTO GRID — 信息流询盘模块
+// BENTO GRID — 快捷功能入口模块
 // ══════════════════════════════════════════════════════════════════
+
+// ── Bento Grid 快捷入口数据定义 ──────────────────────────────────
+interface BentoItem {
+  id: string;
+  label: string;
+  sublabel?: string;
+  icon: React.ReactNode;
+  badge?: string | number;
+  badgeColor?: string;
+  gradient: string;
+  borderColor: string;
+  glowColor: string;
+  href?: string;
+  span?: 'wide' | 'normal'; // wide = 2 columns
+}
 
 const MOCK_INQUIRIES = [
   {
@@ -1043,6 +1058,134 @@ function InquiryRow({ inq, index }: { inq: typeof MOCK_INQUIRIES[0]; index: numb
 }
 
 function BentoInquiryFeed() {
+  // 快捷功能入口配置
+  const bentoItems: BentoItem[] = [
+    {
+      id: 'inquiry-feed',
+      label: '信息流询盘',
+      sublabel: 'TikTok 火山引擎',
+      span: 'wide',
+      badge: 3,
+      badgeColor: C.red,
+      href: 'https://business.oceanengine.com/site/login',
+      gradient: 'linear-gradient(135deg, rgba(254,44,85,0.22) 0%, rgba(180,20,60,0.12) 100%)',
+      borderColor: 'rgba(254,44,85,0.3)',
+      glowColor: 'rgba(254,44,85,0.25)',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+          {/* TikTok 火山引擎 信息流图标 */}
+          <rect width="32" height="32" rx="8" fill="rgba(254,44,85,0.15)"/>
+          {/* 流动列表线条 */}
+          <rect x="6" y="8" width="14" height="2.5" rx="1.25" fill="#FE2C55" opacity="0.9"/>
+          <rect x="6" y="13" width="20" height="2.5" rx="1.25" fill="rgba(254,44,85,0.6)"/>
+          <rect x="6" y="18" width="17" height="2.5" rx="1.25" fill="rgba(254,44,85,0.4)"/>
+          <rect x="6" y="23" width="12" height="2.5" rx="1.25" fill="rgba(254,44,85,0.25)"/>
+          {/* 小火焰图标 */}
+          <path d="M24 6 C24 6 22 9 24 11 C26 13 28 11 26 8 C25 6.5 24 6 24 6Z" fill="#FE2C55"/>
+          <path d="M24 11 C24 11 23 13 24.5 14 C26 15 27 13.5 26 12 C25.5 11.2 24 11 24 11Z" fill="rgba(254,44,85,0.7)"/>
+        </svg>
+      ),
+    },
+    {
+      id: 'ai-reply',
+      label: 'AI 智能回复',
+      sublabel: '自动处理询盘',
+      badge: '新',
+      badgeColor: C.green,
+      gradient: 'linear-gradient(135deg, rgba(124,58,237,0.22) 0%, rgba(67,56,202,0.12) 100%)',
+      borderColor: 'rgba(124,58,237,0.3)',
+      glowColor: 'rgba(124,58,237,0.25)',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+          <rect width="32" height="32" rx="8" fill="rgba(124,58,237,0.15)"/>
+          <path d="M16 4L19 11H26L20.5 15.5L22.5 22.5L16 18.5L9.5 22.5L11.5 15.5L6 11H13L16 4Z" fill="rgba(167,139,250,0.9)"/>
+          <circle cx="24" cy="8" r="3" fill="#10B981"/>
+          <path d="M23 8h2M24 7v2" stroke="white" strokeWidth="1" strokeLinecap="round"/>
+        </svg>
+      ),
+    },
+    {
+      id: 'data-report',
+      label: '数据报表',
+      sublabel: '7日趋势',
+      gradient: 'linear-gradient(135deg, rgba(96,165,250,0.18) 0%, rgba(59,130,246,0.1) 100%)',
+      borderColor: 'rgba(96,165,250,0.25)',
+      glowColor: 'rgba(96,165,250,0.2)',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+          <rect width="32" height="32" rx="8" fill="rgba(96,165,250,0.12)"/>
+          <rect x="6" y="20" width="4" height="7" rx="1" fill="rgba(96,165,250,0.5)"/>
+          <rect x="12" y="14" width="4" height="13" rx="1" fill="rgba(96,165,250,0.7)"/>
+          <rect x="18" y="17" width="4" height="10" rx="1" fill="rgba(96,165,250,0.55)"/>
+          <rect x="24" y="9" width="4" height="18" rx="1" fill="#60A5FA"/>
+          <polyline points="8,16 14,10 20,13 26,6" stroke="#60A5FA" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+          <circle cx="26" cy="6" r="2" fill="#60A5FA"/>
+        </svg>
+      ),
+    },
+    {
+      id: 'buyer-crm',
+      label: '买家 CRM',
+      sublabel: '客户管理',
+      gradient: 'linear-gradient(135deg, rgba(16,185,129,0.18) 0%, rgba(5,150,105,0.1) 100%)',
+      borderColor: 'rgba(16,185,129,0.25)',
+      glowColor: 'rgba(16,185,129,0.2)',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+          <rect width="32" height="32" rx="8" fill="rgba(16,185,129,0.12)"/>
+          {/* 主用户 */}
+          <circle cx="16" cy="11" r="4.5" fill="rgba(16,185,129,0.7)"/>
+          <path d="M7 26C7 21.6 11 18 16 18C21 18 25 21.6 25 26" stroke="#10B981" strokeWidth="2" strokeLinecap="round" fill="none"/>
+          {/* 小用户 */}
+          <circle cx="25" cy="12" r="3" fill="rgba(16,185,129,0.45)"/>
+          <path d="M22 22C22 19.8 23.3 18 25 18C26.7 18 28 19.8 28 22" stroke="rgba(16,185,129,0.5)" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
+        </svg>
+      ),
+    },
+    {
+      id: 'product-lib',
+      label: '产品库',
+      sublabel: 'SKU 管理',
+      gradient: 'linear-gradient(135deg, rgba(245,158,11,0.18) 0%, rgba(217,119,6,0.1) 100%)',
+      borderColor: 'rgba(245,158,11,0.25)',
+      glowColor: 'rgba(245,158,11,0.2)',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+          <rect width="32" height="32" rx="8" fill="rgba(245,158,11,0.12)"/>
+          <path d="M16 4L28 10V22L16 28L4 22V10L16 4Z" stroke="#F59E0B" strokeWidth="1.8" fill="rgba(245,158,11,0.12)" strokeLinejoin="round"/>
+          <path d="M16 4L16 28" stroke="rgba(245,158,11,0.4)" strokeWidth="1.2" strokeDasharray="2 2"/>
+          <path d="M4 10L28 10" stroke="rgba(245,158,11,0.4)" strokeWidth="1.2" strokeDasharray="2 2"/>
+          <circle cx="16" cy="16" r="3" fill="#F59E0B" opacity="0.8"/>
+        </svg>
+      ),
+    },
+    {
+      id: 'logistics',
+      label: '物流跟踪',
+      sublabel: '订单状态',
+      gradient: 'linear-gradient(135deg, rgba(251,146,60,0.18) 0%, rgba(234,88,12,0.1) 100%)',
+      borderColor: 'rgba(251,146,60,0.25)',
+      glowColor: 'rgba(251,146,60,0.2)',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+          <rect width="32" height="32" rx="8" fill="rgba(251,146,60,0.12)"/>
+          {/* 车身 */}
+          <rect x="3" y="12" width="18" height="11" rx="2" fill="rgba(251,146,60,0.3)" stroke="#FB923C" strokeWidth="1.5"/>
+          {/* 车头 */}
+          <path d="M21 15H27L29 19V23H21V15Z" fill="rgba(251,146,60,0.2)" stroke="#FB923C" strokeWidth="1.5" strokeLinejoin="round"/>
+          {/* 轮子 */}
+          <circle cx="8" cy="24" r="2.5" fill="#FB923C"/>
+          <circle cx="8" cy="24" r="1" fill="rgba(0,0,0,0.3)"/>
+          <circle cx="24" cy="24" r="2.5" fill="#FB923C"/>
+          <circle cx="24" cy="24" r="1" fill="rgba(0,0,0,0.3)"/>
+          {/* 路线 */}
+          <path d="M4 9L10 6L16 9" stroke="rgba(251,146,60,0.5)" strokeWidth="1" strokeLinecap="round"/>
+        </svg>
+      ),
+    },
+  ];
+
+  const urgentCount = 3; // 来自真实数据
   const [activeFilter, setActiveFilter] = useState<'all'|'urgent'|'pending'|'replied'>('all');
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -1053,197 +1196,181 @@ function BentoInquiryFeed() {
     { id:'replied', label:'已回复', count: MOCK_INQUIRIES.filter(i=>i.status==='replied').length },
   ];
 
-  const filtered = activeFilter === 'all' ? MOCK_INQUIRIES : MOCK_INQUIRIES.filter(i=>i.status===activeFilter);
-
-  // Summary stats for Bento top row
-  const totalAmount = '$75,100';
-  const urgentCount = MOCK_INQUIRIES.filter(i=>i.status==='urgent').length;
-  const newCount    = MOCK_INQUIRIES.filter(i=>i.isNew).length;
-
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
 
-      {/* ── Bento Top Row: 3 mini stat tiles ── */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
-        {/* Tile 1: Total inquiry value */}
-        <motion.div
-          initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }}
-          transition={{ ...SPRING_GENTLE, delay:0 }}
-          style={{
-            borderRadius:18, padding:'14px 12px',
-            background:'linear-gradient(135deg, rgba(124,58,237,0.2) 0%, rgba(67,56,202,0.12) 100%)',
-            border:'1px solid rgba(124,58,237,0.25)',
-            boxShadow:'inset 0 1px 0 rgba(167,139,250,0.12), 0 8px 24px rgba(0,0,0,0.4)',
-            position:'relative', overflow:'hidden',
-          }}
-        >
-          <div aria-hidden style={{ position:'absolute', top:-20, right:-20, width:60, height:60, borderRadius:'50%', background:'radial-gradient(circle, rgba(124,58,237,0.3) 0%, transparent 70%)', filter:'blur(12px)' }}/>
-          <IconDollar size={14} color={C.PL} style={{ marginBottom:6 }}/>
-          <div style={{ fontSize:16, fontWeight:900, color:C.t1, letterSpacing:-0.8, fontVariantNumeric:'tabular-nums' }}>{totalAmount}</div>
-          <div style={{ fontSize:9.5, color:C.t3, marginTop:2, fontWeight:400 }}>潜在成交额</div>
-        </motion.div>
-
-        {/* Tile 2: Urgent count */}
-        <motion.div
-          initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }}
-          transition={{ ...SPRING_GENTLE, delay:0.05 }}
-          style={{
-            borderRadius:18, padding:'14px 12px',
-            background:'linear-gradient(135deg, rgba(248,113,113,0.15) 0%, rgba(239,68,68,0.08) 100%)',
-            border:'1px solid rgba(248,113,113,0.2)',
-            boxShadow:'inset 0 1px 0 rgba(248,113,113,0.1), 0 8px 24px rgba(0,0,0,0.4)',
-            position:'relative', overflow:'hidden',
-          }}
-        >
-          <div aria-hidden style={{ position:'absolute', top:-20, right:-20, width:60, height:60, borderRadius:'50%', background:'radial-gradient(circle, rgba(248,113,113,0.25) 0%, transparent 70%)', filter:'blur(12px)' }}/>
-          <IconUrgent size={14} color={C.red} style={{ marginBottom:6 }}/>
-          <div style={{ fontSize:16, fontWeight:900, color:C.t1, letterSpacing:-0.8, fontVariantNumeric:'tabular-nums' }}>{urgentCount}</div>
-          <div style={{ fontSize:9.5, color:C.t3, marginTop:2, fontWeight:400 }}>紧急询盘</div>
-        </motion.div>
-
-        {/* Tile 3: New today */}
-        <motion.div
-          initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }}
-          transition={{ ...SPRING_GENTLE, delay:0.1 }}
-          style={{
-            borderRadius:18, padding:'14px 12px',
-            background:'linear-gradient(135deg, rgba(16,185,129,0.15) 0%, rgba(5,150,105,0.08) 100%)',
-            border:'1px solid rgba(16,185,129,0.2)',
-            boxShadow:'inset 0 1px 0 rgba(16,185,129,0.1), 0 8px 24px rgba(0,0,0,0.4)',
-            position:'relative', overflow:'hidden',
-          }}
-        >
-          <div aria-hidden style={{ position:'absolute', top:-20, right:-20, width:60, height:60, borderRadius:'50%', background:'radial-gradient(circle, rgba(16,185,129,0.25) 0%, transparent 70%)', filter:'blur(12px)' }}/>
-          <IconMessage size={14} color={C.green} style={{ marginBottom:6 }}/>
-          <div style={{ fontSize:16, fontWeight:900, color:C.t1, letterSpacing:-0.8, fontVariantNumeric:'tabular-nums' }}>{newCount}</div>
-          <div style={{ fontSize:9.5, color:C.t3, marginTop:2, fontWeight:400 }}>今日新增</div>
-        </motion.div>
+      {/* ── 头部标题 ── */}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 2px' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <div style={{
+            width:26, height:26, borderRadius:8,
+            background:'linear-gradient(135deg, rgba(124,58,237,0.3), rgba(67,56,202,0.2))',
+            border:'1px solid rgba(124,58,237,0.3)',
+            display:'flex', alignItems:'center', justifyContent:'center',
+          }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+              <rect x="3" y="3" width="7" height="7" rx="1.5" fill={C.PL} opacity="0.9"/>
+              <rect x="14" y="3" width="7" height="7" rx="1.5" fill={C.PL} opacity="0.6"/>
+              <rect x="3" y="14" width="7" height="7" rx="1.5" fill={C.PL} opacity="0.6"/>
+              <rect x="14" y="14" width="7" height="7" rx="1.5" fill={C.PL} opacity="0.4"/>
+            </svg>
+          </div>
+          <span style={{ fontSize:13, fontWeight:700, color:C.t1, letterSpacing:-0.3 }}>快捷功能</span>
+        </div>
+        <span style={{ fontSize:10.5, color:C.t3 }}>全部应用</span>
       </div>
 
-      {/* ── Bento Main Card: Inquiry Feed ── */}
-      <Card accentColor="rgba(124,58,237,0.6)">
-        {/* Header */}
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 18px 10px' }}>
-          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+      {/* ── Row 1: 信息流询盘 (宽格) + AI 智能回复 ── */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+        {/* 信息流询盘 — 宽格卡片 (2列) */}
+        <motion.button
+          initial={{ opacity:0, scale:0.95 }} animate={{ opacity:1, scale:1 }}
+          transition={{ ...SPRING_GENTLE, delay:0 }}
+          whileTap={{ scale:0.96 }}
+          onClick={() => {
+            hapticMedium();
+            window.open('https://business.oceanengine.com/site/login', '_blank');
+          }}
+          style={{
+            gridColumn:'1 / -1',
+            borderRadius:20, padding:'16px 18px',
+            background:'linear-gradient(135deg, rgba(254,44,85,0.2) 0%, rgba(180,20,60,0.1) 60%, rgba(0,0,0,0.3) 100%)',
+            border:'1px solid rgba(254,44,85,0.28)',
+            boxShadow:'inset 0 1px 0 rgba(254,44,85,0.15), 0 8px 32px rgba(0,0,0,0.5)',
+            cursor:'pointer', fontFamily:'inherit',
+            display:'flex', alignItems:'center', justifyContent:'space-between',
+            position:'relative', overflow:'hidden',
+          } as React.CSSProperties}
+        >
+          {/* 背景光晕 */}
+          <div aria-hidden style={{ position:'absolute', top:-30, right:-30, width:120, height:120, borderRadius:'50%', background:'radial-gradient(circle, rgba(254,44,85,0.2) 0%, transparent 70%)', filter:'blur(20px)', pointerEvents:'none' }}/>
+          <div aria-hidden style={{ position:'absolute', bottom:-20, left:60, width:80, height:80, borderRadius:'50%', background:'radial-gradient(circle, rgba(254,44,85,0.1) 0%, transparent 70%)', filter:'blur(16px)', pointerEvents:'none' }}/>
+
+          <div style={{ display:'flex', alignItems:'center', gap:14 }}>
+            {/* 大图标 */}
             <div style={{
-              width:30, height:30, borderRadius:10,
-              background:'linear-gradient(135deg, rgba(124,58,237,0.3), rgba(67,56,202,0.2))',
-              border:'1px solid rgba(124,58,237,0.3)',
+              width:52, height:52, borderRadius:16, flexShrink:0,
+              background:'linear-gradient(135deg, rgba(254,44,85,0.25), rgba(180,20,60,0.15))',
+              border:'1px solid rgba(254,44,85,0.35)',
               display:'flex', alignItems:'center', justifyContent:'center',
+              boxShadow:'0 4px 16px rgba(254,44,85,0.2)',
             }}>
-              <IconInquiry size={14} color={C.PL}/>
+              <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+                <rect x="4" y="6" width="16" height="3" rx="1.5" fill="#FE2C55"/>
+                <rect x="4" y="12" width="24" height="3" rx="1.5" fill="rgba(254,44,85,0.65)"/>
+                <rect x="4" y="18" width="20" height="3" rx="1.5" fill="rgba(254,44,85,0.45)"/>
+                <rect x="4" y="24" width="14" height="3" rx="1.5" fill="rgba(254,44,85,0.28)"/>
+                <path d="M27 3 C27 3 24.5 7 27 10 C29.5 13 32 10 30 6.5 C28.8 4.5 27 3 27 3Z" fill="#FE2C55"/>
+                <path d="M27 10 C27 10 25.5 13 27.5 14.5 C29.5 16 31 14 29.5 11.5 C28.8 10.5 27 10 27 10Z" fill="rgba(254,44,85,0.7)"/>
+              </svg>
             </div>
-            <div>
-              <div style={{ fontSize:14, fontWeight:700, color:C.t1, letterSpacing:-0.3 }}>信息流询盘</div>
-              <div style={{ fontSize:10, color:C.t3, marginTop:1 }}>共 {MOCK_INQUIRIES.length} 条 · 实时同步</div>
+            <div style={{ textAlign:'left' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:3 }}>
+                <span style={{ fontSize:15, fontWeight:800, color:C.t1, letterSpacing:-0.4 }}>信息流询盘</span>
+                {/* 待处理徽章 */}
+                <div style={{
+                  display:'flex', alignItems:'center', gap:3,
+                  padding:'2px 8px', borderRadius:50,
+                  background:'rgba(254,44,85,0.18)', border:'1px solid rgba(254,44,85,0.35)',
+                }}>
+                  <motion.div
+                    animate={{ scale:[1,1.4,1], opacity:[1,0.5,1] }}
+                    transition={{ duration:1.6, repeat:Infinity }}
+                    style={{ width:5, height:5, borderRadius:'50%', background:C.red, boxShadow:`0 0 5px ${C.red}` }}
+                  />
+                  <span style={{ fontSize:10, fontWeight:700, color:C.red }}>{urgentCount} 待处理</span>
+                </div>
+              </div>
+              <div style={{ fontSize:11, color:C.t3, letterSpacing:0 }}>火山引擎 · TikTok 商业平台</div>
             </div>
           </div>
-          <div style={{ display:'flex', gap:6 }}>
-            <motion.button
-              whileTap={{ scale:0.9 }}
-              transition={SPRING_SNAPPY}
-              onClick={() => { setSearchOpen(v=>!v); hapticLight(); }}
-              style={{
-                width:30, height:30, borderRadius:'50%',
-                background: searchOpen ? 'rgba(124,58,237,0.2)' : C.s1,
-                border:`1px solid ${searchOpen ? 'rgba(124,58,237,0.4)' : C.b1}`,
-                cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center',
-              } as React.CSSProperties}
-            >
-              <IconSearch size={13} color={searchOpen ? C.PL : C.t2}/>
-            </motion.button>
-            <motion.button
-              whileTap={{ scale:0.9 }}
-              transition={SPRING_SNAPPY}
-              onClick={() => hapticLight()}
-              style={{
-                width:30, height:30, borderRadius:'50%',
-                background:C.s1, border:`1px solid ${C.b1}`,
-                cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center',
-              } as React.CSSProperties}
-            >
-              <IconSort size={13} color={C.t2}/>
-            </motion.button>
+
+          {/* 右侧箭头 */}
+          <div style={{
+            width:32, height:32, borderRadius:'50%', flexShrink:0,
+            background:'rgba(254,44,85,0.15)', border:'1px solid rgba(254,44,85,0.25)',
+            display:'flex', alignItems:'center', justifyContent:'center',
+          }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FE2C55" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M9 18l6-6-6-6"/>
+            </svg>
           </div>
-        </div>
+        </motion.button>
 
-        {/* Filter chips */}
-        <div style={{ display:'flex', gap:6, padding:'0 18px 12px', overflowX:'auto', scrollbarWidth:'none' }}>
-          {filters.map(f => (
-            <motion.button
-              key={f.id}
-              whileTap={{ scale:0.94 }}
-              transition={SPRING_SNAPPY}
-              onClick={() => { setActiveFilter(f.id); hapticSelection(); }}
-              style={{
-                flexShrink:0, padding:'5px 12px', borderRadius:50, cursor:'pointer',
-                fontFamily:'inherit', fontSize:11.5, fontWeight:600, letterSpacing:-0.2,
-                background: activeFilter===f.id ? 'linear-gradient(135deg, rgba(124,58,237,0.3), rgba(67,56,202,0.2))' : C.s1,
-                border: activeFilter===f.id ? '1px solid rgba(124,58,237,0.45)' : `1px solid ${C.b1}`,
-                color: activeFilter===f.id ? C.PL : C.t2,
-                boxShadow: activeFilter===f.id ? '0 2px 10px rgba(124,58,237,0.2)' : 'none',
-                display:'flex', alignItems:'center', gap:5,
-              } as React.CSSProperties}
-            >
-              {f.label}
-              <span style={{
-                fontSize:10, fontWeight:700,
-                color: activeFilter===f.id ? C.PL : C.t3,
-                background: activeFilter===f.id ? 'rgba(124,58,237,0.2)' : 'rgba(255,255,255,0.06)',
-                padding:'1px 5px', borderRadius:50,
-              }}>{f.count}</span>
-            </motion.button>
-          ))}
-        </div>
+        {/* AI 智能回复 */}
+        {bentoItems.filter(b=>b.id==='ai-reply').map((item, i) => (
+          <BentoIconTile key={item.id} item={item} index={i+1}/>
+        ))}
 
-        <div style={{ height:1, background:'linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent)', margin:'0 18px' }}/>
+        {/* 数据报表 */}
+        {bentoItems.filter(b=>b.id==='data-report').map((item, i) => (
+          <BentoIconTile key={item.id} item={item} index={i+2}/>
+        ))}
+      </div>
 
-        {/* Inquiry list */}
-        <div style={{ padding:'4px 18px 8px' }}>
-          <AnimatePresence mode="popLayout">
-            {filtered.map((inq, i) => (
-              <InquiryRow key={inq.id} inq={inq} index={i}/>
-            ))}
-          </AnimatePresence>
-        </div>
-
-        {/* Footer CTA */}
-        <div style={{ padding:'4px 18px 16px', display:'flex', gap:8 }}>
-          <motion.button
-            whileTap={{ scale:0.96 }}
-            transition={SPRING_SNAPPY}
-            onClick={() => hapticMedium()}
-            style={{
-              flex:1, padding:'10px 0', borderRadius:14, cursor:'pointer',
-              fontFamily:'inherit', fontSize:12.5, fontWeight:700, letterSpacing:-0.3,
-              background:'linear-gradient(135deg, rgba(124,58,237,0.28), rgba(67,56,202,0.2))',
-              border:'1px solid rgba(124,58,237,0.4)',
-              color:C.PL,
-              boxShadow:'0 4px 16px rgba(124,58,237,0.2), inset 0 1px 0 rgba(167,139,250,0.15)',
-              display:'flex', alignItems:'center', justifyContent:'center', gap:6,
-            } as React.CSSProperties}
-          >
-            <IconReply size={13} color={C.PL}/>
-            批量回复
-          </motion.button>
-          <motion.button
-            whileTap={{ scale:0.96 }}
-            transition={SPRING_SNAPPY}
-            onClick={() => hapticLight()}
-            style={{
-              padding:'10px 16px', borderRadius:14, cursor:'pointer',
-              fontFamily:'inherit', fontSize:12.5, fontWeight:600,
-              background:C.s1, border:`1px solid ${C.b1}`,
-              color:C.t2,
-              display:'flex', alignItems:'center', justifyContent:'center', gap:6,
-            } as React.CSSProperties}
-          >
-            <IconFilter size={13} color={C.t2}/>
-            筛选
-          </motion.button>
-        </div>
-      </Card>
+      {/* ── Row 2: 买家CRM + 产品库 + 物流跟踪 ── */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
+        {bentoItems.filter(b=>['buyer-crm','product-lib','logistics'].includes(b.id)).map((item, i) => (
+          <BentoIconTile key={item.id} item={item} index={i+4} compact/>
+        ))}
+      </div>
     </div>
+  );
+}
+
+function BentoIconTile({ item, index, compact }: { item: BentoItem; index: number; compact?: boolean }) {
+  return (
+    <motion.button
+      initial={{ opacity:0, scale:0.93 }}
+      animate={{ opacity:1, scale:1 }}
+      transition={{ ...SPRING_GENTLE, delay: index * 0.05 }}
+      whileTap={{ scale:0.94 }}
+      onClick={() => {
+        hapticSelection();
+        if (item.href) window.open(item.href, '_blank');
+      }}
+      style={{
+        borderRadius: compact ? 18 : 20,
+        padding: compact ? '14px 10px' : '16px 14px',
+        background: item.gradient,
+        border: `1px solid ${item.borderColor}`,
+        boxShadow: `inset 0 1px 0 ${item.glowColor.replace('0.25','0.12')}, 0 8px 24px rgba(0,0,0,0.45)`,
+        cursor:'pointer', fontFamily:'inherit',
+        display:'flex', flexDirection:'column', alignItems: compact ? 'center' : 'flex-start',
+        gap: compact ? 6 : 8,
+        position:'relative', overflow:'hidden',
+        textAlign: compact ? 'center' : 'left',
+      } as React.CSSProperties}
+    >
+      {/* 背景光晕 */}
+      <div aria-hidden style={{ position:'absolute', top:-15, right:-15, width:60, height:60, borderRadius:'50%', background:`radial-gradient(circle, ${item.glowColor} 0%, transparent 70%)`, filter:'blur(14px)', pointerEvents:'none' }}/>
+
+      {/* 徽章区域 */}
+      <div style={{ position:'relative' }}>
+        {item.icon}
+        {/* Badge */}
+        {item.badge !== undefined && (
+          <div style={{
+            position:'absolute', top:-4, right:-4,
+            minWidth:16, height:16, borderRadius:50,
+            background: item.badgeColor ?? C.red,
+            border:`1.5px solid rgba(0,0,0,0.6)`,
+            display:'flex', alignItems:'center', justifyContent:'center',
+            padding:'0 3px',
+          }}>
+            <span style={{ fontSize:9, fontWeight:800, color:'#fff', lineHeight:1 }}>{item.badge}</span>
+          </div>
+        )}
+      </div>
+
+      {/* 文字 */}
+      <div>
+        <div style={{ fontSize: compact ? 11 : 12.5, fontWeight:700, color:C.t1, letterSpacing:-0.3, lineHeight:1.2 }}>{item.label}</div>
+        {item.sublabel && (
+          <div style={{ fontSize: compact ? 9.5 : 10.5, color:C.t3, marginTop:2, fontWeight:400 }}>{item.sublabel}</div>
+        )}
+      </div>
+    </motion.button>
   );
 }
 
