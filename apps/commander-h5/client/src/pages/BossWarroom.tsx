@@ -33,15 +33,19 @@ const C = {
 };
 
 // ── Hooks ──────────────────────────────────────────────────────────
-function useCounter(target: number, duration = 1000, enabled = true) {
+function useCounter(target: number, duration = 800, enabled = true) {
   const [val, setVal] = useState(0);
+  const prevRef = useRef(0);
   useEffect(() => {
-    if (!enabled || target === 0) return;
+    if (!enabled) return;
+    const from = prevRef.current;
+    prevRef.current = target;
     let raf = 0, start = 0;
     const step = (ts: number) => {
       if (!start) start = ts;
       const p = Math.min((ts - start) / duration, 1);
-      setVal(Math.round((1 - Math.pow(1 - p, 4)) * target));
+      const ease = 1 - Math.pow(1 - p, 4);
+      setVal(Math.round(from + (target - from) * ease));
       if (p < 1) raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
@@ -264,50 +268,64 @@ function HeroCard({ data, isLoading }:{ data:any; isLoading:boolean }) {
 // CARD 2 — Platform Cards (TikTok + Meta)
 // Story: "Your channels at a glance"
 // ══════════════════════════════════════════════════════════════════
-function TikTokCard({ platform, isLoading }:{ platform?:PlatformData; isLoading:boolean }) {
-  const count = useCounter(platform?.unreadCount??0, 1200, !isLoading);
+function TikTokCard({ platform, isLoading }: { platform?:PlatformData; isLoading:boolean }) {
+  const count = useCounter(platform?.unreadCount??0, 800, !isLoading);
   const { on, bind } = usePress();
-  const up = (platform?.trend7d??[]).length>=2 && platform!.trend7d[platform!.trend7d.length-1] > platform!.trend7d[0];
+  const trend = platform?.trend7d ?? [];
+  const up = trend.length >= 2 && trend[trend.length-1] > trend[0];
+  const pct = trend.length >= 2
+    ? Math.round(((trend[trend.length-1] - trend[0]) / trend[0]) * 100)
+    : 0;
 
   return (
     <div {...bind} style={{
       borderRadius:22, overflow:'hidden', position:'relative',
-      background:'linear-gradient(160deg, #111 0%, #0A0A0A 100%)',
-      border:'1px solid rgba(255,255,255,0.07)',
-      boxShadow:'inset 0 1px 0 rgba(255,255,255,0.05), 0 16px 40px rgba(0,0,0,0.7)',
-      padding:'18px 16px 16px',
+      /* 抖音品牌：纯黑底 + 微妙的深灰渐变 */
+      background:'linear-gradient(160deg, #141414 0%, #0C0C0C 100%)',
+      border:'1px solid rgba(255,255,255,0.06)',
+      boxShadow:'inset 0 1px 0 rgba(255,255,255,0.04), 0 20px 48px rgba(0,0,0,0.75)',
+      padding:'16px 14px 14px',
       transform: on ? 'scale(0.96)' : 'scale(1)',
       transition:'transform 0.18s cubic-bezier(0.34,1.56,0.64,1)',
-      cursor:'pointer', minHeight:168,
+      cursor:'pointer', minHeight:172,
       display:'flex', flexDirection:'column',
     }}>
       <Noise/>
-      {/* Dual color ambient */}
-      <div aria-hidden style={{ position:'absolute', top:-40, left:-30, width:140, height:140, borderRadius:'50%', background:'radial-gradient(circle, rgba(0,242,234,0.08) 0%, transparent 70%)', filter:'blur(25px)', pointerEvents:'none', zIndex:0 }}/>
-      <div aria-hidden style={{ position:'absolute', bottom:-30, right:-20, width:120, height:120, borderRadius:'50%', background:'radial-gradient(circle, rgba(255,0,80,0.08) 0%, transparent 70%)', filter:'blur(22px)', pointerEvents:'none', zIndex:0 }}/>
-      {/* Top specular */}
-      <div aria-hidden style={{ position:'absolute', top:0, left:12, right:12, height:1, background:'linear-gradient(90deg, transparent, rgba(255,255,255,0.07), transparent)', zIndex:5 }}/>
+      {/* 抖音双色光晕：青色 + 红色 */}
+      <div aria-hidden style={{ position:'absolute', top:-50, left:-20, width:160, height:160, borderRadius:'50%', background:'radial-gradient(circle, rgba(0,242,234,0.07) 0%, transparent 65%)', filter:'blur(28px)', pointerEvents:'none', zIndex:0 }}/>
+      <div aria-hidden style={{ position:'absolute', bottom:-40, right:-15, width:140, height:140, borderRadius:'50%', background:'radial-gradient(circle, rgba(255,0,80,0.07) 0%, transparent 65%)', filter:'blur(24px)', pointerEvents:'none', zIndex:0 }}/>
+      {/* 顶部高光线 */}
+      <div aria-hidden style={{ position:'absolute', top:0, left:10, right:10, height:1, background:'linear-gradient(90deg, transparent, rgba(0,242,234,0.15), rgba(255,0,80,0.15), transparent)', zIndex:5 }}/>
 
       <div style={{ position:'relative', zIndex:2, display:'flex', flexDirection:'column', flex:1 }}>
-        {/* Header row */}
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
-          <TikTokIcon size={22}/>
-          <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-            <span style={{ fontSize:10, fontWeight:700, color:up?C.green:C.red, letterSpacing:-0.2 }}>{up?'↑':'↓'} 7d</span>
+        {/* ── Header: Logo + 连接状态 ── */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+          <TikTokIcon size={20}/>
+          <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+            <div style={{ padding:'2px 7px', borderRadius:50, background:up?'rgba(16,185,129,0.12)':'rgba(248,113,113,0.12)', border:`1px solid ${up?'rgba(16,185,129,0.25)':'rgba(248,113,113,0.25)'}` }}>
+              <span style={{ fontSize:10, fontWeight:700, color:up?C.green:C.red, letterSpacing:-0.2 }}>{up?'+':''}{pct}%</span>
+            </div>
             <div style={{ width:6, height:6, borderRadius:'50%', background:platform?.isConnected?C.green:'#4B5563', boxShadow:platform?.isConnected?`0 0 6px ${C.green}`:'none' }}/>
           </div>
         </div>
 
-        {/* Big number */}
-        {isLoading ? <Skeleton w="60%" h={38} r={8}/> : (
-          <div style={{ fontSize:38, fontWeight:900, color:C.amber, letterSpacing:-2, fontVariantNumeric:'tabular-nums', lineHeight:1 }}>{count}</div>
-        )}
-        <div style={{ fontSize:11, color:C.t3, fontWeight:500, marginTop:4, marginBottom:'auto' }}>条未读消息</div>
+        {/* ── 平台名称标签 ── */}
+        <div style={{ fontSize:10, fontWeight:600, color:'rgba(255,255,255,0.3)', letterSpacing:0.8, textTransform:'uppercase', marginBottom:6 }}>抖音 · Douyin</div>
 
-        {/* Sparkline — full width, prominent */}
-        <div style={{ marginTop:14 }}>
+        {/* ── 核心数字 ── */}
+        {isLoading ? <Skeleton w="65%" h={40} r={8}/> : (
+          <div style={{ display:'flex', alignItems:'baseline', gap:6 }}>
+            <span style={{ fontSize:40, fontWeight:900, letterSpacing:-2.5, fontVariantNumeric:'tabular-nums', lineHeight:1, background:'linear-gradient(135deg, #fff 40%, rgba(255,255,255,0.55))', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>
+              {count}
+            </span>
+          </div>
+        )}
+        <div style={{ fontSize:11, color:'rgba(255,255,255,0.28)', fontWeight:500, marginTop:3 }}>条未读消息</div>
+
+        {/* ── Sparkline ── */}
+        <div style={{ marginTop:'auto', paddingTop:12 }}>
           {isLoading ? <Skeleton w="100%" h={36} r={6}/> : (
-            <Sparkline data={platform?.trend7d??[]} color={C.amber} w={130} h={36}/>
+            <Sparkline data={trend} color="#FE2C55" w={130} h={36}/>
           )}
         </div>
       </div>
