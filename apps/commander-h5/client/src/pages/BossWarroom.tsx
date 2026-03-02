@@ -3,13 +3,15 @@ import { useWarroomData } from '../hooks/useWarroomData';
 import type { PlatformData, ChatMessage } from '../types/warroom';
 
 /* ─────────────────────────────────────────────────────────────────
-   Design System v3 — Card-focused refinement
+   Design System v4 — Multi-platform Brand Cards
    ─────────────────────────────────────────────────────────────────
-   Philosophy: Each card tells ONE story. Hierarchy is king.
+   Philosophy: Each card tells ONE story. Brand identity is sacred.
    Color:   #000 base · single primary #7C3AED · 8-step opacity
-   Grid:    8pt · card padding 20px · gap 12px
+   Grid:    8pt · card padding 20px · gap 12px · 2×2 platform grid
    Type:    900w hero · 700w label · 400w body · tabular-nums
    Cards:   glass morphism · inner glow · top specular line
+   Brands:  TikTok(#FE2C55+#00F2EA) · Meta(#0064E0) ·
+            LinkedIn(#0A66C2) · Shopify(#96BF48+#5E8E3E)
    ───────────────────────────────────────────────────────────────── */
 
 const C = {
@@ -71,9 +73,13 @@ const Skeleton = ({ w, h, r=8 }:{ w:string|number; h:number; r?:number }) => (
   <div style={{ width:w, height:h, borderRadius:r, background:'rgba(255,255,255,0.055)', animation:'skPulse 1.6s ease-in-out infinite' }}/>
 );
 
-// ── Sparkline — full-width, taller, more dramatic ──────────────────
+// ── Sparkline ──────────────────────────────────────────────────────
 function Sparkline({ data, color, w=100, h=36 }:{ data:number[]; color:string; w?:number; h?:number }) {
-  if (data.length < 2) return null;
+  if (data.length < 2) return (
+    <div style={{ width:w, height:h, display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div style={{ width:'60%', height:1, background:'rgba(255,255,255,0.08)', borderRadius:1 }}/>
+    </div>
+  );
   const max = Math.max(...data), min = Math.min(...data), range = max - min || 1;
   const pad = 4;
   const pts = data.map((v,i) => {
@@ -83,18 +89,17 @@ function Sparkline({ data, color, w=100, h=36 }:{ data:number[]; color:string; w
   }).join(' ');
   const last = pts.split(' ').pop()!;
   const [lx, ly] = last.split(',').map(Number);
-  const gid = `spk${color.replace(/[^a-z0-9]/gi,'')}`;
+  const gid = `spk${color.replace(/[^a-z0-9]/gi,'')}${w}`;
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} fill="none" style={{ display:'block', overflow:'visible' }}>
       <defs>
         <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.3"/>
+          <stop offset="0%" stopColor={color} stopOpacity="0.28"/>
           <stop offset="100%" stopColor={color} stopOpacity="0"/>
         </linearGradient>
       </defs>
       <polygon points={`0,${h} ${pts} ${w},${h}`} fill={`url(#${gid})`}/>
       <polyline points={pts} stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-      {/* Last point dot */}
       <circle cx={lx} cy={ly} r="3" fill={color} style={{ filter:`drop-shadow(0 0 4px ${color})` }}/>
     </svg>
   );
@@ -116,7 +121,7 @@ function Arc({ v, max, size=72, sw=5, color=C.P }:{ v:number; max:number; size?:
   );
 }
 
-// ── Card shell — the reusable glass card ───────────────────────────
+// ── Card shell ─────────────────────────────────────────────────────
 function Card({ children, style={}, accentColor, dark=false }:{ children:React.ReactNode; style?:React.CSSProperties; accentColor?:string; dark?:boolean }) {
   return (
     <div style={{
@@ -127,7 +132,6 @@ function Card({ children, style={}, accentColor, dark=false }:{ children:React.R
       ...style,
     }}>
       <Noise/>
-      {/* Top specular highlight */}
       <div aria-hidden style={{ position:'absolute', top:0, left:16, right:16, height:1, background:`linear-gradient(90deg, transparent, ${accentColor ?? 'rgba(255,255,255,0.18)'}, transparent)`, zIndex:5, pointerEvents:'none' }}/>
       <div style={{ position:'relative', zIndex:2 }}>{children}</div>
     </div>
@@ -158,35 +162,197 @@ function StatusBar({ time }:{ time:string }) {
   );
 }
 
-// ── TikTok logo ────────────────────────────────────────────────────
-function TikTokIcon({ size=24 }:{ size?:number }) {
+// ══════════════════════════════════════════════════════════════════
+// Brand Icons
+// ══════════════════════════════════════════════════════════════════
+
+// TikTok — triple-layer offset logo
+function TikTokIcon({ size=22 }:{ size?:number }) {
   const p = "M22 0C22 4.9 25.8 8.5 30 8.5V15.5C27.5 15.5 25.2 14.6 23.5 13.2V23.5C23.5 30.4 18 36 11.5 36C5 36 0 30.4 0 23.5C0 16.6 5 11 11.5 11C12 11 12.5 11.1 13 11.1V18.2C12.5 18.1 12 18 11.5 18C8.5 18 6 20.5 6 23.5C6 26.5 8.5 29 11.5 29C14.5 29 17 26.5 17 23.5V0H22Z";
   return (
     <div style={{ position:'relative', width:size, height:size*1.2, flexShrink:0 }}>
-      {[{dx:-1,dy:1,c:'#00F2EA',o:0.65},{dx:1,dy:1,c:'#FF0050',o:0.65},{dx:0,dy:0,c:'white',o:1}].map((l,i)=>(
+      {[{dx:-1,dy:1,c:'#00F2EA',o:0.7},{dx:1,dy:1,c:'#FF0050',o:0.7},{dx:0,dy:0,c:'white',o:1}].map((l,i)=>(
         <svg key={i} style={{ position:'absolute', left:l.dx, top:l.dy, opacity:l.o }} width={size} height={size*1.2} viewBox="0 0 30 36" fill={l.c}><path d={p}/></svg>
       ))}
     </div>
   );
 }
 
-// ── Meta logo ──────────────────────────────────────────────────────
-function MetaIcon() {
+// Meta — infinity loop with blue gradient
+function MetaFBIcon({ size=28 }:{ size?:number }) {
   return (
-    <svg width="48" height="20" viewBox="0 0 54 24" fill="none">
-      <defs><linearGradient id="mlg2" x1="0" y1="0" x2="54" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0%" stopColor="#0064E0"/><stop offset="100%" stopColor="#00B4FF"/></linearGradient></defs>
-      <path d="M6 12C6 7.5 9 4 13 4C16.5 4 19 6.5 22.5 12L27 20L31.5 12C35 6.5 37.5 4 41 4C45 4 48 7.5 48 12C48 16.5 45 20 41 20C37.5 20 35 17.5 31.5 12L27 4L22.5 12C19 17.5 16.5 20 13 20C9 20 6 16.5 6 12Z" fill="url(#mlg2)"/>
+    <svg width={size} height={size*0.5} viewBox="0 0 56 28" fill="none">
+      <defs>
+        <linearGradient id="metaGrad" x1="0" y1="0" x2="56" y2="0" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#0064E0"/>
+          <stop offset="50%" stopColor="#0082FB"/>
+          <stop offset="100%" stopColor="#00B4FF"/>
+        </linearGradient>
+      </defs>
+      {/* Meta ∞ shape */}
+      <path d="M8 14C8 9.6 10.8 6 14.5 6C17.8 6 20.2 8.2 23.5 14C26.8 19.8 29.2 22 32.5 22C36.2 22 39 18.4 39 14C39 9.6 36.2 6 32.5 6C29.2 6 26.8 8.2 23.5 14C20.2 19.8 17.8 22 14.5 22C10.8 22 8 18.4 8 14Z" stroke="url(#metaGrad)" strokeWidth="3.5" fill="none" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+// LinkedIn — blue "in" wordmark
+function LinkedInIcon({ size=28 }:{ size?:number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 28 28" fill="none">
+      <rect width="28" height="28" rx="6" fill="#0A66C2"/>
+      {/* "in" letterform */}
+      <rect x="6" y="10" width="3.5" height="12" rx="1" fill="white"/>
+      <circle cx="7.75" cy="7.5" r="2" fill="white"/>
+      <path d="M12.5 10h3.2v1.8c.7-1.1 2-2 3.8-2C22.5 9.8 24 11.5 24 14.5V22h-3.5v-6.8c0-1.6-.7-2.5-2-2.5-1.4 0-2.5 1-2.5 2.8V22H12.5V10z" fill="white"/>
+    </svg>
+  );
+}
+
+// Shopify — shopping bag with leaf
+function ShopifyIcon({ size=28 }:{ size?:number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 28 28" fill="none">
+      {/* Bag body */}
+      <path d="M7 10.5L8.5 22h11L21 10.5" stroke="#96BF48" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      {/* Handle */}
+      <path d="M10.5 10.5C10.5 8 12 6 14 6C16 6 17.5 8 17.5 10.5" stroke="#96BF48" strokeWidth="2" strokeLinecap="round"/>
+      {/* Shopify "S" leaf accent */}
+      <path d="M18.5 7C18.5 7 17.5 6.5 16.5 7C15.5 7.5 15.5 8.5 16 9C16.5 9.5 17.5 9.5 18 10C18.5 10.5 18.5 11.5 17.5 12" stroke="#5E8E3E" strokeWidth="1.4" strokeLinecap="round"/>
     </svg>
   );
 }
 
 // ══════════════════════════════════════════════════════════════════
+// Shared platform card shell — enforces consistent structure
+// ══════════════════════════════════════════════════════════════════
+interface PlatformCardProps {
+  platform?: PlatformData;
+  isLoading: boolean;
+  // Brand config
+  brandName: string;
+  brandSub: string;
+  brandColor: string;       // primary accent (Sparkline, number)
+  glowColorA: string;       // top-left glow
+  glowColorB: string;       // bottom-right glow
+  specularA: string;        // top specular line color A
+  specularB: string;        // top specular line color B
+  bgGradient: string;       // card background gradient
+  borderColor: string;      // card border
+  textDark?: boolean;       // true for light-background cards (Meta)
+  icon: React.ReactNode;
+}
+
+function PlatformCard({
+  platform, isLoading,
+  brandName, brandSub, brandColor,
+  glowColorA, glowColorB, specularA, specularB,
+  bgGradient, borderColor, textDark = false,
+  icon,
+}: PlatformCardProps) {
+  const count = useCounter(platform?.unreadCount ?? 0, 900, !isLoading);
+  const { on, bind } = usePress();
+  const trend = platform?.trend7d ?? [];
+  const up = trend.length >= 2 && trend[trend.length - 1] > trend[0];
+  const pct = trend.length >= 2 && trend[0] !== 0
+    ? Math.round(((trend[trend.length - 1] - trend[0]) / Math.abs(trend[0])) * 100)
+    : 0;
+
+  const textPrimary = textDark ? 'rgba(0,0,0,0.88)' : 'rgba(255,255,255,0.92)';
+  const textSub     = textDark ? 'rgba(0,0,0,0.38)' : 'rgba(255,255,255,0.28)';
+  const textMuted   = textDark ? 'rgba(0,0,0,0.28)' : 'rgba(255,255,255,0.18)';
+  const dotBg       = textDark ? '#E5E7EB' : C.bg;
+
+  return (
+    <div {...bind} style={{
+      borderRadius: 22, overflow: 'hidden', position: 'relative',
+      background: bgGradient,
+      border: `1px solid ${borderColor}`,
+      boxShadow: `inset 0 1px 0 rgba(255,255,255,${textDark ? '0.7' : '0.04'}), 0 20px 48px rgba(0,0,0,${textDark ? '0.18' : '0.75'})`,
+      padding: '16px 14px 14px',
+      transform: on ? 'scale(0.96)' : 'scale(1)',
+      transition: 'transform 0.18s cubic-bezier(0.34,1.56,0.64,1)',
+      cursor: 'pointer', minHeight: 172,
+      display: 'flex', flexDirection: 'column',
+    }}>
+      <Noise/>
+
+      {/* Brand ambient glows */}
+      <div aria-hidden style={{ position:'absolute', top:-50, left:-20, width:150, height:150, borderRadius:'50%', background:`radial-gradient(circle, ${glowColorA} 0%, transparent 65%)`, filter:'blur(28px)', pointerEvents:'none', zIndex:0 }}/>
+      <div aria-hidden style={{ position:'absolute', bottom:-40, right:-15, width:130, height:130, borderRadius:'50%', background:`radial-gradient(circle, ${glowColorB} 0%, transparent 65%)`, filter:'blur(24px)', pointerEvents:'none', zIndex:0 }}/>
+
+      {/* Top specular line — brand-colored */}
+      <div aria-hidden style={{ position:'absolute', top:0, left:10, right:10, height:1, background:`linear-gradient(90deg, transparent, ${specularA}, ${specularB}, transparent)`, zIndex:5 }}/>
+
+      <div style={{ position:'relative', zIndex:2, display:'flex', flexDirection:'column', flex:1 }}>
+
+        {/* ── Header: Icon + trend badge + status dot ── */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+          {icon}
+          <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+            {trend.length >= 2 && (
+              <div style={{
+                padding:'2px 7px', borderRadius:50,
+                background: up ? 'rgba(16,185,129,0.12)' : 'rgba(248,113,113,0.12)',
+                border: `1px solid ${up ? 'rgba(16,185,129,0.25)' : 'rgba(248,113,113,0.25)'}`,
+              }}>
+                <span style={{ fontSize:10, fontWeight:700, color:up?C.green:C.red, letterSpacing:-0.2 }}>
+                  {up ? '+' : ''}{pct}%
+                </span>
+              </div>
+            )}
+            <div style={{
+              width:6, height:6, borderRadius:'50%',
+              background: platform?.isConnected ? C.green : (textDark ? '#9CA3AF' : '#4B5563'),
+              boxShadow: platform?.isConnected ? `0 0 6px ${C.green}` : 'none',
+            }}/>
+          </div>
+        </div>
+
+        {/* ── Platform label ── */}
+        <div style={{ fontSize:10, fontWeight:600, color:textMuted, letterSpacing:0.8, textTransform:'uppercase', marginBottom:5 }}>
+          {brandSub}
+        </div>
+
+        {/* ── Hero number ── */}
+        {isLoading ? <Skeleton w="65%" h={40} r={8}/> : (
+          <div style={{ display:'flex', alignItems:'baseline', gap:4 }}>
+            <span style={{
+              fontSize:40, fontWeight:900, letterSpacing:-2.5,
+              fontVariantNumeric:'tabular-nums', lineHeight:1,
+              background: textDark
+                ? `linear-gradient(135deg, ${brandColor} 30%, ${brandColor}99)`
+                : `linear-gradient(135deg, #fff 40%, rgba(255,255,255,0.55))`,
+              WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
+            }}>
+              {count}
+            </span>
+          </div>
+        )}
+        <div style={{ fontSize:11, color:textSub, fontWeight:500, marginTop:3 }}>条未读消息</div>
+
+        {/* ── Sparkline ── */}
+        <div style={{ marginTop:'auto', paddingTop:10 }}>
+          {isLoading
+            ? <Skeleton w="100%" h={32} r={6}/>
+            : <Sparkline data={trend} color={brandColor} w={130} h={32}/>
+          }
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
 // CARD 1 — Hero Metric Card
-// Story: "Here's your day at a glance"
 // ══════════════════════════════════════════════════════════════════
 function HeroCard({ data, isLoading }:{ data:any; isLoading:boolean }) {
   const total = useCounter(data?.totalPending ?? 0, 1000, !isLoading && !!data);
-  const cats = data?.categories ?? [{id:'email',label:'邮件',count:0},{id:'task',label:'任务',count:0},{id:'notification',label:'通知',count:0,hasUrgent:true},{id:'other',label:'其他',count:0}];
+  const cats = data?.categories ?? [
+    {id:'email',label:'邮件',count:0},
+    {id:'task',label:'任务',count:0},
+    {id:'notification',label:'通知',count:0,hasUrgent:false},
+    {id:'other',label:'其他',count:0},
+  ];
 
   const catCfg = [
     { color:C.PL,    bg:'rgba(167,139,250,0.1)', icon:'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
@@ -199,189 +365,138 @@ function HeroCard({ data, isLoading }:{ data:any; isLoading:boolean }) {
     <Card accentColor={C.PL} style={{ padding:'22px 20px 20px' }}>
       {/* Aurora background */}
       <div aria-hidden style={{ position:'absolute', inset:0, overflow:'hidden', borderRadius:'inherit', zIndex:0 }}>
-        <div style={{ position:'absolute', top:-100, left:'20%', width:300, height:250, background:'radial-gradient(ellipse, rgba(109,40,217,0.3) 0%, transparent 68%)', filter:'blur(45px)', animation:'aA 9s ease-in-out infinite alternate' }}/>
-        <div style={{ position:'absolute', bottom:-60, right:'5%', width:220, height:200, background:'radial-gradient(ellipse, rgba(79,70,229,0.22) 0%, transparent 68%)', filter:'blur(35px)', animation:'aB 12s ease-in-out infinite alternate-reverse' }}/>
+        <div style={{ position:'absolute', top:-100, left:'20%', width:300, height:250, background:'radial-gradient(ellipse, rgba(109,40,217,0.3) 0%, transparent 68%)', filter:'blur(60px)', animation:'ambA 13s ease-in-out infinite alternate' }}/>
+        <div style={{ position:'absolute', bottom:-80, right:'10%', width:240, height:200, background:'radial-gradient(ellipse, rgba(59,130,246,0.12) 0%, transparent 68%)', filter:'blur(50px)', animation:'ambB 16s ease-in-out infinite alternate-reverse' }}/>
       </div>
 
-      {/* ── Row 1: Big number + Arc ── */}
-      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:20 }}>
-        <div>
-          <div style={{ fontSize:11, fontWeight:600, color:C.t3, letterSpacing:1.4, textTransform:'uppercase', marginBottom:10 }}>今日待处理</div>
-          {isLoading ? <Skeleton w={100} h={60} r={10}/> : (
-            <div style={{ display:'flex', alignItems:'flex-end', gap:10 }}>
-              <span style={{ fontSize:68, fontWeight:900, letterSpacing:-5, fontVariantNumeric:'tabular-nums', lineHeight:0.9, background:'linear-gradient(160deg, #fff 35%, rgba(255,255,255,0.45))', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>
-                {total}
-              </span>
-              {data && (
-                <div style={{ paddingBottom:8, display:'flex', flexDirection:'column', gap:2 }}>
-                  <span style={{ fontSize:12, fontWeight:700, color:data.deltaVsYesterday>=0?C.green:C.red, letterSpacing:-0.3 }}>
-                    {data.deltaVsYesterday>=0?'↑':'↓'}{Math.abs(data.deltaVsYesterday)}
+      <div style={{ position:'relative', zIndex:2 }}>
+        {/* ── Top row: metric + arc ── */}
+        <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:20 }}>
+          <div>
+            <div style={{ fontSize:11, fontWeight:600, color:C.t3, letterSpacing:0.6, textTransform:'uppercase', marginBottom:8 }}>今日待处理</div>
+            {isLoading ? <Skeleton w={120} h={60} r={10}/> : (
+              <div style={{ display:'flex', alignItems:'baseline', gap:8 }}>
+                <span style={{ fontSize:60, fontWeight:900, letterSpacing:-4, fontVariantNumeric:'tabular-nums', lineHeight:1, background:'linear-gradient(135deg, #fff 30%, rgba(255,255,255,0.5))', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>
+                  {total}
+                </span>
+                {data?.deltaVsYesterday !== undefined && (
+                  <span style={{ fontSize:13, fontWeight:700, color:data.deltaVsYesterday >= 0 ? C.red : C.green, letterSpacing:-0.3 }}>
+                    {data.deltaVsYesterday >= 0 ? '+' : ''}{data.deltaVsYesterday}
                   </span>
-                  <span style={{ fontSize:10, color:C.t3 }}>较昨日</span>
-                </div>
-              )}
-            </div>
-          )}
-          <div style={{ fontSize:13, color:C.t3, marginTop:6 }}>条消息待回复</div>
-        </div>
-
-        {/* Arc + label */}
-        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, marginTop:4 }}>
-          {isLoading ? <Skeleton w={72} h={72} r={36}/> : (
-            <div style={{ position:'relative' }}>
-              <Arc v={data?.completionRate??0} max={100} size={72} sw={5} color={C.PL}/>
-              <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center' }}>
-                <span style={{ fontSize:15, fontWeight:800, color:C.t1, fontVariantNumeric:'tabular-nums', letterSpacing:-0.5 }}>{data?.completionRate??0}%</span>
-                <span style={{ fontSize:9, color:C.t3, fontWeight:500, marginTop:1 }}>完成</span>
+                )}
               </div>
+            )}
+            <div style={{ fontSize:12, color:C.t3, marginTop:4 }}>较昨日</div>
+          </div>
+
+          {/* Arc progress */}
+          <div style={{ position:'relative', flexShrink:0 }}>
+            <Arc v={data?.completionRate ?? 0} max={100} size={72} sw={5} color={C.P}/>
+            <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center' }}>
+              <span style={{ fontSize:16, fontWeight:800, color:C.t1, fontVariantNumeric:'tabular-nums', letterSpacing:-0.5 }}>{data?.completionRate ?? 0}%</span>
+              <span style={{ fontSize:8.5, color:C.t3, fontWeight:500, marginTop:1 }}>完成率</span>
             </div>
-          )}
+          </div>
         </div>
-      </div>
 
-      {/* ── Divider ── */}
-      <div style={{ height:1, background:'linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent)', marginBottom:16 }}/>
-
-      {/* ── Row 2: Category chips ── */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8 }}>
-        {cats.map((cat:any, i:number) => {
-          const cfg = catCfg[i];
-          return (
-            <div key={cat.id} style={{ position:'relative', borderRadius:16, background:cfg.bg, border:`1px solid ${cfg.color}28`, padding:'11px 0 9px', display:'flex', flexDirection:'column', alignItems:'center', gap:5, cursor:'pointer', transition:'transform 0.15s ease' }}>
-              {cat.hasUrgent && <div style={{ position:'absolute', top:-3, right:-3, width:8, height:8, borderRadius:'50%', background:C.red, border:`1.5px solid ${C.bg}`, boxShadow:`0 0 7px ${C.red}` }}/>}
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={cfg.color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                <path d={cfg.icon}/>
-              </svg>
-              {isLoading ? <Skeleton w={18} h={16} r={4}/> : (
-                <span style={{ fontSize:16, fontWeight:800, color:cfg.color, fontVariantNumeric:'tabular-nums', letterSpacing:-0.8, lineHeight:1 }}>{cat.count}</span>
-              )}
-              <span style={{ fontSize:10, color:C.t3, fontWeight:500 }}>{cat.label}</span>
-            </div>
-          );
-        })}
+        {/* ── Category chips ── */}
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8 }}>
+          {cats.map((cat: any, i: number) => {
+            const cfg = catCfg[i] ?? catCfg[3];
+            return (
+              <div key={cat.id} style={{ position:'relative', display:'flex', flexDirection:'column', alignItems:'center', gap:5, padding:'10px 4px 8px', borderRadius:14, background:cfg.bg, border:`1px solid ${cfg.color}22` }}>
+                {cat.hasUrgent && <div style={{ position:'absolute', top:-3, right:-3, width:8, height:8, borderRadius:'50%', background:C.red, border:`1.5px solid ${C.bg}`, boxShadow:`0 0 7px ${C.red}` }}/>}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={cfg.color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                  <path d={cfg.icon}/>
+                </svg>
+                {isLoading ? <Skeleton w={18} h={16} r={4}/> : (
+                  <span style={{ fontSize:16, fontWeight:800, color:cfg.color, fontVariantNumeric:'tabular-nums', letterSpacing:-0.8, lineHeight:1 }}>{cat.count}</span>
+                )}
+                <span style={{ fontSize:10, color:C.t3, fontWeight:500 }}>{cat.label}</span>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </Card>
   );
 }
 
 // ══════════════════════════════════════════════════════════════════
-// CARD 2 — Platform Cards (TikTok + Meta)
-// Story: "Your channels at a glance"
+// CARD 2 — Platform Cards (2×2 grid)
+// TikTok · Meta/Facebook · LinkedIn · Shopify
 // ══════════════════════════════════════════════════════════════════
+
 function TikTokCard({ platform, isLoading }: { platform?:PlatformData; isLoading:boolean }) {
-  const count = useCounter(platform?.unreadCount??0, 800, !isLoading);
-  const { on, bind } = usePress();
-  const trend = platform?.trend7d ?? [];
-  const up = trend.length >= 2 && trend[trend.length-1] > trend[0];
-  const pct = trend.length >= 2
-    ? Math.round(((trend[trend.length-1] - trend[0]) / trend[0]) * 100)
-    : 0;
-
   return (
-    <div {...bind} style={{
-      borderRadius:22, overflow:'hidden', position:'relative',
-      /* 抖音品牌：纯黑底 + 微妙的深灰渐变 */
-      background:'linear-gradient(160deg, #141414 0%, #0C0C0C 100%)',
-      border:'1px solid rgba(255,255,255,0.06)',
-      boxShadow:'inset 0 1px 0 rgba(255,255,255,0.04), 0 20px 48px rgba(0,0,0,0.75)',
-      padding:'16px 14px 14px',
-      transform: on ? 'scale(0.96)' : 'scale(1)',
-      transition:'transform 0.18s cubic-bezier(0.34,1.56,0.64,1)',
-      cursor:'pointer', minHeight:172,
-      display:'flex', flexDirection:'column',
-    }}>
-      <Noise/>
-      {/* 抖音双色光晕：青色 + 红色 */}
-      <div aria-hidden style={{ position:'absolute', top:-50, left:-20, width:160, height:160, borderRadius:'50%', background:'radial-gradient(circle, rgba(0,242,234,0.07) 0%, transparent 65%)', filter:'blur(28px)', pointerEvents:'none', zIndex:0 }}/>
-      <div aria-hidden style={{ position:'absolute', bottom:-40, right:-15, width:140, height:140, borderRadius:'50%', background:'radial-gradient(circle, rgba(255,0,80,0.07) 0%, transparent 65%)', filter:'blur(24px)', pointerEvents:'none', zIndex:0 }}/>
-      {/* 顶部高光线 */}
-      <div aria-hidden style={{ position:'absolute', top:0, left:10, right:10, height:1, background:'linear-gradient(90deg, transparent, rgba(0,242,234,0.15), rgba(255,0,80,0.15), transparent)', zIndex:5 }}/>
-
-      <div style={{ position:'relative', zIndex:2, display:'flex', flexDirection:'column', flex:1 }}>
-        {/* ── Header: Logo + 连接状态 ── */}
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
-          <TikTokIcon size={20}/>
-          <div style={{ display:'flex', alignItems:'center', gap:5 }}>
-            <div style={{ padding:'2px 7px', borderRadius:50, background:up?'rgba(16,185,129,0.12)':'rgba(248,113,113,0.12)', border:`1px solid ${up?'rgba(16,185,129,0.25)':'rgba(248,113,113,0.25)'}` }}>
-              <span style={{ fontSize:10, fontWeight:700, color:up?C.green:C.red, letterSpacing:-0.2 }}>{up?'+':''}{pct}%</span>
-            </div>
-            <div style={{ width:6, height:6, borderRadius:'50%', background:platform?.isConnected?C.green:'#4B5563', boxShadow:platform?.isConnected?`0 0 6px ${C.green}`:'none' }}/>
-          </div>
-        </div>
-
-        {/* ── 平台名称标签 ── */}
-        <div style={{ fontSize:10, fontWeight:600, color:'rgba(255,255,255,0.3)', letterSpacing:0.8, textTransform:'uppercase', marginBottom:6 }}>抖音 · Douyin</div>
-
-        {/* ── 核心数字 ── */}
-        {isLoading ? <Skeleton w="65%" h={40} r={8}/> : (
-          <div style={{ display:'flex', alignItems:'baseline', gap:6 }}>
-            <span style={{ fontSize:40, fontWeight:900, letterSpacing:-2.5, fontVariantNumeric:'tabular-nums', lineHeight:1, background:'linear-gradient(135deg, #fff 40%, rgba(255,255,255,0.55))', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>
-              {count}
-            </span>
-          </div>
-        )}
-        <div style={{ fontSize:11, color:'rgba(255,255,255,0.28)', fontWeight:500, marginTop:3 }}>条未读消息</div>
-
-        {/* ── Sparkline ── */}
-        <div style={{ marginTop:'auto', paddingTop:12 }}>
-          {isLoading ? <Skeleton w="100%" h={36} r={6}/> : (
-            <Sparkline data={trend} color="#FE2C55" w={130} h={36}/>
-          )}
-        </div>
-      </div>
-    </div>
+    <PlatformCard
+      platform={platform} isLoading={isLoading}
+      brandName="TikTok" brandSub="抖音 · Douyin"
+      brandColor="#FE2C55"
+      glowColorA="rgba(0,242,234,0.07)"
+      glowColorB="rgba(255,0,80,0.07)"
+      specularA="rgba(0,242,234,0.18)"
+      specularB="rgba(255,0,80,0.18)"
+      bgGradient="linear-gradient(160deg, #141414 0%, #0C0C0C 100%)"
+      borderColor="rgba(255,255,255,0.06)"
+      icon={<TikTokIcon size={20}/>}
+    />
   );
 }
 
-function MetaCard({ platform, isLoading }:{ platform?:PlatformData; isLoading:boolean }) {
-  const count = useCounter(platform?.unreadCount??0, 1200, !isLoading);
-  const { on, bind } = usePress();
-  const up = (platform?.trend7d??[]).length>=2 && platform!.trend7d[platform!.trend7d.length-1] > platform!.trend7d[0];
-
+function MetaCard({ platform, isLoading }: { platform?:PlatformData; isLoading:boolean }) {
   return (
-    <div {...bind} style={{
-      borderRadius:22, overflow:'hidden', position:'relative',
-      background:'linear-gradient(155deg, #F2F2FA 0%, #E9E9F5 50%, #EDEDF8 100%)',
-      border:'1px solid rgba(0,0,0,0.05)',
-      boxShadow:'inset 0 1px 0 rgba(255,255,255,0.95), 0 16px 40px rgba(0,0,0,0.2)',
-      padding:'18px 16px 16px',
-      transform: on ? 'scale(0.96)' : 'scale(1)',
-      transition:'transform 0.18s cubic-bezier(0.34,1.56,0.64,1)',
-      cursor:'pointer', minHeight:168,
-      display:'flex', flexDirection:'column',
-    }}>
-      {/* Indigo glow top-right */}
-      <div aria-hidden style={{ position:'absolute', top:-30, right:-20, width:130, height:130, borderRadius:'50%', background:'radial-gradient(circle, rgba(99,102,241,0.14) 0%, transparent 70%)', filter:'blur(22px)', pointerEvents:'none' }}/>
-      {/* Top specular */}
-      <div aria-hidden style={{ position:'absolute', top:0, left:12, right:12, height:1, background:'linear-gradient(90deg, transparent, rgba(255,255,255,0.9), transparent)' }}/>
+    <PlatformCard
+      platform={platform} isLoading={isLoading}
+      brandName="Meta" brandSub="Meta · Facebook"
+      brandColor="#0064E0"
+      glowColorA="rgba(0,100,224,0.1)"
+      glowColorB="rgba(0,180,255,0.08)"
+      specularA="rgba(0,100,224,0.3)"
+      specularB="rgba(0,180,255,0.2)"
+      bgGradient="linear-gradient(160deg, #0A1628 0%, #071020 100%)"
+      borderColor="rgba(0,100,224,0.2)"
+      icon={<MetaFBIcon size={32}/>}
+    />
+  );
+}
 
-      <div style={{ position:'relative', zIndex:1, display:'flex', flexDirection:'column', flex:1 }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
-          <MetaIcon/>
-          <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-            <span style={{ fontSize:10, fontWeight:700, color:up?'#059669':'#DC2626', letterSpacing:-0.2 }}>{up?'↑':'↓'} 7d</span>
-            <div style={{ width:6, height:6, borderRadius:'50%', background:platform?.isConnected?'#059669':'#9CA3AF', boxShadow:platform?.isConnected?'0 0 6px rgba(5,150,105,0.7)':'none' }}/>
-          </div>
-        </div>
+function LinkedInCard({ platform, isLoading }: { platform?:PlatformData; isLoading:boolean }) {
+  return (
+    <PlatformCard
+      platform={platform} isLoading={isLoading}
+      brandName="LinkedIn" brandSub="领英 · LinkedIn"
+      brandColor="#0A66C2"
+      glowColorA="rgba(10,102,194,0.12)"
+      glowColorB="rgba(10,102,194,0.06)"
+      specularA="rgba(10,102,194,0.35)"
+      specularB="rgba(56,168,255,0.2)"
+      bgGradient="linear-gradient(160deg, #071525 0%, #040E1A 100%)"
+      borderColor="rgba(10,102,194,0.22)"
+      icon={<LinkedInIcon size={26}/>}
+    />
+  );
+}
 
-        {isLoading ? <Skeleton w="60%" h={38} r={8}/> : (
-          <div style={{ fontSize:38, fontWeight:900, color:'#D97706', letterSpacing:-2, fontVariantNumeric:'tabular-nums', lineHeight:1 }}>{count}</div>
-        )}
-        <div style={{ fontSize:11, color:'rgba(0,0,0,0.3)', fontWeight:500, marginTop:4, marginBottom:'auto' }}>条未读消息</div>
-
-        <div style={{ marginTop:14 }}>
-          {isLoading ? <Skeleton w="100%" h={36} r={6}/> : (
-            <Sparkline data={platform?.trend7d??[]} color="#D97706" w={130} h={36}/>
-          )}
-        </div>
-      </div>
-    </div>
+function ShopifyCard({ platform, isLoading }: { platform?:PlatformData; isLoading:boolean }) {
+  return (
+    <PlatformCard
+      platform={platform} isLoading={isLoading}
+      brandName="Shopify" brandSub="Shopify · 独立站"
+      brandColor="#96BF48"
+      glowColorA="rgba(150,191,72,0.1)"
+      glowColorB="rgba(94,142,62,0.08)"
+      specularA="rgba(150,191,72,0.3)"
+      specularB="rgba(94,142,62,0.2)"
+      bgGradient="linear-gradient(160deg, #0D1A07 0%, #091305 100%)"
+      borderColor="rgba(150,191,72,0.2)"
+      icon={<ShopifyIcon size={26}/>}
+    />
   );
 }
 
 // ══════════════════════════════════════════════════════════════════
 // CARD 3 — AI Chat Card
-// Story: "Your AI is ready and waiting"
 // ══════════════════════════════════════════════════════════════════
 function ChatBubble({ msg }:{ msg:ChatMessage }) {
   const isAI = msg.role === 'ai';
@@ -415,10 +530,8 @@ function ChatBubble({ msg }:{ msg:ChatMessage }) {
 function AIChatCard({ chatHistory, aiTyping }:{ chatHistory:ChatMessage[]; aiTyping:boolean }) {
   return (
     <Card accentColor={C.PL}>
-      {/* Card header */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 18px 14px' }}>
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-          {/* AI Avatar with glow ring */}
           <div style={{ position:'relative', flexShrink:0 }}>
             <div style={{ width:36, height:36, borderRadius:'50%', background:'linear-gradient(135deg, #7C3AED 0%, #4338CA 100%)', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 0 0 3px rgba(124,58,237,0.2), 0 4px 14px rgba(124,58,237,0.4)' }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 2L14.5 8.5H21L15.5 12.5L17.5 19L12 15L6.5 19L8.5 12.5L3 8.5H9.5L12 2Z" fill="rgba(255,255,255,0.95)"/></svg>
@@ -430,20 +543,18 @@ function AIChatCard({ chatHistory, aiTyping }:{ chatHistory:ChatMessage[]; aiTyp
             <div style={{ fontSize:10.5, color:C.t3, fontWeight:400, marginTop:1 }}>随时为您服务</div>
           </div>
         </div>
-        {/* Expand button */}
         <div style={{ width:32, height:32, borderRadius:'50%', background:C.s1, border:`1px solid ${C.b1}`, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.t3} strokeWidth="2" strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>
         </div>
       </div>
 
-      {/* Thin separator */}
       <div style={{ height:1, background:'linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent)', margin:'0 18px' }}/>
 
-      {/* Messages */}
       <div style={{ padding:'14px 18px 12px', display:'flex', flexDirection:'column', gap:12 }}>
+        {chatHistory.length === 0 && !aiTyping && (
+          <div style={{ textAlign:'center', padding:'16px 0', color:C.t3, fontSize:13 }}>暂无消息，等待新询盘…</div>
+        )}
         {chatHistory.map(msg => <ChatBubble key={msg.id} msg={msg}/>)}
-
-        {/* Typing indicator */}
         {aiTyping && (
           <div style={{ display:'flex', alignItems:'flex-end', gap:8, animation:'msgIn 0.3s ease-out' }}>
             <div style={{ width:28, height:28, borderRadius:'50%', background:'linear-gradient(135deg, #7C3AED, #4338CA)', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 2px 10px rgba(124,58,237,0.45)' }}>
@@ -458,7 +569,6 @@ function AIChatCard({ chatHistory, aiTyping }:{ chatHistory:ChatMessage[]; aiTyp
         )}
       </div>
 
-      {/* Quick action pills */}
       <div style={{ display:'flex', gap:8, padding:'4px 18px 18px', flexWrap:'wrap' }}>
         {[
           { label:'查看全部消息', primary:true },
@@ -472,7 +582,6 @@ function AIChatCard({ chatHistory, aiTyping }:{ chatHistory:ChatMessage[]; aiTyp
             color: primary ? C.PL : C.t2,
             fontSize:12, fontWeight:600, letterSpacing:-0.2,
             boxShadow: primary ? '0 2px 12px rgba(124,58,237,0.2)' : 'none',
-            transition:'all 0.15s ease',
           } as React.CSSProperties}>
             {label}
           </button>
@@ -500,8 +609,12 @@ export default function BossWarroom() {
     if (!isLoading) { const t = setTimeout(()=>setAiTyping(false),2400); return ()=>clearTimeout(t); }
   }, [isLoading]);
 
-  const tiktok = data?.platforms.find(p=>p.id==='tiktok');
-  const meta   = data?.platforms.find(p=>p.id==='meta');
+  // Platform data — extend with linkedin/shopify from API when available
+  const tiktok   = data?.platforms.find(p=>p.id==='tiktok');
+  const meta     = data?.platforms.find(p=>p.id==='meta');
+  // LinkedIn & Shopify: use empty state until backend provides data
+  const linkedin: PlatformData = { id:'tiktok', unreadCount:0, trend7d:[], isConnected:false };
+  const shopify:  PlatformData = { id:'meta',   unreadCount:0, trend7d:[], isConnected:false };
 
   return (
     <div style={{ height:'100dvh', background:C.bg, display:'flex', flexDirection:'column', fontFamily:'"SF Pro Display",-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif', color:C.t1, overflow:'hidden', WebkitFontSmoothing:'antialiased' }}>
@@ -537,12 +650,21 @@ export default function BossWarroom() {
 
       {/* Scrollable content */}
       <div style={{ flex:1, overflowY:'scroll', WebkitOverflowScrolling:'touch' as any, padding:'4px 16px 0', display:'flex', flexDirection:'column', gap:12, position:'relative', zIndex:10, scrollbarWidth:'none' }}>
+
+        {/* Hero card */}
         <HeroCard data={data} isLoading={isLoading}/>
+
+        {/* Platform cards — 2×2 grid */}
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-          <TikTokCard platform={tiktok} isLoading={isLoading}/>
-          <MetaCard   platform={meta}   isLoading={isLoading}/>
+          <TikTokCard  platform={tiktok}   isLoading={isLoading}/>
+          <MetaCard    platform={meta}     isLoading={isLoading}/>
+          <LinkedInCard platform={linkedin} isLoading={isLoading}/>
+          <ShopifyCard  platform={shopify}  isLoading={isLoading}/>
         </div>
+
+        {/* AI Chat card */}
         <AIChatCard chatHistory={data?.chatHistory??[]} aiTyping={aiTyping}/>
+
         <div style={{ height:16 }}/>
       </div>
 
@@ -558,7 +680,7 @@ export default function BossWarroom() {
             </svg>
           </button>
           <input type="text" placeholder="晚安，需要我帮您做什么？" value={input} onChange={e=>setInput(e.target.value)}
-            style={{ flex:1, background:'transparent', border:'none', outline:'none', fontSize:14, color:C.t1, caretColor:C.PL }}
+            style={{ flex:1, background:'transparent', border:'none', outline:'none', fontSize:14, color:C.t1, caretColor:C.P }}
           />
           <button style={{ width:36, height:36, borderRadius:'50%', border:'none', cursor:'pointer', flexShrink:0, background:input?`linear-gradient(135deg, ${C.P}, #4338CA)`:'white', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:input?`0 4px 18px rgba(124,58,237,0.6)`:'0 2px 10px rgba(0,0,0,0.4)', transition:'all 0.22s cubic-bezier(0.34,1.56,0.64,1)' } as React.CSSProperties}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
@@ -571,8 +693,6 @@ export default function BossWarroom() {
       </div>
 
       <style>{`
-        @keyframes aA     { 0%{transform:scale(1)translate(0,0);}    100%{transform:scale(1.2)translate(28px,-18px);} }
-        @keyframes aB     { 0%{transform:scale(1)translate(0,0);}    100%{transform:scale(1.15)translate(-22px,14px);} }
         @keyframes ambA   { 0%{transform:scale(1)translate(0,0);}    100%{transform:scale(1.2)translate(32px,-22px);} }
         @keyframes ambB   { 0%{transform:scale(1)translate(0,0);}    100%{transform:scale(1.15)translate(-24px,16px);} }
         @keyframes dotB   { 0%,80%,100%{transform:translateY(0)scale(1);opacity:.4;} 40%{transform:translateY(-5px)scale(1.3);opacity:1;} }
