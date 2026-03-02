@@ -549,13 +549,15 @@ function SwipeableCards({ children }: { children: React.ReactNode[] }) {
         style={{
           display: 'flex',
           overflowX: 'scroll',
+          overflowY: 'hidden',
           scrollSnapType: 'x mandatory',
           WebkitOverflowScrolling: 'touch' as any,
           scrollbarWidth: 'none',
           gap: 12,
           borderRadius: 22,
-          // 屏蔽左右边缘，卡片占满宽度
           paddingBottom: 2,
+          // 告知浏览器此区域只处理水平手势，垂直交给父容器
+          touchAction: 'pan-x',
         } as React.CSSProperties}
       >
         {children.map((child, i) => (
@@ -994,10 +996,7 @@ export default function BossWarroom() {
       {/* Scrollable content with pull-to-refresh */}
       <div
         ref={containerRef}
-        style={{ flex:1, overflowY:'scroll', WebkitOverflowScrolling:'touch' as any, padding:'4px 16px 0', display:'flex', flexDirection:'column', gap:12, position:'relative', zIndex:10, scrollbarWidth:'none' }}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
+        style={{ flex:1, overflowY:'scroll', WebkitOverflowScrolling:'touch' as any, padding:'4px 16px 0', display:'flex', flexDirection:'column', gap:12, position:'relative', zIndex:10, scrollbarWidth:'none', touchAction:'pan-y' } as React.CSSProperties}
       >
         <PullIndicator indicatorRef={indicatorRef}/>
 
