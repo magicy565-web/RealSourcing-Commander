@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence, useSpring, useTransform } from 'framer-motion';
 import { useWarroomData } from '../hooks/useWarroomData';
 import { useWarroomWS } from '../hooks/useWarroomWS';
@@ -504,8 +504,119 @@ function HeroCard({ data, isLoading }:{ data:any; isLoading:boolean }) {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// CARD 2 — Platform Cards (2×2 grid)
+// CARD 2 — Platform Cards (Swipeable Carousel)
 // ══════════════════════════════════════════════════════════════════
+
+// ── Swipeable Card Carousel — CSS scroll-snap 实现丝滑滑动 ──────────────────────
+function SwipeableCards({ children }: { children: React.ReactNode[] }) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const count = children.length;
+  const isScrollingRef = useRef(false);
+  const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 监听 scroll 事件更新分页点
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    // 清除之前的延迟判断
+    if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
+    scrollTimerRef.current = setTimeout(() => {
+      const idx = Math.round(el.scrollLeft / el.offsetWidth);
+      if (idx !== activeIndex) {
+        setActiveIndex(idx);
+        hapticSelection();
+      }
+    }, 80);
+  }, [activeIndex]);
+
+  // 点击分页点平滑滚动到对应卡片
+  const scrollTo = useCallback((idx: number) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ left: idx * el.offsetWidth, behavior: 'smooth' });
+    setActiveIndex(idx);
+    hapticSelection();
+  }, []);
+
+  return (
+    <div style={{ position: 'relative' }}>
+      {/* Scroll track with CSS scroll-snap */}
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        style={{
+          display: 'flex',
+          overflowX: 'scroll',
+          scrollSnapType: 'x mandatory',
+          WebkitOverflowScrolling: 'touch' as any,
+          scrollbarWidth: 'none',
+          gap: 12,
+          borderRadius: 22,
+          // 屏蔽左右边缘，卡片占满宽度
+          paddingBottom: 2,
+        } as React.CSSProperties}
+      >
+        {children.map((child, i) => (
+          <div
+            key={i}
+            style={{
+              flexShrink: 0,
+              width: '100%',
+              scrollSnapAlign: 'start',
+              scrollSnapStop: 'always',
+            }}
+          >
+            {child}
+          </div>
+        ))}
+      </div>
+
+      {/* Pagination dots */}
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 6, marginTop: 12 }}>
+        {children.map((_, i) => (
+          <motion.div
+            key={i}
+            animate={{
+              width: i === activeIndex ? 22 : 6,
+              opacity: i === activeIndex ? 1 : 0.35,
+              background: i === activeIndex ? C.PL : 'rgba(255,255,255,0.5)',
+            }}
+            transition={SPRING_SNAPPY}
+            onClick={() => scrollTo(i)}
+            style={{
+              height: 6,
+              borderRadius: 3,
+              cursor: 'pointer',
+              boxShadow: i === activeIndex ? `0 0 10px ${C.PL}99` : 'none',
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Page counter */}
+      <div style={{ textAlign: 'center', marginTop: 6 }}>
+        <AnimatePresence mode="wait">
+          <motion.span
+            key={activeIndex}
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -5 }}
+            transition={SPRING_SNAPPY}
+            style={{ fontSize: 11, color: C.t3, fontWeight: 500, letterSpacing: 0.5 }}
+          >
+            {activeIndex + 1} / {count}
+          </motion.span>
+        </AnimatePresence>
+      </div>
+
+      <style>{`
+        .swipe-track::-webkit-scrollbar { display: none; }
+      `}</style>
+    </div>
+  );
+}
+
 
 function TikTokCard({ platform, isLoading }: { platform?:PlatformData; isLoading:boolean }) {
   return (
@@ -909,13 +1020,13 @@ export default function BossWarroom() {
         {/* Hero card */}
         <HeroCard data={data} isLoading={isLoading}/>
 
-        {/* Platform cards — 2×2 grid */}
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-          <TikTokCard  platform={tiktok}   isLoading={isLoading}/>
-          <MetaCard    platform={meta}     isLoading={isLoading}/>
-          <LinkedInCard platform={linkedin} isLoading={isLoading}/>
-          <ShopifyCard  platform={shopify}  isLoading={isLoading}/>
-        </div>
+        {/* Platform cards — Swipeable Carousel */}
+        <SwipeableCards>
+          {[<TikTokCard  key="tiktok"   platform={tiktok}   isLoading={isLoading}/>,
+            <MetaCard    key="meta"     platform={meta}     isLoading={isLoading}/>,
+            <LinkedInCard key="linkedin" platform={linkedin} isLoading={isLoading}/>,
+            <ShopifyCard  key="shopify"  platform={shopify}  isLoading={isLoading}/>]}
+        </SwipeableCards>
 
         {/* AI Chat card */}
         <AIChatCard
