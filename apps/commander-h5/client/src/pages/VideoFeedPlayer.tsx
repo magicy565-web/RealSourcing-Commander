@@ -1,77 +1,136 @@
 /**
- * VideoFeedPlayer.tsx — Phase 3 Sprint 3.1 手势优化版
+ * VideoFeedPlayer.tsx — TikTok 风格视频询盘信息流 V2
  *
- * 原生 App 级滑动体验：
- *   ① 实时跟手 (touchMove → translateY)
- *   ② 边界阻尼 (超出首/尾时阻力系数 0.25)
- *   ③ 速度感知切换 (velocity > 0.3px/ms 或位移 > 30% 视口高度)
- *   ④ 弹性回弹 (spring cubic-bezier)
- *   ⑤ 动画锁 (isAnimating.current 防止快速连击)
- *   ⑥ 鼠标滚轮防抖 (100ms 节流)
+ * 特性：
+ *   ① 全屏竖向 scroll-snap 滑动（原生流畅）
+ *   ② 进入视口自动播放，离开自动暂停（IntersectionObserver）
+ *   ③ 点击暂停/播放，长按静音切换
+ *   ④ 右侧操作栏：点赞、收藏（转询盘）、分享、静音
+ *   ⑤ 底部询盘信息：买家公司、产品标签、报价按钮
+ *   ⑥ 顶部导航栏：返回 + 标题
+ *   ⑦ 进度条：视频播放进度实时更新
+ *   ⑧ 本地视频 fallback（后端无数据时使用本地 4 个视频演示）
  */
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { videoFeedApi, VideoFeedItem } from '../lib/api';
-import { toast } from 'sonner';
+import { useLocation } from 'wouter';
+import { motion, AnimatePresence } from 'framer-motion';
 
-interface Props {
-  onBack: () => void;
-}
+// ─── 本地演示数据 ──────────────────────────────────────────────────────────────
+const LOCAL_VIDEOS = [
+  {
+    id: 'v1',
+    src: '/videos/video1.mp4',
+    company: 'SunPower Solutions',
+    country: '🇻🇳 越南',
+    product: '太阳能板组件',
+    tags: ['Solar Panel', 'OEM', '500W+'],
+    desc: '寻求太阳能板长期供应商，月需求量 2000 片，要求 IEC 认证，FOB 报价',
+    budget: '$45,000 / 月',
+    likes: 128,
+    comments: 34,
+    bookmarks: 56,
+    avatar: 'S',
+    avatarColor: 'from-orange-400 to-red-500',
+    urgent: true,
+  },
+  {
+    id: 'v2',
+    src: '/videos/video2.mp4',
+    company: 'EcoHome Trading GmbH',
+    country: '🇩🇪 德国',
+    product: '储能电池系统',
+    tags: ['Battery', 'ESS', 'CE认证'],
+    desc: '家用储能系统采购，10kWh 规格，需要 CE/TÜV 认证，季度采购计划',
+    budget: '$120,000 / 季',
+    likes: 256,
+    comments: 89,
+    bookmarks: 143,
+    avatar: 'E',
+    avatarColor: 'from-blue-400 to-indigo-600',
+    urgent: false,
+  },
+  {
+    id: 'v3',
+    src: '/videos/video3.mp4',
+    company: 'GreenTech Australia',
+    country: '🇦🇺 澳大利亚',
+    product: '光伏逆变器',
+    tags: ['Inverter', '5kW', 'AS4777'],
+    desc: '澳洲市场光伏逆变器分销合作，需符合 AS4777 标准，年采购 500 台',
+    budget: '$80,000 / 年',
+    likes: 92,
+    comments: 21,
+    bookmarks: 38,
+    avatar: 'G',
+    avatarColor: 'from-green-400 to-emerald-600',
+    urgent: true,
+  },
+  {
+    id: 'v4',
+    src: '/videos/video4.mp4',
+    company: 'Nordic Energy AS',
+    country: '🇳🇴 挪威',
+    product: '充电桩设备',
+    tags: ['EV Charger', 'AC/DC', 'IEC 61851'],
+    desc: '电动车充电桩采购，7kW/22kW 双规格，需 IEC 61851 认证，北欧市场',
+    budget: '$200,000 / 年',
+    likes: 315,
+    comments: 67,
+    bookmarks: 201,
+    avatar: 'N',
+    avatarColor: 'from-cyan-400 to-blue-500',
+    urgent: false,
+  },
+];
 
-// ─── 常量 ─────────────────────────────────────────────────────────────────────
-const SWITCH_THRESHOLD = 0.30;   // 位移超过视口高度 30% 触发切换
-const VELOCITY_THRESHOLD = 0.30; // px/ms 速度阈值
-const DAMPING = 0.25;            // 边界阻尼系数
-const ANIM_DURATION_MS = 320;    // 切换动画时长 (ms)
-const WHEEL_THROTTLE_MS = 100;   // 滚轮节流时长 (ms)
-
-// ─── 单个视频卡片 ─────────────────────────────────────────────────────────────
-function VideoCard({
-  item,
-  isActive,
-  onLike,
-  onBookmark,
-}: {
-  item: VideoFeedItem;
-  isActive: boolean;
-  onLike: (id: string) => void;
-  onBookmark: (id: string) => void;
-}) {
+// ─── 单个视频卡片 ──────────────────────────────────────────────────────────────
+function VideoCard({ video, index }: { video: typeof LOCAL_VIDEOS[0]; index: number }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [muted, setMuted] = useState(true);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const progressRef = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
+  const [muted, setMuted] = useState(true);
+  const [liked, setLiked] = useState(false);
+  const [bookmarked, setBookmarked] = useState(false);
+  const [likeCount, setLikeCount] = useState(video.likes);
+  const [showQuote, setShowQuote] = useState(false);
+  const [showPauseIcon, setShowPauseIcon] = useState(false);
+  const pauseIconTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // IntersectionObserver 自动播放/暂停
+  useEffect(() => {
+    const v = videoRef.current;
+    const card = cardRef.current;
+    if (!v || !card) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && entry.intersectionRatio > 0.7) {
+          v.currentTime = 0;
+          v.play().then(() => setPlaying(true)).catch(() => {});
+        } else {
+          v.pause();
+          setPlaying(false);
+        }
+      },
+      { threshold: 0.7 }
+    );
+    observer.observe(card);
+    return () => observer.disconnect();
+  }, []);
+
+  // 进度条更新
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    if (isActive) {
-      v.currentTime = 0;
-      const tryPlay = () => {
-        const p = v.play();
-        if (p !== undefined) {
-          p.then(() => setPlaying(true)).catch((err) => {
-            if (err?.name !== 'NotAllowedError') {
-              console.warn('[VideoCard] play failed:', err?.message);
-            }
-            setPlaying(false);
-          });
-        }
-      };
-      if (v.readyState >= 3) {
-        tryPlay();
-      } else {
-        const onCanPlay = () => {
-          tryPlay();
-          v.removeEventListener('canplay', onCanPlay);
-        };
-        v.addEventListener('canplay', onCanPlay);
-        v.load();
-        return () => v.removeEventListener('canplay', onCanPlay);
-      }
-    } else {
-      v.pause();
-      setPlaying(false);
-    }
-  }, [isActive]);
+    const onTimeUpdate = () => {
+      if (!progressRef.current || !v.duration) return;
+      const pct = (v.currentTime / v.duration) * 100;
+      progressRef.current.style.width = `${pct}%`;
+    };
+    v.addEventListener('timeupdate', onTimeUpdate);
+    return () => v.removeEventListener('timeupdate', onTimeUpdate);
+  }, []);
 
   const togglePlay = () => {
     const v = videoRef.current;
@@ -81,6 +140,10 @@ function VideoCard({
     } else {
       v.pause();
       setPlaying(false);
+      // 显示暂停图标 1s
+      setShowPauseIcon(true);
+      if (pauseIconTimer.current) clearTimeout(pauseIconTimer.current);
+      pauseIconTimer.current = setTimeout(() => setShowPauseIcon(false), 900);
     }
   };
 
@@ -92,460 +155,325 @@ function VideoCard({
     setMuted(v.muted);
   };
 
+  const handleLike = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setLiked(v => {
+      setLikeCount(c => v ? c - 1 : c + 1);
+      return !v;
+    });
+    if (navigator.vibrate) navigator.vibrate(15);
+  };
+
+  const handleBookmark = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setBookmarked(v => !v);
+    if (!bookmarked) setShowQuote(true);
+    if (navigator.vibrate) navigator.vibrate([10, 5, 10]);
+  };
+
   return (
-    <div className="relative w-full h-full bg-black flex-shrink-0 overflow-hidden" onClick={togglePlay}>
+    <div
+      ref={cardRef}
+      className="relative w-full flex-shrink-0 bg-black overflow-hidden"
+      style={{ height: '100dvh', scrollSnapAlign: 'start', scrollSnapStop: 'always' }}
+      onClick={togglePlay}
+    >
       {/* 视频 */}
-      {item.play_url ? (
-        <video
-          ref={videoRef}
-          src={item.play_url}
-          poster={item.cover_url}
-          muted={muted}
-          loop
-          playsInline
-          className="absolute inset-0 w-full h-full object-cover"
-        />
-      ) : item.cover_url ? (
-        <img
-          src={item.cover_url}
-          alt={item.title}
-          className="absolute inset-0 w-full h-full object-cover"
-        />
-      ) : (
-        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900">
-          <div className="text-center">
-            <div className="text-6xl mb-3">🎬</div>
-            <p className="text-white/60 text-sm">视频处理中</p>
-          </div>
-        </div>
-      )}
+      <video
+        ref={videoRef}
+        src={video.src}
+        muted={muted}
+        loop
+        playsInline
+        preload="metadata"
+        className="absolute inset-0 w-full h-full object-cover"
+      />
 
       {/* 渐变遮罩 */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20 pointer-events-none" />
+      <div className="absolute inset-0 pointer-events-none" style={{
+        background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 35%, rgba(0,0,0,0.1) 60%, rgba(0,0,0,0.3) 100%)'
+      }} />
 
-      {/* 播放/暂停指示 */}
-      {!playing && isActive && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-16 h-16 rounded-full bg-black/40 flex items-center justify-center">
-            <svg className="w-8 h-8 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M8 5v14l11-7z" />
-            </svg>
+      {/* 进度条 */}
+      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white/20 z-20">
+        <div ref={progressRef} className="h-full bg-white transition-none" style={{ width: '0%' }} />
+      </div>
+
+      {/* 暂停图标动画 */}
+      <AnimatePresence>
+        {showPauseIcon && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.6 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.3 }}
+            transition={{ duration: 0.2 }}
+            className="absolute inset-0 flex items-center justify-center pointer-events-none z-10"
+          >
+            <div className="w-20 h-20 rounded-full flex items-center justify-center"
+              style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
+                <rect x="6" y="4" width="4" height="16" rx="1" />
+                <rect x="14" y="4" width="4" height="16" rx="1" />
+              </svg>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── 右侧操作栏 ── */}
+      <div className="absolute right-3 z-10 flex flex-col items-center gap-5"
+        style={{ bottom: '100px' }}>
+
+        {/* 买家头像 */}
+        <div className="flex flex-col items-center gap-1">
+          <div className={`w-11 h-11 rounded-full bg-gradient-to-br ${video.avatarColor} flex items-center justify-center text-white font-bold text-lg border-2 border-white/30`}>
+            {video.avatar}
+          </div>
+          <div className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center -mt-3 border border-black">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M12 5v14M5 12l7-7 7 7" stroke="white" strokeWidth="3" strokeLinecap="round"/></svg>
           </div>
         </div>
-      )}
 
-      {/* 右侧操作栏 */}
-      <div className="absolute right-3 bottom-32 flex flex-col items-center gap-5 z-10">
         {/* 点赞 */}
-        <button
-          onClick={(e) => { e.stopPropagation(); onLike(item.id); }}
-          className="flex flex-col items-center gap-1"
-        >
-          <div className={`w-11 h-11 rounded-full flex items-center justify-center ${item.is_liked ? 'bg-red-500' : 'bg-black/40'} backdrop-blur-sm transition-colors`}>
-            <svg className="w-6 h-6 text-white" fill={item.is_liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <button onClick={handleLike} className="flex flex-col items-center gap-1" style={{ touchAction: 'none' }}>
+          <motion.div
+            animate={liked ? { scale: [1, 1.4, 1] } : {}}
+            transition={{ duration: 0.3 }}
+            className={`w-11 h-11 rounded-full flex items-center justify-center ${liked ? 'bg-red-500' : 'bg-black/40'}`}
+            style={{ backdropFilter: 'blur(8px)' }}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill={liked ? 'white' : 'none'} stroke="white" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
             </svg>
-          </div>
-          <span className="text-white text-xs font-medium drop-shadow">{item.likes_count}</span>
+          </motion.div>
+          <span className="text-white text-xs font-semibold drop-shadow">{likeCount}</span>
         </button>
 
-        {/* 收藏（转入询盘） */}
-        <button
-          onClick={(e) => { e.stopPropagation(); onBookmark(item.id); }}
-          className="flex flex-col items-center gap-1"
-        >
-          <div className={`w-11 h-11 rounded-full flex items-center justify-center ${item.is_bookmarked ? 'bg-yellow-500' : 'bg-black/40'} backdrop-blur-sm transition-colors`}>
-            <svg className="w-6 h-6 text-white" fill={item.is_bookmarked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        {/* 收藏（转询盘） */}
+        <button onClick={handleBookmark} className="flex flex-col items-center gap-1" style={{ touchAction: 'none' }}>
+          <motion.div
+            animate={bookmarked ? { scale: [1, 1.3, 1] } : {}}
+            transition={{ duration: 0.3 }}
+            className={`w-11 h-11 rounded-full flex items-center justify-center ${bookmarked ? 'bg-yellow-500' : 'bg-black/40'}`}
+            style={{ backdropFilter: 'blur(8px)' }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill={bookmarked ? 'white' : 'none'} stroke="white" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
             </svg>
-          </div>
-          <span className="text-white text-xs font-medium drop-shadow">{item.is_bookmarked ? '已收藏' : '收藏'}</span>
+          </motion.div>
+          <span className="text-white text-xs font-semibold drop-shadow">{video.bookmarks}</span>
         </button>
 
-        {/* 静音切换 */}
-        <button
-          onClick={toggleMute}
-          className="flex flex-col items-center gap-1"
-        >
-          <div className="w-11 h-11 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center">
+        {/* 评论 */}
+        <button className="flex flex-col items-center gap-1" style={{ touchAction: 'none' }}
+          onClick={e => e.stopPropagation()}>
+          <div className="w-11 h-11 rounded-full bg-black/40 flex items-center justify-center"
+            style={{ backdropFilter: 'blur(8px)' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+          </div>
+          <span className="text-white text-xs font-semibold drop-shadow">{video.comments}</span>
+        </button>
+
+        {/* 静音 */}
+        <button onClick={toggleMute} className="flex flex-col items-center gap-1" style={{ touchAction: 'none' }}>
+          <div className="w-11 h-11 rounded-full bg-black/40 flex items-center justify-center"
+            style={{ backdropFilter: 'blur(8px)' }}>
             {muted ? (
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
               </svg>
             ) : (
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072M12 6v12m-3.536-9.536a5 5 0 000 7.072M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
               </svg>
             )}
           </div>
-          <span className="text-white text-xs font-medium drop-shadow">{muted ? '静音' : '有声'}</span>
+          <span className="text-white text-xs font-semibold drop-shadow">{muted ? '静音' : '有声'}</span>
         </button>
       </div>
 
-      {/* 底部信息 */}
-      <div className="absolute bottom-0 left-0 right-14 p-4 z-10">
-        <div className="flex items-center gap-2 mb-1">
-          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-sky-400 to-indigo-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-            {item.company_name?.[0] ?? '?'}
-          </div>
-          <span className="text-white font-semibold text-sm drop-shadow truncate">{item.company_name}</span>
-          {item.is_bookmarked && (
-            <span className="text-xs bg-yellow-500/80 text-white px-1.5 py-0.5 rounded-full flex-shrink-0">已收藏</span>
+      {/* ── 底部询盘信息 ── */}
+      <div className="absolute bottom-6 left-0 z-10 px-4" style={{ right: '72px' }}>
+        {/* 公司 + 国家 */}
+        <div className="flex items-center gap-2 mb-1.5">
+          <span className="text-white font-bold text-sm drop-shadow">{video.company}</span>
+          <span className="text-white/70 text-xs">{video.country}</span>
+          {video.urgent && (
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full"
+              style={{ background: 'rgba(254,44,85,0.85)', color: 'white' }}>
+              紧急
+            </span>
           )}
         </div>
-        <p className="text-white/90 text-sm leading-snug drop-shadow line-clamp-2 mb-2">{item.title}</p>
-        {item.description && (
-          <p className="text-white/60 text-xs leading-snug drop-shadow line-clamp-1 mb-2">{item.description}</p>
-        )}
-        <div className="flex flex-wrap gap-1">
-          {item.tags?.slice(0, 3).map((tag) => (
-            <span key={tag} className="text-xs bg-white/20 backdrop-blur-sm text-white px-2 py-0.5 rounded-full">
+
+        {/* 产品描述 */}
+        <p className="text-white/90 text-sm leading-snug drop-shadow mb-2 line-clamp-2">{video.desc}</p>
+
+        {/* 标签 */}
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {video.tags.map(tag => (
+            <span key={tag} className="text-xs text-white/80 px-2 py-0.5 rounded-full"
+              style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
               #{tag}
             </span>
           ))}
-          {item.duration && (
-            <span className="text-xs bg-black/30 backdrop-blur-sm text-white/80 px-2 py-0.5 rounded-full">
-              {Math.floor(item.duration / 60)}:{String(item.duration % 60).padStart(2, '0')}
-            </span>
-          )}
         </div>
-        {item.is_bookmarked && (
-          <div className="mt-2 text-xs text-yellow-300 drop-shadow">
-            ✓ 已加入询盘，可在「我的询盘」中查看并报价
+
+        {/* 预算 + 报价按钮 */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2">
+              <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+            </svg>
+            <span className="text-white/60 text-xs">预算</span>
+            <span className="text-white font-bold text-sm">{video.budget}</span>
           </div>
-        )}
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={e => { e.stopPropagation(); setShowQuote(true); if (navigator.vibrate) navigator.vibrate(20); }}
+            className="px-4 py-1.5 rounded-full text-white text-xs font-bold"
+            style={{
+              background: 'linear-gradient(135deg, rgba(124,58,237,0.9), rgba(67,56,202,0.8))',
+              border: '1px solid rgba(167,139,250,0.4)',
+              boxShadow: '0 4px 16px rgba(124,58,237,0.4)',
+            }}
+          >
+            立即报价 →
+          </motion.button>
+        </div>
       </div>
+
+      {/* ── 报价弹窗 ── */}
+      <AnimatePresence>
+        {showQuote && (
+          <motion.div
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+            className="absolute inset-x-0 bottom-0 z-30 rounded-t-3xl p-6"
+            style={{ background: 'rgba(15,10,30,0.97)', backdropFilter: 'blur(40px)', border: '1px solid rgba(124,58,237,0.3)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-5" />
+            <div className="flex items-center gap-3 mb-4">
+              <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${video.avatarColor} flex items-center justify-center text-white font-bold`}>
+                {video.avatar}
+              </div>
+              <div>
+                <div className="text-white font-bold text-sm">{video.company}</div>
+                <div className="text-white/50 text-xs">{video.country} · {video.product}</div>
+              </div>
+              <div className="ml-auto text-white font-bold text-base">{video.budget}</div>
+            </div>
+            <div className="rounded-2xl p-3 mb-4" style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.2)' }}>
+              <p className="text-white/70 text-xs leading-relaxed">{video.desc}</p>
+            </div>
+            <div className="flex gap-3">
+              <motion.button
+                whileTap={{ scale: 0.96 }}
+                onClick={() => setShowQuote(false)}
+                className="flex-1 py-3 rounded-2xl text-white/60 text-sm font-semibold"
+                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+              >
+                稍后处理
+              </motion.button>
+              <motion.button
+                whileTap={{ scale: 0.96 }}
+                onClick={() => { setBookmarked(true); setShowQuote(false); }}
+                className="flex-1 py-3 rounded-2xl text-white text-sm font-bold"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(124,58,237,0.9), rgba(67,56,202,0.8))',
+                  border: '1px solid rgba(167,139,250,0.3)',
+                  boxShadow: '0 4px 20px rgba(124,58,237,0.4)',
+                }}
+              >
+                收藏并报价 ✓
+              </motion.button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
 // ─── 主组件 ───────────────────────────────────────────────────────────────────
-export default function VideoFeedPlayer({ onBack }: Props) {
-  const [items, setItems] = useState<VideoFeedItem[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [hasMore, setHasMore] = useState(true);
-  const [page, setPage] = useState(1);
-
+export default function VideoFeedPlayer({ onBack }: { onBack?: () => void }) {
+  const [, navigate] = useLocation();
   const containerRef = useRef<HTMLDivElement>(null);
-  const trackRef = useRef<HTMLDivElement>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
 
-  // 已加载播放地址的 item id 集合（避免重复请求）
-  const loadedPlayUrls = useRef<Set<string>>(new Set());
+  const handleBack = useCallback(() => {
+    if (onBack) onBack();
+    else navigate('/boss-warroom');
+  }, [onBack, navigate]);
 
-  // ─── 手势状态 (ref 避免 re-render 开销) ──────────────────────────────────
-  const isAnimating = useRef(false);
-  const touchStartY = useRef(0);
-  const touchStartTime = useRef(0);
-  const lastTouchY = useRef(0);
-  const dragOffset = useRef(0);       // 当前拖拽偏移量 (px)
-  const currentIndexRef = useRef(0);  // 与 state 同步的 ref，供手势回调使用
-
-  // 同步 currentIndex → ref
-  useEffect(() => {
-    currentIndexRef.current = currentIndex;
-  }, [currentIndex]);
-
-  // ─── 加载视频列表 ─────────────────────────────────────────────────────────
-  const loadVideos = useCallback(async (pageNum: number, append = false) => {
-    try {
-      if (!append) setLoading(true);
-      const res = await videoFeedApi.getVideos({ page: pageNum, limit: 10 });
-      if (append) {
-        setItems((prev) => [...prev, ...res.items]);
-      } else {
-        setItems(res.items);
-      }
-      setHasMore(res.items.length === 10);
-    } catch {
-      toast.error('加载视频失败');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadVideos(1);
-  }, [loadVideos]);
-
-  // ─── 懒加载当前视频播放地址（切换时自动获取）─────────────────────────────────
-  useEffect(() => {
-    const item = items[currentIndex];
-    if (!item) return;
-    // 如果已有 play_url 或已经请求过，跳过
-    if (item.play_url || loadedPlayUrls.current.has(item.id)) return;
-    loadedPlayUrls.current.add(item.id);
-    // 同时预加载下一条
-    const toLoad = [item, items[currentIndex + 1]].filter(Boolean);
-    toLoad.forEach(async (v) => {
-      if (!v || v.play_url || loadedPlayUrls.current.has(v.id + '_next')) return;
-      loadedPlayUrls.current.add(v.id + '_next');
-      try {
-        const res = await videoFeedApi.getPlayInfo(v.id);
-        setItems((prev) =>
-          prev.map((p) =>
-            p.id === v.id
-              ? { ...p, play_url: res.playUrl, cover_url: res.coverUrl || p.cover_url, duration: res.duration || p.duration }
-              : p
-          )
-        );
-      } catch (err) {
-        console.warn('[VideoFeed] 获取播放地址失败', v.id, err);
-      }
-    });
-  }, [currentIndex, items]);
-
-  // ─── 设置轨道 transform（无动画，实时跟手）────────────────────────────────
-  const setTrackOffset = useCallback((offset: number, animated = false) => {
-    const track = trackRef.current;
-    if (!track) return;
-    const baseY = -(currentIndexRef.current * 100);
-    const totalY = baseY + (offset / (window.innerHeight || 812)) * 100;
-    if (animated) {
-      track.style.transition = `transform ${ANIM_DURATION_MS}ms cubic-bezier(0.25, 0.46, 0.45, 0.94)`;
-    } else {
-      track.style.transition = 'none';
-    }
-    track.style.transform = `translateY(${totalY}%)`;
-  }, []);
-
-  // ─── 切换到指定 index（带动画锁）────────────────────────────────────────
-  const goToIndex = useCallback((nextIndex: number, itemCount: number) => {
-    if (isAnimating.current) return;
-    const clamped = Math.max(0, Math.min(nextIndex, itemCount - 1));
-    isAnimating.current = true;
-    dragOffset.current = 0;
-
-    // 预加载下一页
-    if (clamped >= itemCount - 2 && hasMore) {
-      setPage((p) => {
-        const np = p + 1;
-        loadVideos(np, true);
-        return np;
-      });
-    }
-
-    setCurrentIndex(clamped);
-    currentIndexRef.current = clamped;
-
-    // 应用动画
-    const track = trackRef.current;
-    if (track) {
-      track.style.transition = `transform ${ANIM_DURATION_MS}ms cubic-bezier(0.25, 0.46, 0.45, 0.94)`;
-      track.style.transform = `translateY(-${clamped * 100}%)`;
-    }
-
-    setTimeout(() => {
-      isAnimating.current = false;
-    }, ANIM_DURATION_MS + 20);
-  }, [hasMore, loadVideos]);
-
-  // ─── Touch 事件处理 ───────────────────────────────────────────────────────
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (isAnimating.current) return;
-    touchStartY.current = e.touches[0].clientY;
-    lastTouchY.current = e.touches[0].clientY;
-    touchStartTime.current = Date.now();
-    dragOffset.current = 0;
-    // 立即取消过渡，准备跟手
-    const track = trackRef.current;
-    if (track) track.style.transition = 'none';
-  }, []);
-
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (isAnimating.current) return;
-    const dy = e.touches[0].clientY - touchStartY.current;
-    lastTouchY.current = e.touches[0].clientY;
-    const viewH = window.innerHeight || 812;
-    const idx = currentIndexRef.current;
-    const total = items.length;
-
-    // 边界阻尼：首帧上滑 or 末帧下滑 时施加阻力
-    let offset = dy;
-    if ((idx === 0 && dy > 0) || (idx === total - 1 && dy < 0)) {
-      offset = dy * DAMPING;
-    }
-
-    dragOffset.current = offset;
-    setTrackOffset(offset, false);
-
-    // 阻止页面滚动
-    e.preventDefault();
-  }, [items.length, setTrackOffset]);
-
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    if (isAnimating.current) return;
-    const dy = touchStartY.current - e.changedTouches[0].clientY; // 正 = 上滑
-    const dt = Date.now() - touchStartTime.current;
-    const velocity = Math.abs(dy) / Math.max(dt, 1); // px/ms
-    const viewH = window.innerHeight || 812;
-    const ratio = Math.abs(dy) / viewH;
-    const idx = currentIndexRef.current;
-
-    const shouldSwitch = ratio > SWITCH_THRESHOLD || velocity > VELOCITY_THRESHOLD;
-
-    if (shouldSwitch && dy > 0 && idx < items.length - 1) {
-      goToIndex(idx + 1, items.length);
-    } else if (shouldSwitch && dy < 0 && idx > 0) {
-      goToIndex(idx - 1, items.length);
-    } else {
-      // 回弹到当前位置
-      isAnimating.current = true;
-      dragOffset.current = 0;
-      const track = trackRef.current;
-      if (track) {
-        track.style.transition = `transform ${ANIM_DURATION_MS}ms cubic-bezier(0.34, 1.56, 0.64, 1)`;
-        track.style.transform = `translateY(-${idx * 100}%)`;
-      }
-      setTimeout(() => { isAnimating.current = false; }, ANIM_DURATION_MS + 20);
-    }
-  }, [items.length, goToIndex]);
-
-  // ─── 鼠标滚轮（节流）────────────────────────────────────────────────────
-  const wheelLastTime = useRef(0);
-  const handleWheel = useCallback((e: WheelEvent) => {
-    e.preventDefault();
-    const now = Date.now();
-    if (now - wheelLastTime.current < WHEEL_THROTTLE_MS) return;
-    wheelLastTime.current = now;
-    const idx = currentIndexRef.current;
-    if (e.deltaY > 0) {
-      goToIndex(idx + 1, items.length);
-    } else {
-      goToIndex(idx - 1, items.length);
-    }
-  }, [items.length, goToIndex]);
-
+  // 监听滚动更新当前 index
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    el.addEventListener('wheel', handleWheel, { passive: false });
-    return () => el.removeEventListener('wheel', handleWheel);
-  }, [handleWheel]);
-
-  // ─── 点赞 ─────────────────────────────────────────────────────────────────
-  const handleLike = useCallback(async (id: string) => {
-    try {
-      const res = await videoFeedApi.like(id);
-      setItems((prev) =>
-        prev.map((item) =>
-          item.id === id
-            ? { ...item, is_liked: res.liked, likes_count: res.likes_count }
-            : item
-        )
-      );
-    } catch {
-      toast.error('操作失败');
-    }
+    const onScroll = () => {
+      const idx = Math.round(el.scrollTop / window.innerHeight);
+      setCurrentIndex(idx);
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
   }, []);
 
-  // ─── 收藏 ─────────────────────────────────────────────────────────────────
-  const handleBookmark = useCallback(async (id: string) => {
-    const item = items.find((i) => i.id === id);
-    if (item?.is_bookmarked) {
-      toast.info('已在询盘列表中');
-      return;
-    }
-    try {
-      await videoFeedApi.bookmark(id);
-      setItems((prev) =>
-        prev.map((it) =>
-          it.id === id ? { ...it, is_bookmarked: true } : it
-        )
-      );
-      toast.success('✓ 已加入询盘，可在「我的询盘」中报价');
-    } catch (err: any) {
-      toast.error(err.message ?? '收藏失败');
-    }
-  }, [items]);
+  return (
+    <div className="fixed inset-0 bg-black z-50 flex flex-col" style={{ touchAction: 'pan-y' }}>
 
-  // ─── 渲染 ─────────────────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="fixed inset-0 bg-black flex items-center justify-center z-50">
-        <div className="text-center">
-          <div className="w-10 h-10 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-white/60 text-sm">加载视频中...</p>
+      {/* ── 顶部导航 ── */}
+      <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 pt-12 pb-3"
+        style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 100%)' }}>
+        <motion.button
+          whileTap={{ scale: 0.9 }}
+          onClick={handleBack}
+          className="w-9 h-9 rounded-full flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.15)' }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </motion.button>
+
+        <div className="flex flex-col items-center">
+          <span className="text-white font-bold text-sm tracking-wide">信息流询盘</span>
+          <span className="text-white/50 text-xs mt-0.5">火山引擎 · TikTok 商业平台</span>
+        </div>
+
+        {/* 分页指示器 */}
+        <div className="flex flex-col gap-1">
+          {LOCAL_VIDEOS.map((_, i) => (
+            <div key={i} className="w-1 rounded-full transition-all duration-300"
+              style={{
+                height: i === currentIndex ? '16px' : '4px',
+                background: i === currentIndex ? 'white' : 'rgba(255,255,255,0.3)',
+              }} />
+          ))}
         </div>
       </div>
-    );
-  }
 
-  if (items.length === 0) {
-    return (
-      <div className="fixed inset-0 bg-black flex flex-col items-center justify-center z-50">
-        <button onClick={onBack} className="absolute top-4 left-4 text-white/60 p-2">
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <div className="text-6xl mb-4">🎬</div>
-        <p className="text-white font-semibold text-lg mb-2">暂无视频</p>
-        <p className="text-white/50 text-sm text-center px-8">管理员还未上传视频询盘，请稍后再来</p>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      ref={containerRef}
-      className="fixed inset-0 bg-black z-50 overflow-hidden touch-none"
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-    >
-      {/* 返回按钮 */}
-      <button
-        onClick={onBack}
-        className="absolute top-4 left-4 z-20 w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center"
-      >
-        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-        </svg>
-      </button>
-
-      {/* 顶部标题 */}
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20">
-        <span className="text-white font-semibold text-sm drop-shadow">视频询盘</span>
-      </div>
-
-      {/* 进度指示器 */}
-      <div className="absolute top-4 right-4 z-20">
-        <span className="text-white/60 text-xs">{currentIndex + 1} / {items.length}</span>
-      </div>
-
-      {/* 视频轨道（CSS transform 实时跟手） */}
+      {/* ── 视频滚动容器 ── */}
       <div
-        ref={trackRef}
-        className="w-full"
+        ref={containerRef}
+        className="flex-1 overflow-y-scroll"
         style={{
-          height: `${items.length * 100}dvh`,
-          transform: `translateY(-${currentIndex * 100}%)`,
-          willChange: 'transform',
-        }}
+          scrollSnapType: 'y mandatory',
+          scrollBehavior: 'smooth',
+          WebkitOverflowScrolling: 'touch',
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
+        } as React.CSSProperties}
       >
-        {items.map((item, idx) => (
-          <div key={item.id} className="w-full" style={{ height: '100dvh' }}>
-            <VideoCard
-              item={item}
-              isActive={idx === currentIndex}
-              onLike={handleLike}
-              onBookmark={handleBookmark}
-            />
-          </div>
+        {LOCAL_VIDEOS.map((video, index) => (
+          <VideoCard key={video.id} video={video} index={index} />
         ))}
       </div>
-
-      {/* 上滑提示（首次进入，首屏且有下一个） */}
-      {currentIndex === 0 && items.length > 1 && (
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-1 animate-bounce pointer-events-none">
-          <svg className="w-5 h-5 text-white/50" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
-          <span className="text-white/40 text-xs">上滑查看下一个</span>
-        </div>
-      )}
     </div>
   );
 }
