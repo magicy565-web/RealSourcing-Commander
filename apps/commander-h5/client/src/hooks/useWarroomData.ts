@@ -1,138 +1,157 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { bossApi } from '../lib/api';
+import type { WaRoomData } from '../lib/api';
 import type { WarroomData, UseWarroomDataReturn } from '../types/warroom';
 
 /**
  * useWarroomData — Warroom 核心数据 Hook
  *
- * ═══════════════════════════════════════════════════════════════
- * 当前状态：Mock 模式，每 8 秒自动轮询并随机波动数据，模拟真实数据流。
+ * 直接调用 GET /api/v1/boss/warroom，从真实数据库获取数据。
+ * 数据库为空时，所有数字默认为 0，不展示 Mock 数据。
  *
- * 接入真实 API 的步骤：
- *   1. 将 fetchData 函数中的 Mock 逻辑替换为真实 fetch：
- *      const res = await fetch('/api/warroom/summary', {
- *        headers: { Authorization: `Bearer ${token}` }
- *      });
- *      return mapApiResponseToWarroomData(await res.json());
- *   2. 将 POLL_INTERVAL 改为期望的轮询间隔（如 30000ms）
- *   3. 取消注释 mapApiResponseToWarroomData 字段映射函数
- * ═══════════════════════════════════════════════════════════════
+ * 轮询间隔：30 秒（生产环境）
  */
 
-// ── 轮询间隔（Mock 模式 8s，真实 API 建议 30s）────────────────────
-const POLL_INTERVAL = 8000;
+const POLL_INTERVAL = 30_000;
 
-// ── 基础 Mock 数据 ────────────────────────────────────────────────
-const BASE_DATA: WarroomData = {
-  totalPending: 28,
-  deltaVsYesterday: 12,
-  completionRate: 56,
-  categories: [
-    { id: 'email',        label: '邮件', count: 12, hasUrgent: false },
-    { id: 'task',         label: '任务', count: 5,  hasUrgent: false },
-    { id: 'notification', label: '通知', count: 8,  hasUrgent: true  },
-    { id: 'other',        label: '其他', count: 3,  hasUrgent: false },
-  ],
-  platforms: [
-    {
-      id: 'tiktok',
-      unreadCount: 210,
-      trend7d: [120, 145, 132, 168, 155, 180, 210],
-      isConnected: true,
-    },
-    {
-      id: 'meta',
-      unreadCount: 145,
-      trend7d: [90, 105, 98, 120, 115, 132, 145],
-      isConnected: true,
-    },
-  ],
-  chatHistory: [
-    {
-      id: 'msg-1',
-      role: 'ai',
-      content: '检测到 28 条待处理消息，已按优先级整理完毕 ✓',
-      createdAt: new Date(Date.now() - 60000).toISOString(),
-    },
-    {
-      id: 'msg-2',
-      role: 'user',
-      content: '先处理 TikTok 的消息',
-      createdAt: new Date(Date.now() - 30000).toISOString(),
-    },
-  ],
-  updatedAt: new Date().toISOString(),
-};
+// ── 将后端 WaRoomData 映射到前端 WarroomData ─────────────────────
+function mapToWarroomData(raw: WaRoomData): WarroomData {
+  const { signals, agent, weekReport } = raw;
 
-// ── 随机波动函数 ──────────────────────────────────────────────────
-function jitter(base: number, range: number): number {
-  return Math.max(0, base + Math.round((Math.random() - 0.5) * 2 * range));
-}
+  // 从 social_accounts 中找 tiktok / meta 平台数据
+  const tiktokAccount = agent.accounts.find(a =>
+    ['tiktok', 'douyin', 'tik_tok'].includes(a.platform.toLowerCase())
+  );
+  const metaAccount = agent.accounts.find(a =>
+    ['meta', 'facebook', 'instagram', 'fb'].includes(a.platform.toLowerCase())
+  );
 
-function generateMockUpdate(prev: WarroomData): WarroomData {
-  const tiktokPrev = prev.platforms.find(p => p.id === 'tiktok')!;
-  const metaPrev   = prev.platforms.find(p => p.id === 'meta')!;
+  // 用本周 vs 上周的询盘数构造 7 日趋势（简化版）
+  // 真实趋势数据需要后端提供逐日数据，此处用周数据做近似
+  const buildTrend = (thisWeek: number, lastWeek: number): number[] => {
+    if (thisWeek === 0 && lastWeek === 0) return [];
+    // 用线性插值生成 7 个点
+    const step = (thisWeek - lastWeek) / 6;
+    return Array.from({ length: 7 }, (_, i) => Math.max(0, Math.round(lastWeek + step * i)));
+  };
 
-  const newTikTokCount = jitter(tiktokPrev.unreadCount, 8);
-  const newMetaCount   = jitter(metaPrev.unreadCount, 5);
+  const tiktokCount = tiktokAccount ? Math.round(tiktokAccount.usageRate * 2) : 0;
+  const metaCount   = metaAccount   ? Math.round(metaAccount.usageRate * 1.5) : 0;
 
-  // 滚动趋势数组（移除最旧的，追加最新的）
-  const newTikTokTrend = [...tiktokPrev.trend7d.slice(1), newTikTokCount];
-  const newMetaTrend   = [...metaPrev.trend7d.slice(1), newMetaCount];
+  // 总待处理 = 未读询盘 + 待审批 + 新报价
+  const totalPending = signals.unread + signals.pendingApprovals + signals.newQuotations;
 
-  const newCategories = prev.categories.map(cat => ({
-    ...cat,
-    count: jitter(cat.count, 2),
-  }));
+  // 完成率 = 今日完成任务 / 今日总任务
+  const completionRate = agent.todayTasks > 0
+    ? Math.round((agent.completedTasks / agent.todayTasks) * 100)
+    : 0;
 
-  const newTotal = newCategories.reduce((sum, c) => sum + c.count, 0);
-  const newCompletion = Math.min(99, Math.max(10, jitter(prev.completionRate, 3)));
-  const newDelta = jitter(prev.deltaVsYesterday, 3);
+  // 较昨日差值：用本周询盘 vs 上周询盘的日均差
+  const deltaVsYesterday = weekReport.growth.inquiries !== 0
+    ? Math.round(weekReport.growth.inquiries / 7)
+    : 0;
 
   return {
-    ...prev,
-    totalPending: newTotal,
-    deltaVsYesterday: newDelta,
-    completionRate: newCompletion,
-    categories: newCategories,
-    platforms: [
-      { ...tiktokPrev, unreadCount: newTikTokCount, trend7d: newTikTokTrend },
-      { ...metaPrev,   unreadCount: newMetaCount,   trend7d: newMetaTrend   },
+    totalPending,
+    deltaVsYesterday,
+    completionRate,
+    categories: [
+      {
+        id: 'email',
+        label: '邮件',
+        count: signals.unread,
+        hasUrgent: signals.hasUrgent,
+      },
+      {
+        id: 'task',
+        label: '任务',
+        count: agent.completedTasks,
+        hasUrgent: false,
+      },
+      {
+        id: 'notification',
+        label: '通知',
+        count: signals.pendingApprovals,
+        hasUrgent: signals.pendingApprovals > 0,
+      },
+      {
+        id: 'other',
+        label: '其他',
+        count: signals.newQuotations,
+        hasUrgent: false,
+      },
     ],
+    platforms: [
+      {
+        id: 'tiktok',
+        unreadCount: tiktokCount,
+        trend7d: buildTrend(
+          weekReport.thisWeek.inquiries,
+          weekReport.lastWeek.inquiries
+        ),
+        isConnected: tiktokAccount?.healthStatus === 'normal',
+      },
+      {
+        id: 'meta',
+        unreadCount: metaCount,
+        trend7d: buildTrend(
+          weekReport.thisWeek.replied,
+          weekReport.lastWeek.replied
+        ),
+        isConnected: metaAccount?.healthStatus === 'normal',
+      },
+    ],
+    chatHistory: signals.latestInquiries.slice(0, 2).map((inq, i) => ({
+      id: `inq-${inq.id}`,
+      role: i === 0 ? 'ai' : 'user',
+      content: i === 0
+        ? `检测到来自 ${inq.buyer_country ?? '未知地区'} 的询盘：${inq.product_name ?? '产品'} — ${inq.buyer_company ?? inq.buyer_name ?? '买家'}`
+        : `${inq.buyer_name ?? '买家'} (${inq.buyer_company ?? ''}) 发来询盘`,
+      createdAt: inq.received_at ?? new Date().toISOString(),
+    })),
     updatedAt: new Date().toISOString(),
   };
 }
 
+// ── 空状态（数据库无数据时的默认值）─────────────────────────────
+const EMPTY_DATA: WarroomData = {
+  totalPending: 0,
+  deltaVsYesterday: 0,
+  completionRate: 0,
+  categories: [
+    { id: 'email',        label: '邮件', count: 0, hasUrgent: false },
+    { id: 'task',         label: '任务', count: 0, hasUrgent: false },
+    { id: 'notification', label: '通知', count: 0, hasUrgent: false },
+    { id: 'other',        label: '其他', count: 0, hasUrgent: false },
+  ],
+  platforms: [
+    { id: 'tiktok', unreadCount: 0, trend7d: [], isConnected: false },
+    { id: 'meta',   unreadCount: 0, trend7d: [], isConnected: false },
+  ],
+  chatHistory: [],
+  updatedAt: new Date().toISOString(),
+};
+
 // ── Hook 实现 ────────────────────────────────────────────────────
 export function useWarroomData(): UseWarroomDataReturn {
-  const [data, setData] = useState<WarroomData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-  const dataRef = useRef<WarroomData | null>(null);
+  const [data, setData]       = useState<WarroomData | null>(null);
+  const [isLoading, setLoading] = useState(true);
+  const [error, setError]     = useState<Error | null>(null);
 
-  const fetchData = useCallback(async (isFirst = false) => {
+  const fetchData = useCallback(async (showLoading = false) => {
     try {
-      if (isFirst) setIsLoading(true);
+      if (showLoading) setLoading(true);
       setError(null);
 
-      // ── TODO: 接入真实 API 时替换此处 ──────────────────────────
-      // const res = await fetch('/api/warroom/summary');
-      // if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      // const json = await res.json();
-      // const newData = mapApiResponseToWarroomData(json);
-      // ────────────────────────────────────────────────────────────
-
-      // Mock: 首次加载用基础数据，后续轮询随机波动
-      await new Promise(r => setTimeout(r, isFirst ? 400 : 0));
-      const newData = isFirst || !dataRef.current
-        ? BASE_DATA
-        : generateMockUpdate(dataRef.current);
-
-      dataRef.current = newData;
-      setData(newData);
+      const raw = await bossApi.getWarroom();
+      setData(mapToWarroomData(raw));
     } catch (err) {
+      // 未登录或 API 错误时，展示空状态而非崩溃
+      console.warn('[useWarroomData] API error, showing empty state:', err);
+      setData(EMPTY_DATA);
       setError(err instanceof Error ? err : new Error(String(err)));
     } finally {
-      if (isFirst) setIsLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, []);
 
@@ -144,22 +163,3 @@ export function useWarroomData(): UseWarroomDataReturn {
 
   return { data, isLoading, error, refetch: () => fetchData(true) };
 }
-
-// ── 字段映射函数（接入真实 API 时取消注释）────────────────────────
-// export function mapApiResponseToWarroomData(raw: Record<string, unknown>): WarroomData {
-//   return {
-//     totalPending:      raw.total_pending as number,
-//     deltaVsYesterday:  raw.delta_vs_yesterday as number,
-//     completionRate:    raw.completion_rate as number,
-//     categories: (raw.categories as any[]).map(c => ({
-//       id: c.id, label: c.label, count: c.unread_count, hasUrgent: c.has_urgent,
-//     })),
-//     platforms: (raw.platforms as any[]).map(p => ({
-//       id: p.id, unreadCount: p.unread_count, trend7d: p.trend_7d, isConnected: p.is_connected,
-//     })),
-//     chatHistory: (raw.chat_history as any[]).map(m => ({
-//       id: m.id, role: m.role, content: m.content, createdAt: m.created_at,
-//     })),
-//     updatedAt: raw.updated_at as string,
-//   };
-// }

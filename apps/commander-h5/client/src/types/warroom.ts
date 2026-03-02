@@ -1,19 +1,16 @@
 /**
  * Warroom 数据类型定义
  *
- * 数据映射说明：
+ * 数据来源：
  * ─────────────────────────────────────────────────────────────
- * 当前阶段：所有数据由 useWarroomData() Hook 内的 MOCK_DATA 提供。
+ * 真实 API：GET /api/v1/boss/warroom（需要 JWT 认证）
+ * 数据库：SQLite（better-sqlite3），表：inquiries / task_queue /
+ *         social_accounts / openclaw_instances / pending_approvals
  *
- * 接入真实 API 时，只需修改 useWarroomData() 内部的数据来源：
- *   1. 将 `return MOCK_DATA` 替换为 `await fetch('/api/warroom/summary')`
- *   2. 后端返回的 JSON 结构需符合下方 WarroomData 接口
- *   3. 组件层零改动
+ * 映射逻辑在 useWarroomData.ts 的 mapToWarroomData() 函数中。
+ * 数据库为空时，所有字段默认为 0 / [] / false。
  *
- * 推荐接入方式（优先级从高到低）：
- *   · React Query (TanStack Query) — 适合需要缓存、轮询、乐观更新的场景
- *   · SWR — 轻量级，适合简单数据获取
- *   · 原生 useEffect + fetch — 当前 Mock 阶段使用此方式
+ * 轮询间隔：30 秒
  * ─────────────────────────────────────────────────────────────
  */
 
