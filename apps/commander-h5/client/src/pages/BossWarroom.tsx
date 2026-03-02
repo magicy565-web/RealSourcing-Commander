@@ -9,6 +9,7 @@ import { FluidAurora } from '../components/FluidAurora';
 import { ProactiveCardStack } from '../components/ProactiveCard';
 import { VoiceInput } from '../components/VoiceInput';
 import { QuickActions, buildQuickActions } from '../components/QuickActions';
+import { useLocation } from 'wouter';
 import { hapticLight, hapticMedium, hapticSuccess, hapticSelection } from '../lib/haptics';
 import {
   IconInquiry, IconMessage, IconReply, IconBuyer, IconGlobe, IconUrgent,
@@ -1058,6 +1059,7 @@ function InquiryRow({ inq, index }: { inq: typeof MOCK_INQUIRIES[0]; index: numb
 }
 
 function BentoInquiryFeed() {
+  const [, navigate] = useLocation();
   // 快捷功能入口配置
   const bentoItems: BentoItem[] = [
     {
@@ -1229,7 +1231,7 @@ function BentoInquiryFeed() {
           whileTap={{ scale:0.96 }}
           onClick={() => {
             hapticMedium();
-            window.open('https://business.oceanengine.com/site/login', '_blank');
+            navigate('/video-feed');
           }}
           style={{
             gridColumn:'1 / -1',
