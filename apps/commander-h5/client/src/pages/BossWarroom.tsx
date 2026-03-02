@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import avatarImg from '../assets/avatar.png';
 import { motion, AnimatePresence, useSpring, useTransform } from 'framer-motion';
 import { useWarroomData } from '../hooks/useWarroomData';
 import { useWarroomWS } from '../hooks/useWarroomWS';
@@ -975,12 +976,13 @@ export default function BossWarroom() {
           whileTap={{ scale: 0.92 }}
           transition={SPRING_SNAPPY}
           onClick={() => hapticLight()}
-          style={{ position:'relative', width:40, height:40, borderRadius:'50%', background:'linear-gradient(135deg, #6D28D9, #4338CA)', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 0 0 2.5px rgba(109,40,217,0.28), 0 4px 16px rgba(0,0,0,0.5)' } as React.CSSProperties}
+          style={{ position:'relative', width:42, height:42, borderRadius:'50%', border:'none', cursor:'pointer', padding:0, background:'transparent', boxShadow:'0 0 0 2.5px rgba(109,40,217,0.45), 0 4px 16px rgba(0,0,0,0.6)' } as React.CSSProperties}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="8" r="4" fill="rgba(255,255,255,0.92)"/>
-            <path d="M4 20C4 16.7 7.6 14 12 14C16.4 14 20 16.7 20 20" stroke="rgba(255,255,255,0.92)" strokeWidth="2.2" strokeLinecap="round"/>
-          </svg>
+          <img
+            src={avatarImg}
+            alt="Boss"
+            style={{ width:'100%', height:'100%', borderRadius:'50%', objectFit:'cover', display:'block' }}
+          />
           <motion.div
             animate={{ boxShadow: [`0 0 4px ${C.green}`, `0 0 10px ${C.green}`, `0 0 4px ${C.green}`] }}
             transition={{ duration: 2.5, repeat: Infinity }}
