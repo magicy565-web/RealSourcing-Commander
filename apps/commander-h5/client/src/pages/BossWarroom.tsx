@@ -373,7 +373,22 @@ function PlatformCard({
   const textSub     = textDark ? 'rgba(0,0,0,0.38)' : 'rgba(255,255,255,0.28)';
   const textMuted   = textDark ? 'rgba(0,0,0,0.28)' : 'rgba(255,255,255,0.18)';
 
-  // ── 未解锁状态渲染 ─────────────────────────────────────────────────
+  // ── 已解锁状态：AI 操作日志轮播（必须在所有条件分支之前声明 Hooks）──
+  const AI_LOGS_DEF = [
+    { tag: '已捕获', tagColor: C.green,  text: `AI 回复了 @buyer_john 的询价 "Price?"` },
+    { tag: '主动出击', tagColor: C.blue,  text: `AI 向 5 位潜在买家发起 DM 触达` },
+    { tag: '自动报价', tagColor: C.amber, text: `AI 为询盘 #INQ-047 生成报价草稿` },
+    { tag: '智能跟进', tagColor: C.PL,   text: `AI 跟进 3h 未回复买家，发送催单` },
+    { tag: '已捕获', tagColor: C.green,  text: `AI 识别到评论区 "MOQ?" 并秒级回复` },
+  ];
+  const [logIdx, setLogIdx] = useState(0);
+  useEffect(() => {
+    if (isLocked) return;
+    const t = setInterval(() => setLogIdx(i => (i + 1) % AI_LOGS_DEF.length), 3200);
+    return () => clearInterval(t);
+  }, [isLocked]);
+
+  // ── 未解锁状态渲染 ─────────────────────────────────────────
   if (isLocked) {
     const ld = lockedData ?? {
       hiddenCount: 5,
@@ -563,102 +578,140 @@ function PlatformCard({
     );
   }
 
-  // ── 已解锁（正常）状态渲染 ────────────────────────────────────────
+  // ── 已解锁（AI 工作中）状态渲染 ─────────────────────────────────
+  // 今日战报数据（从 platform 取，无数据则用 mock）
+  const todayCaptured  = platform?.unreadCount ?? 14;
+  const todayOutreach  = Math.round((platform?.unreadCount ?? 14) * 7.2);
+  const avgReplyMin    = 1;
+  const weekTotal      = trend.reduce((s, v) => s + v, 0) || (platform?.unreadCount ?? 14) * 6;
+
   return (
     <motion.div
-      whileTap={{ scale: 0.95 }}
+      whileTap={{ scale: 0.97 }}
       transition={SPRING_BOUNCY}
       onTapStart={() => hapticSelection()}
       onClick={() => {
-        if (path) {
-          hapticMedium();
-          navigate(path);
-        }
+        if (path) { hapticMedium(); navigate(path); }
       }}
       style={{
         borderRadius: 22, overflow: 'hidden', position: 'relative',
         background: bgGradient,
         border: `1px solid ${borderColor}`,
-        boxShadow: `inset 0 1px 0 rgba(255,255,255,${textDark ? '0.7' : '0.04'}), 0 20px 48px rgba(0,0,0,${textDark ? '0.18' : '0.75'})`,
-        padding: '16px 14px 14px',
-        cursor: 'pointer', minHeight: 172,
+        boxShadow: `inset 0 1px 0 rgba(255,255,255,0.05), 0 20px 48px rgba(0,0,0,0.75), 0 0 0 1px ${brandColor}18`,
+        padding: '14px 14px 14px',
+        cursor: 'pointer',
         display: 'flex', flexDirection: 'column',
       }}
     >
       <Noise intensity={0.025}/>
-      <EdgeDiffraction color={`${brandColor}20`}/>
+      <EdgeDiffraction color={`${brandColor}28`}/>
 
-      {/* Brand ambient glows */}
-      <div aria-hidden style={{ position:'absolute', top:-50, left:-20, width:150, height:150, borderRadius:'50%', background:`radial-gradient(circle, ${glowColorA} 0%, transparent 65%)`, filter:'blur(28px)', pointerEvents:'none', zIndex:0 }}/>
-      <div aria-hidden style={{ position:'absolute', bottom:-40, right:-15, width:130, height:130, borderRadius:'50%', background:`radial-gradient(circle, ${glowColorB} 0%, transparent 65%)`, filter:'blur(24px)', pointerEvents:'none', zIndex:0 }}/>
+      {/* Brand ambient glows — 已解锁时更亮 */}
+      <div aria-hidden style={{ position:'absolute', top:-50, left:-20, width:160, height:160, borderRadius:'50%', background:`radial-gradient(circle, ${glowColorA} 0%, transparent 65%)`, filter:'blur(28px)', pointerEvents:'none', zIndex:0, opacity:1.8 }}/>
+      <div aria-hidden style={{ position:'absolute', bottom:-40, right:-15, width:140, height:140, borderRadius:'50%', background:`radial-gradient(circle, ${glowColorB} 0%, transparent 65%)`, filter:'blur(24px)', pointerEvents:'none', zIndex:0, opacity:1.8 }}/>
 
       {/* Top specular line */}
       <div aria-hidden style={{ position:'absolute', top:0, left:10, right:10, height:1, background:`linear-gradient(90deg, transparent, ${specularA}, ${specularB}, transparent)`, zIndex:5 }}/>
 
-      <div style={{ position:'relative', zIndex:2, display:'flex', flexDirection:'column', flex:1 }}>
-        {/* Header */}
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+      <div style={{ position:'relative', zIndex:2, display:'flex', flexDirection:'column', gap:10 }}>
+
+        {/* ── 头部：图标 + AI 运行中标签 ── */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
           {icon}
-          <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+            {/* 7日趋势徽章 */}
             {trend.length >= 2 && (
-              <div style={{
-                padding:'2px 7px', borderRadius:50,
-                background: up ? 'rgba(16,185,129,0.12)' : 'rgba(248,113,113,0.12)',
-                border: `1px solid ${up ? 'rgba(16,185,129,0.25)' : 'rgba(248,113,113,0.25)'}`,
-              }}>
-                <span style={{ fontSize:10, fontWeight:700, color:up?C.green:C.red, letterSpacing:-0.2 }}>
-                  {up ? '+' : ''}{pct}%
-                </span>
+              <div style={{ padding:'2px 7px', borderRadius:50, background: up ? 'rgba(16,185,129,0.12)' : 'rgba(248,113,113,0.12)', border: `1px solid ${up ? 'rgba(16,185,129,0.25)' : 'rgba(248,113,113,0.25)'}` }}>
+                <span style={{ fontSize:10, fontWeight:700, color:up?C.green:C.red, letterSpacing:-0.2 }}>{up?'+':''}{pct}%</span>
               </div>
             )}
+            {/* AI 运行中标签 */}
             <motion.div
-              animate={{ boxShadow: platform?.isConnected ? [`0 0 4px ${C.green}`, `0 0 8px ${C.green}`, `0 0 4px ${C.green}`] : 'none' }}
-              transition={{ duration: 2.5, repeat: Infinity }}
-              style={{
-                width:6, height:6, borderRadius:'50%',
-                background: platform?.isConnected ? C.green : '#4B5563',
-              }}
-            />
+              animate={{ opacity: [0.8, 1, 0.8] }}
+              transition={{ duration: 2, repeat: Infinity }}
+              style={{ display:'flex', alignItems:'center', gap:4, padding:'3px 8px', borderRadius:50, background:'rgba(16,185,129,0.12)', border:'1px solid rgba(16,185,129,0.28)' }}
+            >
+              <motion.div
+                animate={{ scale:[1,1.4,1], opacity:[1,0.6,1] }}
+                transition={{ duration:1.8, repeat:Infinity }}
+                style={{ width:5, height:5, borderRadius:'50%', background:C.green, boxShadow:`0 0 5px ${C.green}` }}
+              />
+              <span style={{ fontSize:9.5, fontWeight:700, color:C.green, letterSpacing:0.2 }}>AI 运行中</span>
+            </motion.div>
           </div>
         </div>
 
-        {/* Platform label */}
-        <div style={{ fontSize:10, fontWeight:600, color:textMuted, letterSpacing:0.8, textTransform:'uppercase', marginBottom:5 }}>
-          {brandSub}
+        {/* ── 今日战报：3 个核心指标 ── */}
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:6 }}>
+          {/* 已捕获询盘 */}
+          <div style={{ padding:'8px 8px 7px', borderRadius:12, background:`${brandColor}12`, border:`1px solid ${brandColor}22`, display:'flex', flexDirection:'column', gap:2 }}>
+            <div style={{ fontSize:8.5, color:`${brandColor}99`, fontWeight:600, letterSpacing:0.3 }}>已捕获</div>
+            {isLoading ? <Skeleton w="60%" h={20} r={4}/> : (
+              <span style={{ fontSize:20, fontWeight:900, color:brandColor, letterSpacing:-1, fontVariantNumeric:'tabular-nums', lineHeight:1 }}>{todayCaptured}</span>
+            )}
+            <div style={{ fontSize:8, color:'rgba(255,255,255,0.22)', fontWeight:400 }}>条询盘</div>
+          </div>
+          {/* 主动触达 */}
+          <div style={{ padding:'8px 8px 7px', borderRadius:12, background:'rgba(96,165,250,0.08)', border:'1px solid rgba(96,165,250,0.18)', display:'flex', flexDirection:'column', gap:2 }}>
+            <div style={{ fontSize:8.5, color:'rgba(96,165,250,0.7)', fontWeight:600, letterSpacing:0.3 }}>主动触达</div>
+            {isLoading ? <Skeleton w="60%" h={20} r={4}/> : (
+              <span style={{ fontSize:20, fontWeight:900, color:C.blue, letterSpacing:-1, fontVariantNumeric:'tabular-nums', lineHeight:1 }}>{todayOutreach}</span>
+            )}
+            <div style={{ fontSize:8, color:'rgba(255,255,255,0.22)', fontWeight:400 }}>人次</div>
+          </div>
+          {/* 平均回盘 */}
+          <div style={{ padding:'8px 8px 7px', borderRadius:12, background:'rgba(16,185,129,0.08)', border:'1px solid rgba(16,185,129,0.18)', display:'flex', flexDirection:'column', gap:2 }}>
+            <div style={{ fontSize:8.5, color:'rgba(16,185,129,0.7)', fontWeight:600, letterSpacing:0.3 }}>平均回盘</div>
+            {isLoading ? <Skeleton w="60%" h={20} r={4}/> : (
+              <span style={{ fontSize:20, fontWeight:900, color:C.green, letterSpacing:-1, fontVariantNumeric:'tabular-nums', lineHeight:1 }}>{avgReplyMin}<span style={{ fontSize:11, fontWeight:700 }}>min</span></span>
+            )}
+            <div style={{ fontSize:8, color:'rgba(255,255,255,0.22)', fontWeight:400 }}>响应速度</div>
+          </div>
         </div>
 
-        {/* Hero number — 900 Black weight */}
-        {isLoading ? <Skeleton w="65%" h={40} r={8}/> : (
-          <div style={{ display:'flex', alignItems:'baseline', gap:4 }}>
-            <span style={{
-              fontSize:40, fontWeight:900, letterSpacing:-2.5,
-              fontVariantNumeric:'tabular-nums', lineHeight:1,
-              background: textDark
-                ? `linear-gradient(135deg, ${brandColor} 30%, ${brandColor}99)`
-                : `linear-gradient(135deg, #fff 40%, rgba(255,255,255,0.55))`,
-              WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
-            }}>
-              {count}
-            </span>
+        {/* ── AI 实时操作流 ── */}
+        <div style={{ borderRadius:12, background:'rgba(16,185,129,0.05)', border:'1px solid rgba(16,185,129,0.14)', padding:'8px 10px', overflow:'hidden' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2L14.5 8.5H21L15.5 12.5L17.5 19L12 15L6.5 19L8.5 12.5L3 8.5H9.5L12 2Z"/>
+            </svg>
+            <span style={{ fontSize:9.5, fontWeight:700, color:C.green, letterSpacing:0.3 }}>AI 实时操作</span>
+            <span style={{ fontSize:8.5, color:C.t3, marginLeft:'auto' }}>今日</span>
           </div>
-        )}
-        <div style={{ fontSize:11, color:textSub, fontWeight:400, marginTop:3 }}>条未读消息</div>
-
-        {/* Extra metric (LinkedIn connections / Shopify GMV) */}
-        {extraMetric && !isLoading && (
-          <div style={{ marginTop:6, display:'flex', alignItems:'center', gap:4 }}>
-            <span style={{ fontSize:10, color:textMuted, fontWeight:500 }}>{extraMetric.label}</span>
-            <span style={{ fontSize:12, fontWeight:700, color:extraMetric.color ?? brandColor, fontVariantNumeric:'tabular-nums' }}>{extraMetric.value}</span>
-          </div>
-        )}
-
-        {/* Sparkline */}
-        <div style={{ marginTop:'auto', paddingTop:10 }}>
-          {isLoading
-            ? <Skeleton w="100%" h={32} r={6}/>
-            : <Sparkline data={trend} color={brandColor} w={130} h={32}/>
-          }
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={logIdx}
+              initial={{ opacity:0, y:6 }}
+              animate={{ opacity:1, y:0 }}
+              exit={{ opacity:0, y:-6 }}
+              transition={SPRING_SNAPPY}
+              style={{ display:'flex', alignItems:'center', gap:6 }}
+            >
+              <span style={{ fontSize:10, color:C.t2, flex:1, lineHeight:1.4 }}>{AI_LOGS_DEF[logIdx].text}</span>
+              <span style={{ fontSize:8.5, fontWeight:700, color:AI_LOGS_DEF[logIdx].tagColor, padding:'2px 6px', borderRadius:50, background:`${AI_LOGS_DEF[logIdx].tagColor}18`, border:`1px solid ${AI_LOGS_DEF[logIdx].tagColor}28`, flexShrink:0, whiteSpace:'nowrap' }}>{AI_LOGS_DEF[logIdx].tag}</span>
+            </motion.div>
+          </AnimatePresence>
         </div>
+
+        {/* ── 底部：Sparkline + 本周总量 ── */}
+        <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between' }}>
+          <div>
+            <div style={{ fontSize:8.5, color:C.t3, fontWeight:500, marginBottom:2 }}>7 日趋势</div>
+            {isLoading
+              ? <Skeleton w={90} h={28} r={6}/>
+              : <Sparkline data={trend.length >= 2 ? trend : [2,5,4,8,6,11,todayCaptured]} color={brandColor} w={90} h={28}/>
+            }
+          </div>
+          <div style={{ textAlign:'right' }}>
+            <div style={{ fontSize:8.5, color:C.t3, fontWeight:500, marginBottom:2 }}>本周询盘</div>
+            <div style={{ display:'flex', alignItems:'baseline', gap:2, justifyContent:'flex-end' }}>
+              <span style={{ fontSize:18, fontWeight:900, color:brandColor, letterSpacing:-0.8, fontVariantNumeric:'tabular-nums', lineHeight:1, filter:`drop-shadow(0 0 6px ${brandColor}66)` }}>{weekTotal}</span>
+              <span style={{ fontSize:9, color:C.t3, fontWeight:500 }}>条</span>
+            </div>
+            <div style={{ fontSize:8, color:C.t3, marginTop:1 }}>{brandSub}</div>
+          </div>
+        </div>
+
       </div>
     </motion.div>
   );
