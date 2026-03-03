@@ -589,83 +589,170 @@ function StatusView({ onGoFeed, onGoInquiries, isEnterprise = false }: { onGoFee
       </div>
 
       {/* 社媒托管入口 */}
-      <div className="px-4 mb-4">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">社媒账号托管</h3>
-          {isEnterprise
-            ? <span className="text-xs text-teal-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-teal-400" />4 个账号运行中</span>
-            : <span className="text-xs text-amber-500 flex items-center gap-1">🔒 独立部署专属</span>
-          }
-        </div>
-        {!isEnterprise && (
-          <div className="rounded-xl p-4 mb-2 flex items-start gap-3"
-            style={{background:"oklch(0.19 0.02 250)", border:"1px solid #f59e0b30"}}>
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
-              style={{background:"#f59e0b15"}}>
-              <span className="text-base">🔒</span>
+      {/* ─── 社媒托管区域：未开通引导 / 已开通看板 ─── */}
+      {!isEnterprise ? (
+        /* ── 未开通：价值引导页 ── */
+        <div className="px-4 mb-4">
+          {/* 标题行 */}
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">社媒账号托管</h3>
+            <span className="text-xs text-amber-500 font-medium px-2 py-0.5 rounded-full" style={{background:"#f59e0b15", border:"1px solid #f59e0b30"}}>未开通</span>
+          </div>
+
+          {/* 核心价值卡片 */}
+          <div className="rounded-2xl overflow-hidden mb-3" style={{background:"linear-gradient(135deg, oklch(0.17 0.04 280) 0%, oklch(0.15 0.03 260) 100%)", border:"1px solid oklch(0.45 0.12 280 / 35%)"}}>
+            {/* 顶部 Hero */}
+            <div className="px-4 pt-4 pb-3 border-b border-white/8">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{background:"linear-gradient(135deg, #6366f1, #8b5cf6)"}}>
+                  <Bot className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-white">OpenClaw 社媒托管</p>
+                  <p className="text-xs text-slate-400">AI 全天候代替你运营社媒账号</p>
+                </div>
+              </div>
+              {/* 数据亮点 */}
+              <div className="grid grid-cols-3 gap-2 mt-3">
+                {[
+                  { value: "3.2x", label: "询盘增长", color: "text-teal-400" },
+                  { value: "24h", label: "全天运营", color: "text-blue-400" },
+                  { value: "0", label: "人工干预", color: "text-purple-400" },
+                ].map(stat => (
+                  <div key={stat.label} className="text-center py-2 rounded-xl" style={{background:"oklch(0.20 0.03 270 / 60%)"}}>
+                    <p className={`text-lg font-bold font-mono ${stat.color}`}>{stat.value}</p>
+                    <p className="text-xs text-slate-500">{stat.label}</p>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-white mb-0.5">社媒账号托管</p>
-              <p className="text-xs text-slate-400 mb-2.5">LinkedIn、Facebook、TikTok、WhatsApp 账号托管仅对独立部署用户开放。升级后 OpenClaw 将为您的账号自动运营。</p>
-              <button onClick={() => toast.info("请联系销售团队了解独立部署方案")}
-                className="text-xs px-3 py-1.5 rounded-lg font-semibold transition-all active:scale-95"
-                style={{background:"linear-gradient(135deg, #f59e0b, #d97706)", color:"#000"}}>
-                了解独立部署方案 →
+
+            {/* 功能列表 */}
+            <div className="px-4 py-3 space-y-2.5">
+              {[
+                { icon: "💼", platform: "LinkedIn", desc: "每日自动发起连接 + 发送开发信", highlight: "25条/天" },
+                { icon: "🎵", platform: "TikTok", desc: "自动回复询价评论，转化为询盘", highlight: "评论监控" },
+                { icon: "📘", platform: "Facebook", desc: "主动私信目标买家，跟进潜在客户", highlight: "精准触达" },
+                { icon: "💬", platform: "WhatsApp", desc: "自动跟进报价后未回复的买家", highlight: "转化率+40%" },
+              ].map(item => (
+                <div key={item.platform} className="flex items-center gap-3">
+                  <span className="text-lg w-7 text-center flex-shrink-0">{item.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-white">{item.platform}</span>
+                      <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{background:"#22c55e15", color:"#22c55e"}}>{item.highlight}</span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">{item.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* 对比：开通前 vs 开通后 */}
+            <div className="mx-4 mb-3 rounded-xl overflow-hidden" style={{border:"1px solid oklch(1 0 0 / 8%)"}}>
+              <div className="grid grid-cols-2">
+                <div className="px-3 py-2.5" style={{background:"oklch(0.18 0.02 250)"}}>
+                  <p className="text-xs font-semibold text-slate-500 mb-1.5">未开通</p>
+                  {["手动逐条回复", "每天 2-3 小时", "错过非工作时间询盘", "依赖个人记忆跟进"].map(t => (
+                    <div key={t} className="flex items-center gap-1.5 mb-1">
+                      <span className="text-red-500 text-xs">✕</span>
+                      <span className="text-xs text-slate-500">{t}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="px-3 py-2.5" style={{background:"oklch(0.17 0.04 160 / 40%)"}}>
+                  <p className="text-xs font-semibold text-teal-400 mb-1.5">开通后</p>
+                  {["AI 自动处理", "节省 90% 时间", "7×24 全天候响应", "智能跟进不遗漏"].map(t => (
+                    <div key={t} className="flex items-center gap-1.5 mb-1">
+                      <span className="text-teal-400 text-xs">✓</span>
+                      <span className="text-xs text-teal-300">{t}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* CTA */}
+            <div className="px-4 pb-4">
+              <button
+                onClick={() => toast.info("请联系您的销售顾问开通社媒托管服务")} 
+                className="w-full py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 active:scale-98 transition-transform"
+                style={{background:"linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)", boxShadow:"0 4px 20px #6366f140"}}>
+                <span>联系销售顾问开通</span>
+                <ChevronRight className="w-4 h-4" />
               </button>
+              <p className="text-center text-xs text-slate-600 mt-2">开通后由销售顾问为您完成账号配置，无需自行操作</p>
             </div>
           </div>
-        )}
-        <div className={`grid grid-cols-2 gap-2 ${!isEnterprise ? "opacity-30 pointer-events-none" : ""}`}>
-          <button onClick={() => navigate("/tiktok")}
-            className="text-left rounded-xl p-3 flex items-center gap-2.5 active:scale-95 transition-all"
-            style={{background:"oklch(0.19 0.02 250)", border:"1px solid #fe2c5530"}}>
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-              style={{background:"#fe2c5520"}}>
-              <span className="text-base">🎵</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-white">TikTok</p>
-              <p className="text-xs" style={{color:"#fe2c55"}}>23 条询价评论</p>
-            </div>
-          </button>
-          <button onClick={() => navigate("/facebook")}
-            className="text-left rounded-xl p-3 flex items-center gap-2.5 active:scale-95 transition-all"
-            style={{background:"oklch(0.19 0.02 250)", border:"1px solid #1877f230"}}>
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-              style={{background:"#1877f220"}}>
-              <span className="text-base">📘</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-white">Facebook</p>
-              <p className="text-xs" style={{color:"#1877f2"}}>3 条待回复</p>
-            </div>
-          </button>
-          <button onClick={() => navigate("/linkedin")}
-            className="text-left rounded-xl p-3 flex items-center gap-2.5 active:scale-95 transition-all"
-            style={{background:"oklch(0.19 0.02 250)", border:"1px solid #0a66c230"}}>
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-              style={{background:"#0a66c220"}}>
-              <span className="text-base">💼</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-white">LinkedIn</p>
-              <p className="text-xs" style={{color:"#0a66c2"}}>5 条连接请求</p>
-            </div>
-          </button>
-          <button onClick={() => navigate("/whatsapp")}
-            className="text-left rounded-xl p-3 flex items-center gap-2.5 active:scale-95 transition-all"
-            style={{background:"oklch(0.19 0.02 250)", border:"1px solid #25d36630"}}>
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-              style={{background:"#25d36620"}}>
-              <span className="text-base">💬</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-white">WhatsApp</p>
-              <p className="text-xs" style={{color:"#25d366"}}>3 条未读消息</p>
-            </div>
+        </div>
+      ) : (
+        /* ── 已开通：托管看板 ── */
+        <div className="px-4 mb-4">
+          {/* 标题行 */}
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">社媒账号托管</h3>
+            <span className="text-xs text-teal-400 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />4 个账号运行中
+            </span>
+          </div>
+
+          {/* 今日汇总数据 */}
+          <div className="rounded-xl px-4 py-3 mb-3 grid grid-cols-4 gap-2" style={{background:"oklch(0.19 0.02 250)", border:"1px solid oklch(1 0 0 / 8%)"}}>
+            {[
+              { value: "47", label: "今日操作", color: "text-blue-400" },
+              { value: "12", label: "新触达", color: "text-teal-400" },
+              { value: "5", label: "新询盘", color: "text-orange-400" },
+              { value: "89", label: "积分消耗", color: "text-purple-400" },
+            ].map(s => (
+              <div key={s.label} className="text-center">
+                <p className={`text-base font-bold font-mono ${s.color}`}>{s.value}</p>
+                <p className="text-xs text-slate-500">{s.label}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* 各平台状态卡片 */}
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            {[
+              { icon: "💼", platform: "LinkedIn", color: "#0a66c2", border: "#0a66c230", bg: "#0a66c220", route: "/linkedin",
+                stats: { primary: "25/25", primaryLabel: "连接配额", secondary: "5 条回复待处理", secondaryColor: "#f97316" } },
+              { icon: "🎵", platform: "TikTok", color: "#fe2c55", border: "#fe2c5530", bg: "#fe2c5520", route: "/tiktok",
+                stats: { primary: "23", primaryLabel: "询价评论", secondary: "已自动回复 18 条", secondaryColor: "#22c55e" } },
+              { icon: "📘", platform: "Facebook", color: "#1877f2", border: "#1877f230", bg: "#1877f220", route: "/facebook",
+                stats: { primary: "3", primaryLabel: "待回复", secondary: "今日触达 12 人", secondaryColor: "#60a5fa" } },
+              { icon: "💬", platform: "WhatsApp", color: "#25d366", border: "#25d36630", bg: "#25d36620", route: "/whatsapp",
+                stats: { primary: "3", primaryLabel: "未读消息", secondary: "跟进转化率 40%", secondaryColor: "#22c55e" } },
+            ].map(acc => (
+              <button key={acc.platform}
+                onClick={() => navigate(acc.route)}
+                className="text-left rounded-xl p-3 flex flex-col gap-1.5 active:scale-95 transition-all"
+                style={{background:"oklch(0.19 0.02 250)", border:`1px solid ${acc.border}`}}>
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{background:acc.bg}}>
+                    <span className="text-sm">{acc.icon}</span>
+                  </div>
+                  <span className="text-xs font-semibold text-white">{acc.platform}</span>
+                  <span className="ml-auto w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />
+                </div>
+                <div>
+                  <p className="text-base font-bold font-mono" style={{color:acc.color}}>{acc.stats.primary}</p>
+                  <p className="text-xs text-slate-500">{acc.stats.primaryLabel}</p>
+                </div>
+                <p className="text-xs" style={{color:acc.stats.secondaryColor}}>{acc.stats.secondary}</p>
+              </button>
+            ))}
+          </div>
+
+          {/* 快捷任务下达 */}
+          <button onClick={() => navigate("/task-queue")}
+            className="w-full py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-semibold text-white active:scale-98 transition-transform"
+            style={{background:"linear-gradient(135deg, oklch(0.35 0.10 280) 0%, oklch(0.28 0.08 270) 100%)", border:"1px solid oklch(0.55 0.12 280 / 40%)"}}>
+            <Zap className="w-4 h-4 text-purple-300" />
+            <span>下达市场开发任务</span>
+            <ChevronRight className="w-4 h-4 ml-auto" />
           </button>
         </div>
-      </div>
+      )}
 
       {/* 快捷功能入口 */}
       <div className="px-4 space-y-2">
