@@ -56,7 +56,7 @@ function VideoCard({
   const progressRef = useRef<HTMLDivElement>(null);
 
   const [playing, setPlaying] = useState(false);
-  const [muted, setMuted] = useState(true);
+  const [muted, setMuted] = useState(false);
   const [liked, setLiked] = useState(item.is_liked ?? false);
   const [bookmarked, setBookmarked] = useState(item.is_bookmarked ?? false);
   const [likeCount, setLikeCount] = useState(item.likes_count ?? 0);
@@ -80,8 +80,16 @@ function VideoCard({
       // 进入激活状态：重置用户暂停标记，从头播放
       userPausedRef.current = false;
       v.currentTime = 0;
-      v.play().then(() => setPlaying(true)).catch(() => {
-        // 自动播放被浏览器拦截时静默失败，等待用户点击
+      // 优先尝试有声播放；若被浏览器自动播放策略拦截，降级为静音重试
+      v.muted = false;
+      v.play().then(() => {
+        setPlaying(true);
+        setMuted(false);
+      }).catch(() => {
+        // 有声被拦截，静音重试（符合浏览器策略）
+        v.muted = true;
+        setMuted(true);
+        v.play().then(() => setPlaying(true)).catch(() => {});
       });
     } else {
       // 离开激活状态：暂停并重置进度，为下次进入做准备
