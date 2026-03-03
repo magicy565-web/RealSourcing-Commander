@@ -50,7 +50,11 @@ export async function commitUploadInfo(spaceName: string, sessionKey: string) {
  * spaceName 参数保留以兼容旧调用签名，SDK 版本无需传入。
  */
 export async function getPlayInfo(vid: string, _spaceName?: string) {
-  const res = await vodService.GetPlayInfo({ Vid: vid });
+  const res = await vodService.GetPlayInfo({
+    Vid: vid,
+    Ssl: '1',          // 强制返回 HTTPS 播放地址
+    NeedThumbs: '0',   // 不需要缩略图，减少响应体积
+  });
   return res.Result;
 }
 

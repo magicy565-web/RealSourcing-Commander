@@ -430,7 +430,7 @@ export const videoFeedApi = {
   },
   // 获取单个视频播放信息
   getPlayInfo: (id: string) =>
-    request<{ playUrl: string; coverUrl: string; duration: number; vid: string }>(`/video-feed/${id}/play`),
+    request<{ play_url: string; poster_url: string; duration: number; vid: string }>(`/video-feed/${id}/play`),
   // 点赞
   like: (id: string) =>
     request<{ liked: boolean; likes_count: number }>(`/video-feed/${id}/like`, { method: "POST" }),
