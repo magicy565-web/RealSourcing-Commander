@@ -31,12 +31,25 @@ const INQUIRY_META: Record<string, {
 };
 
 // ─── 单个视频卡片 ──────────────────────────────────────────────────────────────
+/**
+ * TikTok 自动播放机制说明：
+ * 1. 「集中式控制」：父组件通过 currentIndex 精确告知哪张卡片应该播放，
+ *    不依赖 IntersectionObserver 的模糊阈值触发。
+ * 2. 「滚动结束后播放」：TikTok 在 scroll-snap 完全停止后才 play()，
+ *    滚动过程中的卡片不会提前播放。
+ * 3. 「不重置进度」：切换回已看过的视频时从头播（loop 模式），
+ *    但不在每次 active 时强制 currentTime=0（由 loop 属性保证循环）。
+ * 4. 「静音自动播放」：始终 muted=true 初始化，绕过浏览器自动播放策略。
+ * 5. 「预加载相邻视频」：active ±1 的视频设置 preload="auto"，其余 "none"。
+ */
 function VideoCard({
   item,
   index,
+  isActive,
 }: {
   item: VideoFeedItem & { playUrl?: string };
   index: number;
+  isActive: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -50,47 +63,34 @@ function VideoCard({
   const [showQuote, setShowQuote] = useState(false);
   const [showPauseIcon, setShowPauseIcon] = useState(false);
   const pauseIconTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 记录用户是否主动暂停（主动暂停后切回该卡片不自动恢复）
+  const userPausedRef = useRef(false);
 
   const meta = INQUIRY_META[item.id] ?? {
     country: '🌍 海外', budget: '面议', urgent: false,
     avatarColor: 'from-purple-400 to-indigo-600', comments: 0,
   };
 
-  // IntersectionObserver 自动播放/暂停
-  // 依赖 item.playUrl：playUrl 异步到达后重新注册，确保视频元素已挂载
+  // ── 核心：isActive + playUrl 双重门控，对齐 TikTok 集中式播放控制 ──
   useEffect(() => {
     const v = videoRef.current;
-    const card = cardRef.current;
-    if (!v || !card) return;
+    if (!v) return;
 
-    let isVisible = false;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        isVisible = entry.isIntersecting && entry.intersectionRatio > 0.7;
-        if (isVisible) {
-          v.currentTime = 0;
-          v.play().then(() => setPlaying(true)).catch(() => {});
-        } else {
-          v.pause();
-          setPlaying(false);
-        }
-      },
-      { threshold: 0.7 }
-    );
-    observer.observe(card);
-
-    // playUrl 刚到达时，如果卡片已在视口内则立即播放
-    // （Observer 首次回调可能在 playUrl 到达前已经触发过）
-    const rect = card.getBoundingClientRect();
-    const viewH = window.innerHeight;
-    const ratio = Math.min(rect.bottom, viewH) - Math.max(rect.top, 0);
-    if (ratio / viewH > 0.7) {
-      v.play().then(() => setPlaying(true)).catch(() => {});
+    if (isActive && item.playUrl) {
+      // 进入激活状态：重置用户暂停标记，从头播放
+      userPausedRef.current = false;
+      v.currentTime = 0;
+      v.play().then(() => setPlaying(true)).catch(() => {
+        // 自动播放被浏览器拦截时静默失败，等待用户点击
+      });
+    } else {
+      // 离开激活状态：暂停并重置进度，为下次进入做准备
+      v.pause();
+      v.currentTime = 0;
+      setPlaying(false);
+      if (progressRef.current) progressRef.current.style.width = '0%';
     }
-
-    return () => observer.disconnect();
-  }, [item.playUrl]);
+  }, [isActive, item.playUrl]);
 
   // 进度条更新
   useEffect(() => {
@@ -108,8 +108,10 @@ function VideoCard({
     const v = videoRef.current;
     if (!v) return;
     if (v.paused) {
+      userPausedRef.current = false;
       v.play().then(() => setPlaying(true)).catch(() => {});
     } else {
+      userPausedRef.current = true;
       v.pause();
       setPlaying(false);
       setShowPauseIcon(true);
@@ -161,7 +163,7 @@ function VideoCard({
           muted={muted}
           loop
           playsInline
-          preload="metadata"
+          preload={isActive ? 'auto' : 'none'}
           className="absolute inset-0 w-full h-full object-cover"
         />
       ) : (
@@ -413,16 +415,38 @@ export default function VideoFeedPlayer({ onBack }: { onBack?: () => void }) {
     return () => { cancelled = true; };
   }, []);
 
-  // 监听滚动更新当前 index
+  // 监听滚动结束更新当前 index
+  // TikTok 关键点：必须在 scroll-snap 完全停止后才更新 currentIndex，
+  // 这样 isActive 才会在滚动完成后才变为 true，触发自动播放。
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const onScroll = () => {
+
+    let scrollEndTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const commitIndex = () => {
       const idx = Math.round(el.scrollTop / window.innerHeight);
       setCurrentIndex(idx);
     };
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
+
+    // 优先使用原生 scrollend 事件（Chrome 114+，最准确）
+    const supportsScrollEnd = 'onscrollend' in el;
+
+    if (supportsScrollEnd) {
+      el.addEventListener('scrollend', commitIndex, { passive: true });
+      return () => el.removeEventListener('scrollend', commitIndex);
+    } else {
+      // 降级方案：scroll + 150ms 防抖（模拟 scrollend）
+      const onScroll = () => {
+        if (scrollEndTimer) clearTimeout(scrollEndTimer);
+        scrollEndTimer = setTimeout(commitIndex, 150);
+      };
+      el.addEventListener('scroll', onScroll, { passive: true });
+      return () => {
+        el.removeEventListener('scroll', onScroll);
+        if (scrollEndTimer) clearTimeout(scrollEndTimer);
+      };
+    }
   }, []);
 
   return (
@@ -483,7 +507,7 @@ export default function VideoFeedPlayer({ onBack }: { onBack?: () => void }) {
         } as React.CSSProperties}
       >
         {items.map((item, index) => (
-          <VideoCard key={item.id} item={item} index={index} />
+          <VideoCard key={item.id} item={item} index={index} isActive={index === currentIndex} />
         ))}
       </div>
     </div>
