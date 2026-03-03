@@ -1716,6 +1716,142 @@ function BentoIconTile({ item, index, compact }: { item: BentoItem; index: numbe
 }
 
 // ══════════════════════════════════════════════════════════════════
+// Agent Entry Cards — 同行监听 Agent 入口
+// ══════════════════════════════════════════════════════════════════
+function AgentEntryCards() {
+  const [, navigate] = useLocation();
+  const agents = [
+    {
+      id: 'comment-leads',
+      title: '评论区线索挖掘',
+      subtitle: 'Agent A · 竞品评论区买家监听',
+      status: '5 条新线索',
+      statusColor: C.green,
+      badge: 'NEW',
+      gradient: 'linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(5,150,105,0.06) 100%)',
+      border: 'rgba(16,185,129,0.25)',
+      glow: 'rgba(16,185,129,0.15)',
+      icon: (
+        <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
+          <circle cx="10" cy="10" r="5" fill="rgba(16,185,129,0.3)" stroke="#10B981" strokeWidth="1.5"/>
+          <circle cx="22" cy="10" r="5" fill="rgba(16,185,129,0.2)" stroke="rgba(16,185,129,0.6)" strokeWidth="1.5"/>
+          <circle cx="16" cy="22" r="5" fill="rgba(16,185,129,0.2)" stroke="rgba(16,185,129,0.6)" strokeWidth="1.5"/>
+          <line x1="14" y1="14" x2="10" y2="17" stroke="#10B981" strokeWidth="1.5" strokeLinecap="round"/>
+          <line x1="18" y1="14" x2="22" y2="17" stroke="rgba(16,185,129,0.6)" strokeWidth="1.5" strokeLinecap="round"/>
+          <circle cx="10" cy="10" r="2" fill="#10B981"/>
+        </svg>
+      ),
+      href: '/agent/comment-leads',
+    },
+    {
+      id: 'video-trends',
+      title: '爆款视频分析',
+      subtitle: 'Agent B · 竞品内容情报监听',
+      status: '3 条选题建议',
+      statusColor: C.PL,
+      badge: 'AI',
+      gradient: 'linear-gradient(135deg, rgba(124,58,237,0.12) 0%, rgba(109,40,217,0.06) 100%)',
+      border: 'rgba(124,58,237,0.25)',
+      glow: 'rgba(124,58,237,0.15)',
+      icon: (
+        <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
+          <rect x="3" y="20" width="4" height="9" rx="2" fill="rgba(124,58,237,0.4)"/>
+          <rect x="9" y="14" width="4" height="15" rx="2" fill="rgba(124,58,237,0.55)"/>
+          <rect x="15" y="8" width="4" height="21" rx="2" fill="rgba(124,58,237,0.7)"/>
+          <rect x="21" y="3" width="4" height="26" rx="2" fill="#7C3AED"/>
+          <path d="M5 19 L11 13 L17 7 L23 2" stroke="#7C3AED" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+          <circle cx="23" cy="2" r="2.5" fill="#7C3AED"/>
+        </svg>
+      ),
+      href: '/agent/video-trends',
+    },
+  ];
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+      {/* 区块标题 */}
+      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'0 2px' }}>
+        <div style={{ width:3, height:14, borderRadius:2, background:`linear-gradient(to bottom, ${C.PL}, ${C.green})` }}/>
+        <span style={{ fontSize:12, fontWeight:700, color:C.t2, letterSpacing:0.3 }}>AI 监听 Agent</span>
+        <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.06)' }}/>
+        <span style={{ fontSize:10, color:C.t4 }}>2 个运行中</span>
+      </div>
+
+      {/* 卡片列表 */}
+      {agents.map((agent, i) => (
+        <motion.button
+          key={agent.id}
+          initial={{ opacity:0, y:12 }}
+          animate={{ opacity:1, y:0 }}
+          transition={{ ...SPRING_GENTLE, delay: i * 0.08 }}
+          whileTap={{ scale:0.97 }}
+          onClick={() => { hapticMedium(); navigate(agent.href); }}
+          style={{
+            width:'100%', border:`1px solid ${agent.border}`,
+            borderRadius:20, padding:'14px 16px',
+            background:agent.gradient,
+            boxShadow:`inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 20px ${agent.glow}`,
+            cursor:'pointer', fontFamily:'inherit',
+            display:'flex', alignItems:'center', gap:14,
+            position:'relative', overflow:'hidden',
+          } as React.CSSProperties}
+        >
+          {/* 背景光晓 */}
+          <div aria-hidden style={{ position:'absolute', top:-20, right:-20, width:100, height:100, borderRadius:'50%', background:`radial-gradient(circle, ${agent.glow} 0%, transparent 70%)`, filter:'blur(20px)', pointerEvents:'none' }}/>
+
+          {/* 图标 */}
+          <div style={{
+            width:50, height:50, borderRadius:15, flexShrink:0,
+            background:`rgba(255,255,255,0.04)`,
+            border:`1px solid ${agent.border}`,
+            display:'flex', alignItems:'center', justifyContent:'center',
+          }}>
+            {agent.icon}
+          </div>
+
+          {/* 文字区 */}
+          <div style={{ flex:1, textAlign:'left' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:4 }}>
+              <span style={{ fontSize:15, fontWeight:800, color:C.t1, letterSpacing:-0.3 }}>{agent.title}</span>
+              {/* Badge */}
+              <div style={{
+                padding:'2px 7px', borderRadius:50,
+                background:`rgba(255,255,255,0.08)`,
+                border:`1px solid rgba(255,255,255,0.12)`,
+              }}>
+                <span style={{ fontSize:9, fontWeight:800, color:C.t2, letterSpacing:0.5 }}>{agent.badge}</span>
+              </div>
+            </div>
+            <div style={{ fontSize:11, color:C.t3, marginBottom:6 }}>{agent.subtitle}</div>
+            {/* 状态行 */}
+            <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+              <motion.div
+                animate={{ opacity:[1,0.4,1] }}
+                transition={{ duration:2, repeat:Infinity }}
+                style={{ width:5, height:5, borderRadius:'50%', background:agent.statusColor, boxShadow:`0 0 6px ${agent.statusColor}` }}
+              />
+              <span style={{ fontSize:11, fontWeight:600, color:agent.statusColor }}>{agent.status}</span>
+            </div>
+          </div>
+
+          {/* 右箭头 */}
+          <div style={{
+            width:30, height:30, borderRadius:'50%', flexShrink:0,
+            background:`rgba(255,255,255,0.05)`,
+            border:`1px solid rgba(255,255,255,0.1)`,
+            display:'flex', alignItems:'center', justifyContent:'center',
+          }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.t3} strokeWidth="2.5" strokeLinecap="round">
+              <path d="M9 18l6-6-6-6"/>
+            </svg>
+          </div>
+        </motion.button>
+      ))}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
 // Pull-to-Refresh Indicator
 // ══════════════════════════════════════════════════════════════════
 function PullIndicator({ indicatorRef }: { indicatorRef: React.RefObject<HTMLDivElement | null> }) {
@@ -1909,6 +2045,9 @@ export default function BossWarroom() {
 
         {/* Bento Grid — 信息流询盘 */}
         <BentoInquiryFeed/>
+
+        {/* ── Agent 入口卡片 ── */}
+        <AgentEntryCards/>
 
         {/* AI Chat card */}
         <AIChatCard

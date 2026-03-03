@@ -34,6 +34,9 @@ import ROICalculator from "./pages/ROICalculator";
 import BossWarroom from "./pages/BossWarroom";
 // Phase 7 社媒托管解锁落地页
 import SocialHostingLanding from "./pages/SocialHostingLanding";
+// Phase 8 Agent 看板
+import CommentLeadAgent from "./pages/CommentLeadAgent";
+import VideoTrendAgent from "./pages/VideoTrendAgent";
 // ─── 受保护路由 ───────────────────────────────────────────────
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   if (!isLoggedIn()) {
@@ -143,6 +146,9 @@ function Router() {
       <Route path="/warroom">{() => <ProtectedRoute component={BossWarroom} />}</Route>
       {/* Phase 7 社媒托管解锁落地页 */}
       <Route path="/hosting/:platform">{(params) => isLoggedIn() ? <SocialHostingLandingPage platform={(params as any).platform} /> : <Redirect to="/login" />}</Route>
+      {/* Phase 8 Agent 看板 */}
+      <Route path="/agent/comment-leads">{() => <ProtectedRoute component={CommentLeadAgent} />}</Route>
+      <Route path="/agent/video-trends">{() => <ProtectedRoute component={VideoTrendAgent} />}</Route>
       {/* Phase 3 新增路由 */}
       <Route path="/video-feed">{() => <ProtectedRoute component={VideoFeedPlayerWrapper} />}</Route>
       <Route path="/feed">{() => <ProtectedRoute component={FeedPageWrapper} />}</Route>
