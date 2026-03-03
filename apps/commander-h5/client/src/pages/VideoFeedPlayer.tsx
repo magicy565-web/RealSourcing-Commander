@@ -367,7 +367,7 @@ export default function VideoFeedPlayer({ onBack }: { onBack?: () => void }) {
 
   const handleBack = useCallback(() => {
     if (onBack) onBack();
-    else navigate('/boss-warroom');
+    else navigate('/phone');
   }, [onBack, navigate]);
 
   // 加载视频列表 + 逐一获取播放地址
