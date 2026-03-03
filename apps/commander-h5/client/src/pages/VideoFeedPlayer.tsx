@@ -283,13 +283,6 @@ function VideoCard({
           ))}
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
-            </svg>
-            <span className="text-white/60 text-xs">预算</span>
-            <span className="text-white font-bold text-sm">{meta.budget}</span>
-          </div>
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={e => { e.stopPropagation(); setShowQuote(true); if (navigator.vibrate) navigator.vibrate(20); }}
@@ -326,7 +319,6 @@ function VideoCard({
                 <div className="text-white font-bold text-sm">{item.company_name}</div>
                 <div className="text-white/50 text-xs">{meta.country} · {item.title}</div>
               </div>
-              <div className="ml-auto text-white font-bold text-base">{meta.budget}</div>
             </div>
             <div className="rounded-2xl p-3 mb-4" style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.2)' }}>
               <p className="text-white/70 text-xs leading-relaxed">{item.description}</p>
