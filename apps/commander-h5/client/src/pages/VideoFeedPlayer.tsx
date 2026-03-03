@@ -270,22 +270,6 @@ function VideoCard({
           <span className="text-white text-xs font-semibold drop-shadow">{meta.comments}</span>
         </button>
 
-        {/* 静音 */}
-        <button onClick={toggleMute} className="flex flex-col items-center gap-1" style={{ touchAction: 'none' }}>
-          <div className="w-11 h-11 rounded-full bg-black/40 flex items-center justify-center" style={{ backdropFilter: 'blur(8px)' }}>
-            {muted ? (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
-              </svg>
-            ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072M12 6v12m-3.536-9.536a5 5 0 000 7.072M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-              </svg>
-            )}
-          </div>
-          <span className="text-white text-xs font-semibold drop-shadow">{muted ? '静音' : '有声'}</span>
-        </button>
       </div>
 
       {/* ── 底部询盘信息 ── */}
@@ -460,9 +444,8 @@ export default function VideoFeedPlayer({ onBack }: { onBack?: () => void }) {
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col" style={{ touchAction: 'pan-y' }}>
 
-      {/* ── 顶部导航 ── */}
-      <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 pt-12 pb-3"
-        style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 100%)' }}>
+      {/* ── 顶部导航（仅保留返回按鈕） ── */}
+      <div className="absolute top-0 left-0 z-20 px-4 pt-12 pb-3">
         <motion.button
           whileTap={{ scale: 0.9 }}
           onClick={handleBack}
@@ -473,22 +456,6 @@ export default function VideoFeedPlayer({ onBack }: { onBack?: () => void }) {
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </motion.button>
-
-        <div className="flex flex-col items-center">
-          <span className="text-white font-bold text-sm tracking-wide">信息流询盘</span>
-          <span className="text-white/50 text-xs mt-0.5">火山引擎 · TikTok 商业平台</span>
-        </div>
-
-        {/* 竖向分页指示器 */}
-        <div className="flex flex-col gap-1">
-          {items.map((_, i) => (
-            <div key={i} className="w-1 rounded-full transition-all duration-300"
-              style={{
-                height: i === currentIndex ? '16px' : '4px',
-                background: i === currentIndex ? 'white' : 'rgba(255,255,255,0.3)',
-              }} />
-          ))}
-        </div>
       </div>
 
       {/* ── 加载中 ── */}
