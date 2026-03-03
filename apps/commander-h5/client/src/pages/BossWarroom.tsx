@@ -1746,7 +1746,7 @@ function AgentEntryCards() {
     {
       id: 'video-trends',
       title: '爆款视频分析',
-      subtitle: 'Agent B · 竞品内容情报监听',
+      subtitle: 'Agent B · 竞品爆款特征分析',
       status: '3 条选题建议',
       statusColor: C.PL,
       badge: 'AI',
@@ -1765,6 +1765,28 @@ function AgentEntryCards() {
       ),
       href: '/agent/video-trends',
     },
+    {
+      id: 'content-intel',
+      title: '内容情报 Agent',
+      subtitle: 'Agent C · AI 选题建议 + 脚本框架',
+      status: '3 条选题待拍摄',
+      statusColor: '#F59E0B',
+      badge: 'NEW',
+      gradient: 'linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(251,146,60,0.06) 100%)',
+      border: 'rgba(245,158,11,0.25)',
+      glow: 'rgba(245,158,11,0.15)',
+      icon: (
+        <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
+          <rect x="4" y="4" width="24" height="24" rx="6" fill="rgba(245,158,11,0.15)" stroke="rgba(245,158,11,0.5)" strokeWidth="1.5"/>
+          <line x1="9" y1="11" x2="23" y2="11" stroke="#F59E0B" strokeWidth="1.8" strokeLinecap="round"/>
+          <line x1="9" y1="16" x2="19" y2="16" stroke="rgba(245,158,11,0.7)" strokeWidth="1.8" strokeLinecap="round"/>
+          <line x1="9" y1="21" x2="15" y2="21" stroke="rgba(245,158,11,0.4)" strokeWidth="1.8" strokeLinecap="round"/>
+          <circle cx="25" cy="8" r="5" fill="#F59E0B"/>
+          <text x="25" y="11.5" textAnchor="middle" fontSize="7" fontWeight="800" fill="#000">AI</text>
+        </svg>
+      ),
+      href: '/agent/content-intel',
+    },
   ];
 
   return (
@@ -1774,7 +1796,7 @@ function AgentEntryCards() {
         <div style={{ width:3, height:14, borderRadius:2, background:`linear-gradient(to bottom, ${C.PL}, ${C.green})` }}/>
         <span style={{ fontSize:12, fontWeight:700, color:C.t2, letterSpacing:0.3 }}>AI 监听 Agent</span>
         <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.06)' }}/>
-        <span style={{ fontSize:10, color:C.t4 }}>2 个运行中</span>
+        <span style={{ fontSize:10, color:C.t4 }}>3 个运行中</span>
       </div>
 
       {/* 卡片列表 */}

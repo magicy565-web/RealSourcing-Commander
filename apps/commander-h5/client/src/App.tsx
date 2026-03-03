@@ -37,6 +37,7 @@ import SocialHostingLanding from "./pages/SocialHostingLanding";
 // Phase 8 Agent 看板
 import CommentLeadAgent from "./pages/CommentLeadAgent";
 import VideoTrendAgent from "./pages/VideoTrendAgent";
+import ContentIntelAgent from "./pages/ContentIntelAgent";
 // ─── 受保护路由 ───────────────────────────────────────────────
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   if (!isLoggedIn()) {
@@ -149,6 +150,7 @@ function Router() {
       {/* Phase 8 Agent 看板 */}
       <Route path="/agent/comment-leads">{() => <ProtectedRoute component={CommentLeadAgent} />}</Route>
       <Route path="/agent/video-trends">{() => <ProtectedRoute component={VideoTrendAgent} />}</Route>
+      <Route path="/agent/content-intel">{() => <ProtectedRoute component={ContentIntelAgent} />}</Route>
       {/* Phase 3 新增路由 */}
       <Route path="/video-feed">{() => <ProtectedRoute component={VideoFeedPlayerWrapper} />}</Route>
       <Route path="/feed">{() => <ProtectedRoute component={FeedPageWrapper} />}</Route>
