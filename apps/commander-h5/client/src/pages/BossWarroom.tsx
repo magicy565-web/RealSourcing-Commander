@@ -300,6 +300,54 @@ interface PlatformCardProps {
   icon: React.ReactNode;
   // Extended fields for LinkedIn/Shopify
   extraMetric?: { label: string; value: string; color?: string };
+  // 未解锁状态（非独立部署版）
+  isLocked?: boolean;
+  lockedData?: {
+    hiddenCount: number;       // 模糊展示的询价条数
+    waitingHours: number;      // 买家已等待小时数
+    estimatedValue: string;    // 待解锁询盘估值
+    urgentTip: string;         // 紧迫感提示文案
+  };
+}
+
+// ── 模糊买家行（未解锁状态下的遮罩列表项）─────────────────────────
+function BlurredBuyerRow({ delay = 0, width = '70%' }: { delay?: number; width?: string }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -8 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ ...SPRING_GENTLE, delay }}
+      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}
+    >
+      {/* 模糊头像 */}
+      <div style={{
+        width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+        background: 'rgba(255,255,255,0.08)',
+        filter: 'blur(4px)',
+        border: '1px solid rgba(255,255,255,0.06)',
+      }}/>
+      {/* 模糊内容 */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{
+          height: 9, borderRadius: 4,
+          background: 'rgba(255,255,255,0.12)',
+          width: width,
+          filter: 'blur(3px)',
+        }}/>
+        <div style={{
+          height: 7, borderRadius: 4,
+          background: 'rgba(255,255,255,0.07)',
+          width: '50%',
+          filter: 'blur(2px)',
+        }}/>
+      </div>
+      {/* 锁定图标 */}
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+      </svg>
+    </motion.div>
+  );
 }
 
 function PlatformCard({
@@ -308,6 +356,8 @@ function PlatformCard({
   glowColorA, glowColorB, specularA, specularB,
   bgGradient, borderColor, textDark = false,
   icon, extraMetric,
+  isLocked = false,
+  lockedData,
 }: PlatformCardProps) {
   const count = useCounter(platform?.unreadCount ?? 0, 900, !isLoading);
   const trend = platform?.trend7d ?? [];
@@ -320,6 +370,185 @@ function PlatformCard({
   const textSub     = textDark ? 'rgba(0,0,0,0.38)' : 'rgba(255,255,255,0.28)';
   const textMuted   = textDark ? 'rgba(0,0,0,0.28)' : 'rgba(255,255,255,0.18)';
 
+  // ── 未解锁状态渲染 ─────────────────────────────────────────────────
+  if (isLocked) {
+    const ld = lockedData ?? {
+      hiddenCount: 5,
+      waitingHours: 6,
+      estimatedValue: '$12,400+',
+      urgentTip: '买家正在等待回复',
+    };
+
+    return (
+      <motion.div
+        whileTap={{ scale: 0.97 }}
+        transition={SPRING_BOUNCY}
+        onTapStart={() => hapticSelection()}
+        style={{
+          borderRadius: 22, overflow: 'hidden', position: 'relative',
+          background: bgGradient,
+          border: `1px solid ${borderColor}`,
+          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04), 0 20px 48px rgba(0,0,0,0.75)`,
+          padding: '16px 14px 14px',
+          cursor: 'pointer',
+          display: 'flex', flexDirection: 'column',
+          minHeight: 220,
+        }}
+      >
+        <Noise intensity={0.025}/>
+        <EdgeDiffraction color={`${brandColor}20`}/>
+
+        {/* 品牌环境光 */}
+        <div aria-hidden style={{ position:'absolute', top:-50, left:-20, width:150, height:150, borderRadius:'50%', background:`radial-gradient(circle, ${glowColorA} 0%, transparent 65%)`, filter:'blur(28px)', pointerEvents:'none', zIndex:0 }}/>
+        <div aria-hidden style={{ position:'absolute', bottom:-40, right:-15, width:130, height:130, borderRadius:'50%', background:`radial-gradient(circle, ${glowColorB} 0%, transparent 65%)`, filter:'blur(24px)', pointerEvents:'none', zIndex:0 }}/>
+
+        {/* 顶部高光线 */}
+        <div aria-hidden style={{ position:'absolute', top:0, left:10, right:10, height:1, background:`linear-gradient(90deg, transparent, ${specularA}, ${specularB}, transparent)`, zIndex:5 }}/>
+
+        {/* 全局遮罩层 — 锁定状态下的磨砂玻璃效果 */}
+        <div aria-hidden style={{
+          position: 'absolute', inset: 0, zIndex: 4,
+          background: 'linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.18) 40%, rgba(0,0,0,0.55) 100%)',
+          pointerEvents: 'none',
+          borderRadius: 'inherit',
+        }}/>
+
+        <div style={{ position:'relative', zIndex:5, display:'flex', flexDirection:'column', flex:1 }}>
+
+          {/* ── 头部：平台图标 + 锁定状态标签 ── */}
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+            {icon}
+            <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+              {/* 锁定标签 */}
+              <motion.div
+                animate={{ opacity: [0.7, 1, 0.7] }}
+                transition={{ duration: 2.2, repeat: Infinity }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  padding: '3px 8px', borderRadius: 50,
+                  background: 'rgba(248,113,113,0.12)',
+                  border: '1px solid rgba(248,113,113,0.28)',
+                }}
+              >
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={C.red} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+                <span style={{ fontSize: 9.5, fontWeight: 700, color: C.red, letterSpacing: 0.2 }}>未托管</span>
+              </motion.div>
+              {/* 离线状态点 */}
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#4B5563' }}/>
+            </div>
+          </div>
+
+          {/* ── 平台副标题 ── */}
+          <div style={{ fontSize:10, fontWeight:600, color:'rgba(255,255,255,0.18)', letterSpacing:0.8, textTransform:'uppercase', marginBottom:8 }}>
+            {brandSub}
+          </div>
+
+          {/* ── 流失警告横幅 ── */}
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ ...SPRING_GENTLE, delay: 0.15 }}
+            style={{
+              display: 'flex', alignItems: 'flex-start', gap: 7,
+              padding: '8px 10px', borderRadius: 12,
+              background: 'rgba(248,113,113,0.08)',
+              border: '1px solid rgba(248,113,113,0.18)',
+              marginBottom: 10,
+            }}
+          >
+            <motion.div
+              animate={{ scale: [1, 1.25, 1], opacity: [1, 0.6, 1] }}
+              transition={{ duration: 1.6, repeat: Infinity }}
+              style={{ flexShrink: 0, marginTop: 1 }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.red} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+            </motion.div>
+            <span style={{ fontSize: 10.5, color: 'rgba(248,113,113,0.85)', lineHeight: 1.5, fontWeight: 500 }}>
+              AI 监控到 <span style={{ fontWeight: 800, color: C.red }}>{ld.hiddenCount} 条</span>高意向询价，已等待 <span style={{ fontWeight: 800, color: C.red }}>{ld.waitingHours}h</span>，无人响应中
+            </span>
+          </motion.div>
+
+          {/* ── 模糊买家列表（遮罩商机池）── */}
+          <div style={{ position: 'relative', marginBottom: 10 }}>
+            <BlurredBuyerRow delay={0.1} width="72%"/>
+            <BlurredBuyerRow delay={0.18} width="60%"/>
+            <BlurredBuyerRow delay={0.26} width="80%"/>
+
+            {/* 渐变遮罩 — 底部淡出 */}
+            <div aria-hidden style={{
+              position: 'absolute', bottom: 0, left: 0, right: 0, height: 28,
+              background: `linear-gradient(to bottom, transparent, ${bgGradient.includes('#0A1628') ? '#0A1628' : bgGradient.includes('#141414') ? '#141414' : bgGradient.includes('#071525') ? '#071525' : bgGradient.includes('#0D1A07') ? '#0D1A07' : '#0A0A0A'}ee)`,
+              pointerEvents: 'none',
+            }}/>
+          </div>
+
+          {/* ── 待解锁估值 ── */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <div>
+              <div style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.28)', fontWeight: 500, marginBottom: 2 }}>待解锁询盘估值</div>
+              <motion.div
+                animate={{ opacity: [0.8, 1, 0.8] }}
+                transition={{ duration: 2.8, repeat: Infinity }}
+                style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}
+              >
+                <span style={{
+                  fontSize: 22, fontWeight: 900, letterSpacing: -1.2,
+                  fontVariantNumeric: 'tabular-nums', lineHeight: 1,
+                  background: `linear-gradient(135deg, ${brandColor} 30%, ${brandColor}88)`,
+                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                  filter: `drop-shadow(0 0 8px ${brandColor}66)`,
+                }}>
+                  {ld.estimatedValue}
+                </span>
+              </motion.div>
+            </div>
+
+            {/* 商机捕获率进度条 */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.28)', fontWeight: 500 }}>商机捕获率</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{ width: 52, height: 5, borderRadius: 3, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+                  <div style={{ width: '0%', height: '100%', borderRadius: 3, background: `linear-gradient(90deg, ${brandColor}88, ${brandColor})` }}/>
+                </div>
+                <span style={{ fontSize: 10, fontWeight: 800, color: C.red }}>0%</span>
+              </div>
+              <span style={{ fontSize: 8.5, color: 'rgba(255,255,255,0.2)', fontWeight: 400 }}>沉睡状态</span>
+            </div>
+          </div>
+
+          {/* ── 解锁 CTA 按钮 ── */}
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            transition={SPRING_BOUNCY}
+            onClick={(e) => { e.stopPropagation(); hapticMedium(); }}
+            style={{
+              width: '100%', padding: '10px 14px',
+              borderRadius: 14, border: 'none', cursor: 'pointer',
+              fontFamily: 'inherit',
+              background: `linear-gradient(135deg, ${brandColor}CC, ${brandColor}88)`,
+              boxShadow: `0 4px 18px ${brandColor}44, inset 0 1px 0 rgba(255,255,255,0.15)`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            } as React.CSSProperties}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+            </svg>
+            <span style={{ fontSize: 12, fontWeight: 800, color: 'white', letterSpacing: -0.2 }}>获取 AI 托管钥匙，立即找回询盘</span>
+          </motion.button>
+
+        </div>
+      </motion.div>
+    );
+  }
+
+  // ── 已解锁（正常）状态渲染 ────────────────────────────────────────
   return (
     <motion.div
       whileTap={{ scale: 0.95 }}
@@ -629,6 +858,7 @@ function SwipeableCards({ children }: { children: React.ReactNode[] }) {
 
 
 function TikTokCard({ platform, isLoading }: { platform?:PlatformData; isLoading:boolean }) {
+  const locked = !platform?.isConnected;
   return (
     <PlatformCard
       platform={platform} isLoading={isLoading}
@@ -639,13 +869,21 @@ function TikTokCard({ platform, isLoading }: { platform?:PlatformData; isLoading
       specularA="rgba(0,242,234,0.18)"
       specularB="rgba(255,0,80,0.18)"
       bgGradient="linear-gradient(160deg, #141414 0%, #0C0C0C 100%)"
-      borderColor="rgba(255,255,255,0.06)"
+      borderColor={locked ? 'rgba(248,113,113,0.18)' : 'rgba(255,255,255,0.06)'}
       icon={<TikTokIcon size={20}/>}
+      isLocked={locked}
+      lockedData={locked ? {
+        hiddenCount: 14,
+        waitingHours: 2,
+        estimatedValue: '$8,600+',
+        urgentTip: '买家将转向竞对',
+      } : undefined}
     />
   );
 }
 
 function MetaCard({ platform, isLoading }: { platform?:PlatformData; isLoading:boolean }) {
+  const locked = !platform?.isConnected;
   return (
     <PlatformCard
       platform={platform} isLoading={isLoading}
@@ -656,13 +894,21 @@ function MetaCard({ platform, isLoading }: { platform?:PlatformData; isLoading:b
       specularA="rgba(0,100,224,0.3)"
       specularB="rgba(0,180,255,0.2)"
       bgGradient="linear-gradient(160deg, #0A1628 0%, #071020 100%)"
-      borderColor="rgba(0,100,224,0.2)"
+      borderColor={locked ? 'rgba(248,113,113,0.18)' : 'rgba(0,100,224,0.2)'}
       icon={<MetaFBIcon size={32}/>}
+      isLocked={locked}
+      lockedData={locked ? {
+        hiddenCount: 3,
+        waitingHours: 6,
+        estimatedValue: '$12,400+',
+        urgentTip: '非工作时间无人响应',
+      } : undefined}
     />
   );
 }
 
 function LinkedInCard({ platform, isLoading }: { platform?:PlatformData; isLoading:boolean }) {
+  const locked = !platform?.isConnected;
   return (
     <PlatformCard
       platform={platform} isLoading={isLoading}
@@ -673,14 +919,22 @@ function LinkedInCard({ platform, isLoading }: { platform?:PlatformData; isLoadi
       specularA="rgba(10,102,194,0.35)"
       specularB="rgba(56,168,255,0.2)"
       bgGradient="linear-gradient(160deg, #071525 0%, #040E1A 100%)"
-      borderColor="rgba(10,102,194,0.22)"
+      borderColor={locked ? 'rgba(248,113,113,0.18)' : 'rgba(10,102,194,0.22)'}
       icon={<LinkedInIcon size={26}/>}
-      extraMetric={{ label: '人脉', value: '—', color: '#38A8FF' }}
+      extraMetric={locked ? undefined : { label: '人脉', value: '—', color: '#38A8FF' }}
+      isLocked={locked}
+      lockedData={locked ? {
+        hiddenCount: 20,
+        waitingHours: 12,
+        estimatedValue: '$45,000+',
+        urgentTip: '采购经理已读未回',
+      } : undefined}
     />
   );
 }
 
 function ShopifyCard({ platform, isLoading }: { platform?:PlatformData; isLoading:boolean }) {
+  const locked = !platform?.isConnected;
   return (
     <PlatformCard
       platform={platform} isLoading={isLoading}
@@ -691,9 +945,16 @@ function ShopifyCard({ platform, isLoading }: { platform?:PlatformData; isLoadin
       specularA="rgba(150,191,72,0.3)"
       specularB="rgba(94,142,62,0.2)"
       bgGradient="linear-gradient(160deg, #0D1A07 0%, #091305 100%)"
-      borderColor="rgba(150,191,72,0.2)"
+      borderColor={locked ? 'rgba(248,113,113,0.18)' : 'rgba(150,191,72,0.2)'}
       icon={<ShopifyIcon size={26}/>}
-      extraMetric={{ label: 'GMV', value: '—', color: '#96BF48' }}
+      extraMetric={locked ? undefined : { label: 'GMV', value: '—', color: '#96BF48' }}
+      isLocked={locked}
+      lockedData={locked ? {
+        hiddenCount: 7,
+        waitingHours: 3,
+        estimatedValue: '$5,200+',
+        urgentTip: '购物车已放弃',
+      } : undefined}
     />
   );
 }
