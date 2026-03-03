@@ -57,13 +57,18 @@ function VideoCard({
   };
 
   // IntersectionObserver 自动播放/暂停
+  // 依赖 item.playUrl：playUrl 异步到达后重新注册，确保视频元素已挂载
   useEffect(() => {
     const v = videoRef.current;
     const card = cardRef.current;
     if (!v || !card) return;
+
+    let isVisible = false;
+
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && entry.intersectionRatio > 0.7) {
+        isVisible = entry.isIntersecting && entry.intersectionRatio > 0.7;
+        if (isVisible) {
           v.currentTime = 0;
           v.play().then(() => setPlaying(true)).catch(() => {});
         } else {
@@ -74,8 +79,18 @@ function VideoCard({
       { threshold: 0.7 }
     );
     observer.observe(card);
+
+    // playUrl 刚到达时，如果卡片已在视口内则立即播放
+    // （Observer 首次回调可能在 playUrl 到达前已经触发过）
+    const rect = card.getBoundingClientRect();
+    const viewH = window.innerHeight;
+    const ratio = Math.min(rect.bottom, viewH) - Math.max(rect.top, 0);
+    if (ratio / viewH > 0.7) {
+      v.play().then(() => setPlaying(true)).catch(() => {});
+    }
+
     return () => observer.disconnect();
-  }, []);
+  }, [item.playUrl]);
 
   // 进度条更新
   useEffect(() => {
