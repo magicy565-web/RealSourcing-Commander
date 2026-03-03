@@ -892,7 +892,7 @@ function TikTokCard({ platform, isLoading }: { platform?:PlatformData; isLoading
       bgGradient="linear-gradient(160deg, #141414 0%, #0C0C0C 100%)"
       borderColor={locked ? 'rgba(248,113,113,0.18)' : 'rgba(255,255,255,0.06)'}
       icon={<TikTokIcon size={20}/>}
-      path="/tiktok"
+      path={locked ? '/hosting/tiktok' : '/tiktok'}
       isLocked={locked}
       lockedData={locked ? {
         hiddenCount: 14,
@@ -918,7 +918,7 @@ function MetaCard({ platform, isLoading }: { platform?:PlatformData; isLoading:b
       bgGradient="linear-gradient(160deg, #0A1628 0%, #071020 100%)"
       borderColor={locked ? 'rgba(248,113,113,0.18)' : 'rgba(0,100,224,0.2)'}
       icon={<MetaFBIcon size={32}/>}
-      path="/facebook"
+      path={locked ? '/hosting/facebook' : '/facebook'}
       isLocked={locked}
       lockedData={locked ? {
         hiddenCount: 3,
@@ -945,7 +945,7 @@ function LinkedInCard({ platform, isLoading }: { platform?:PlatformData; isLoadi
       borderColor={locked ? 'rgba(248,113,113,0.18)' : 'rgba(10,102,194,0.22)'}
       icon={<LinkedInIcon size={26}/>}
       extraMetric={locked ? undefined : { label: '人脉', value: '—', color: '#38A8FF' }}
-      path="/linkedin"
+      path={locked ? '/hosting/linkedin' : '/linkedin'}
       isLocked={locked}
       lockedData={locked ? {
         hiddenCount: 20,
@@ -972,7 +972,7 @@ function ShopifyCard({ platform, isLoading }: { platform?:PlatformData; isLoadin
       borderColor={locked ? 'rgba(248,113,113,0.18)' : 'rgba(150,191,72,0.2)'}
       icon={<ShopifyIcon size={26}/>}
       extraMetric={locked ? undefined : { label: 'GMV', value: '—', color: '#96BF48' }}
-      path="/openclaw"
+      path={locked ? '/hosting/openclaw' : '/openclaw'}
       isLocked={locked}
       lockedData={locked ? {
         hiddenCount: 7,

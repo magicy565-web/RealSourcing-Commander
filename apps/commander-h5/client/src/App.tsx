@@ -32,6 +32,8 @@ import MultiAccountManager from "./pages/MultiAccountManager";
 import ROICalculator from "./pages/ROICalculator";
 // Phase 6 老板指挥台
 import BossWarroom from "./pages/BossWarroom";
+// Phase 7 社媒托管解锁落地页
+import SocialHostingLanding from "./pages/SocialHostingLanding";
 // ─── 受保护路由 ───────────────────────────────────────────────
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   if (!isLoggedIn()) {
@@ -139,6 +141,8 @@ function Router() {
       {/* Phase 6 老板指挥台 */}
       <Route path="/boss-warroom">{() => <ProtectedRoute component={BossWarroom} />}</Route>
       <Route path="/warroom">{() => <ProtectedRoute component={BossWarroom} />}</Route>
+      {/* Phase 7 社媒托管解锁落地页 */}
+      <Route path="/hosting/:platform">{(params) => isLoggedIn() ? <SocialHostingLandingPage platform={(params as any).platform} /> : <Redirect to="/login" />}</Route>
       {/* Phase 3 新增路由 */}
       <Route path="/video-feed">{() => <ProtectedRoute component={VideoFeedPlayerWrapper} />}</Route>
       <Route path="/feed">{() => <ProtectedRoute component={FeedPageWrapper} />}</Route>
@@ -192,6 +196,17 @@ function AdminPageWrapper() {
         <AdminPage />
       </div>
     </div>
+  );
+}
+
+// Phase 7 社媒托管解锁落地页包装器
+function SocialHostingLandingPage({ platform }: { platform?: string }) {
+  const [, navigate] = useLocation();
+  return (
+    <SocialHostingLanding
+      platform={platform}
+      onBack={() => navigate("/boss-warroom")}
+    />
   );
 }
 
