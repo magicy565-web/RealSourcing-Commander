@@ -1,7 +1,14 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import { hapticMedium, hapticSuccess, hapticLight } from '../lib/haptics';
+import { agentApi, type Agent, type AgentTask, type ContentSuggestion, type TrendVideo } from '../lib/api';
+
+/* ─────────────────────────────────────────────────────────────────
+   Agent 03 — 选题助手看板（Phase 9 真实 API 版）
+   ─────────────────────────────────────────────────────────────────
+   功能：基于竞品爆款分析，AI 生成高转化选题和 4 段式脚本框架
+   ───────────────────────────────────────────────────────────────── */
 
 /* ── Design System ── */
 const C = {
@@ -14,319 +21,227 @@ const C = {
   teal: '#2DD4BF', orange: '#FB923C',
 };
 const SPRING_SNAPPY = { type: 'spring' as const, stiffness: 420, damping: 28 };
-const SPRING_GENTLE = { type: 'spring' as const, stiffness: 260, damping: 30 };
 
-/* ── Mock 数据 ── */
-const MOCK_TOP_VIDEOS = [
-  {
-    id: 'v1', account: '@guangzhoufurniture', accountName: '广州家具工厂',
-    title: '你知道为什么欧美买家不选你的工厂吗？3个供应链细节',
-    duration: 28, playCount: 284000, likeCount: 19800, commentCount: 1240,
-    interactionRate: 9.2, openingType: '问题式', tags: ['#furniture', '#factory', '#B2B'],
-    bgm: 'Corporate Motivation v3', publishedAt: '3小时前',
-    insight: '问题式开场 + 痛点共鸣，触发买家自我代入',
-  },
-  {
-    id: 'v2', account: '@shenzhenelectronics', accountName: '深圳电子厂',
-    title: '工厂直播：一条生产线如何日产10万件',
-    duration: 45, playCount: 512000, likeCount: 31200, commentCount: 2800,
-    interactionRate: 8.6, openingType: '工厂实拍', tags: ['#electronics', '#manufacturing', '#OEM'],
-    bgm: 'Factory Beat 2024', publishedAt: '8小时前',
-    insight: '工厂实拍建立信任感，买家最关心产能和品控',
-  },
-  {
-    id: 'v3', account: '@yiwumarket', accountName: '义乌小商品市场',
-    title: '2024最新爆款：这5类产品欧美买家抢着要',
-    duration: 32, playCount: 198000, likeCount: 14600, commentCount: 980,
-    interactionRate: 7.8, openingType: '数字冲击式', tags: ['#yiwu', '#wholesale', '#trending'],
-    bgm: 'Upbeat Commerce', publishedAt: '14小时前',
-    insight: '数字+爆款组合，激发选品焦虑，评论区大量询价',
-  },
-  {
-    id: 'v4', account: '@foshan_ceramics', accountName: '佛山陶瓷出口',
-    title: 'MOQ只要50件！这款瓷砖为什么让美国设计师疯狂',
-    duration: 22, playCount: 156000, likeCount: 11200, commentCount: 1560,
-    interactionRate: 8.2, openingType: 'MOQ钩子式', tags: ['#ceramics', '#tiles', '#interior'],
-    bgm: 'Luxury Ambient', publishedAt: '20小时前',
-    insight: '低MOQ降低决策门槛，设计师群体转发率高',
-  },
-  {
-    id: 'v5', account: '@hangzhou_textiles', accountName: '杭州纺织出口',
-    title: '客户说价格太高？教你用这3句话谈成订单',
-    duration: 35, playCount: 89000, likeCount: 7800, commentCount: 2100,
-    interactionRate: 11.1, openingType: '解决方案式', tags: ['#textiles', '#negotiation', '#export'],
-    bgm: 'Business Talk', publishedAt: '22小时前',
-    insight: '解决谈判痛点，评论区互动率最高，大量同行转发',
-  },
-];
-
-const MOCK_SUGGESTIONS = [
-  {
-    id: 's1', priority: 1, title: '你的工厂为什么接不到欧美大单？3个供应链细节决定买家选择',
-    predictedRate: '8-10%', duration: '28-32秒', openingType: '问题式开场',
-    refVideo: '@guangzhoufurniture 的爆款视频',
-    tags: ['#factory', '#B2B', '#supplier', '#manufacturing'],
-    bgmSuggestion: 'Corporate Motivation v3（参考竞品同款BGM）',
-    scriptFramework: [
-      { time: '0-3s', action: '开场问题', content: '"你知道为什么你的工厂每年丢掉几十万美元的订单吗？"（直视镜头，表情严肃）' },
-      { time: '3-15s', action: '痛点展开', content: '展示3个供应链细节：交货期承诺、品控报告、包装规格——这3点决定欧美买家是否信任你' },
-      { time: '15-25s', action: '价值证明', content: '我们工厂是如何做到的：[展示实际操作/证书/客户反馈]' },
-      { time: '25-32s', action: 'CTA', content: '"评论区留言「报价」，我发你完整的供应商资质包"' },
-    ],
-    reasoning: '过去24小时内，问题式开场的视频平均互动率比其他类型高35%；供应链主题在欧美买家群体中评论转化率最高（均值2.1%）',
-  },
-  {
-    id: 's2', priority: 2, title: '工厂实拍：我们如何保证每批货的品控达到欧盟标准',
-    predictedRate: '7-9%', duration: '40-50秒', openingType: '工厂实拍',
-    refVideo: '@shenzhenelectronics 的工厂实拍系列',
-    tags: ['#quality', '#EU', '#certification', '#factory'],
-    bgmSuggestion: 'Factory Beat 2024（工业感强，适合实拍场景）',
-    scriptFramework: [
-      { time: '0-5s', action: '开场实拍', content: '直接进入工厂生产线画面，无需文字说明，让画面说话' },
-      { time: '5-25s', action: '品控流程', content: '展示3个关键品控节点：原材料检测→生产过程抽检→出货前全检，每个节点配数据字幕' },
-      { time: '25-40s', action: '证书展示', content: '快速展示CE/FDA/ISO等认证证书，配字幕"这是买家最关心的"' },
-      { time: '40-50s', action: 'CTA', content: '"需要完整品控报告？私信我，24小时内发给你"' },
-    ],
-    reasoning: '工厂实拍类视频在B2B买家中信任度评分最高；品控主题在欧盟市场询盘转化率比均值高2.3倍',
-  },
-  {
-    id: 's3', priority: 3, title: '2024年Q2最新爆款：这5类产品欧美采购商正在疯狂下单',
-    predictedRate: '6-8%', duration: '30-38秒', openingType: '数字冲击式',
-    refVideo: '@yiwumarket 的选品情报系列',
-    tags: ['#trending', '#2024', '#wholesale', '#hotproducts'],
-    bgmSuggestion: 'Upbeat Commerce（节奏感强，适合快切产品展示）',
-    scriptFramework: [
-      { time: '0-3s', action: '数字钩子', content: '"2024年Q2，这5类产品在亚马逊搜索量暴涨300%"（大字幕冲击）' },
-      { time: '3-25s', action: '产品展示', content: '快切展示5类产品，每个产品配：当前市场价/MOQ/交货期，节奏要快（每个产品不超过4秒）' },
-      { time: '25-38s', action: 'CTA', content: '"评论区留言「选品」，发你完整的2024爆款产品目录，含成本价"' },
-    ],
-    reasoning: '数字冲击式开场在前3秒留存率比平均高28%；选品焦虑是外贸买家最强烈的情绪触发点',
-  },
-];
-
-/* ── 子组件 ── */
-function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color: string }) {
-  return (
-    <div style={{ background: C.s1, border: `1px solid ${C.b1}`, borderRadius: 12, padding: '12px 14px', flex: 1 }}>
-      <div style={{ fontSize: 11, color: C.t3, marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 700, color, letterSpacing: -0.5 }}>{value}</div>
-      {sub && <div style={{ fontSize: 10, color: C.t3, marginTop: 2 }}>{sub}</div>}
-    </div>
-  );
+/* ── 格式化数字 ── */
+function fmtNum(n: number): string {
+  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
+  return String(n);
 }
 
-function VideoCard({ video, rank }: { video: typeof MOCK_TOP_VIDEOS[0]; rank: number }) {
+/* ── 选题卡片组件 ── */
+function SuggestionCard({ s, index, onUpdateStatus }: {
+  s: ContentSuggestion;
+  index: number;
+  onUpdateStatus: (id: string, status: ContentSuggestion['status']) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
-  const rateColor = video.interactionRate >= 9 ? C.green : video.interactionRate >= 7 ? C.amber : C.blue;
+
+  const statusConfig = {
+    pending:  { label: '待审核', color: C.amber, bg: 'rgba(245,158,11,0.15)' },
+    approved: { label: '已采纳', color: C.green, bg: 'rgba(16,185,129,0.15)' },
+    rejected: { label: '已拒绝', color: C.red,   bg: 'rgba(248,113,113,0.1)' },
+    used:     { label: '已使用', color: C.teal,  bg: 'rgba(45,212,191,0.15)' },
+  };
+  const sc = statusConfig[s.status] ?? statusConfig.pending;
 
   return (
     <motion.div
-      layout
-      style={{ background: C.s1, border: `1px solid ${C.b1}`, borderRadius: 14, overflow: 'hidden', marginBottom: 10 }}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ ...SPRING_SNAPPY, delay: index * 0.07 }}
+      style={{
+        background: C.s1,
+        border: `1px solid ${s.status === 'approved' ? 'rgba(16,185,129,0.3)' : C.b1}`,
+        borderRadius: 16, padding: '16px', marginBottom: 12,
+      }}
     >
-      <div
-        style={{ padding: '12px 14px', cursor: 'pointer' }}
-        onClick={() => { setExpanded(!expanded); hapticLight(); }}
-      >
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-          {/* 排名 */}
-          <div style={{
-            width: 28, height: 28, borderRadius: 8, flexShrink: 0,
-            background: rank <= 2 ? `linear-gradient(135deg, ${C.amber}, ${C.orange})` : C.s2,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 13, fontWeight: 800, color: rank <= 2 ? '#000' : C.t2,
-          }}>{rank}</div>
-
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12, color: C.PL, marginBottom: 3 }}>{video.accountName}</div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: C.t1, lineHeight: 1.4, marginBottom: 6 }}>
-              {video.title}
-            </div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 6, background: `${rateColor}22`, color: rateColor, fontWeight: 700 }}>
-                互动率 {video.interactionRate}%
-              </span>
-              <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 6, background: C.s2, color: C.t3 }}>
-                {video.openingType}
-              </span>
-              <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 6, background: C.s2, color: C.t3 }}>
-                {video.duration}s
-              </span>
-            </div>
-          </div>
-
-          {/* 播放量 */}
-          <div style={{ textAlign: 'right', flexShrink: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>
-              {video.playCount >= 1000000 ? `${(video.playCount / 1000000).toFixed(1)}M` : `${(video.playCount / 1000).toFixed(0)}K`}
-            </div>
-            <div style={{ fontSize: 10, color: C.t3 }}>播放</div>
-          </div>
+      {/* 头部：排名 + 标题 + 状态 */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
+        <div style={{
+          width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+          background: index === 0 ? `linear-gradient(135deg, ${C.amber}, #D97706)` :
+                      index === 1 ? `linear-gradient(135deg, ${C.P}, #5B21B6)` :
+                      C.s2,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 13, fontWeight: 800,
+          color: index < 2 ? '#fff' : C.t3,
+        }}>
+          {index + 1}
         </div>
-
-        {/* 展开箭头 */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 6 }}>
-          <motion.div animate={{ rotate: expanded ? 180 : 0 }} style={{ color: C.t3, fontSize: 12 }}>▼</motion.div>
+        <div style={{ flex: 1 }}>
+          <div style={{ color: C.t1, fontSize: 13, fontWeight: 700, lineHeight: 1.4, marginBottom: 6 }}>
+            {s.title}
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <span style={{
+              background: sc.bg, color: sc.color,
+              fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+            }}>
+              {sc.label}
+            </span>
+            {s.estimated_views > 0 && (
+              <span style={{
+                background: 'rgba(99,102,241,0.15)', color: C.indigo,
+                fontSize: 10, padding: '2px 8px', borderRadius: 20,
+              }}>
+                📈 预估 {fmtNum(s.estimated_views)} 播放
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
-      <AnimatePresence>
-        {expanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }} transition={SPRING_GENTLE}
-            style={{ overflow: 'hidden' }}
-          >
-            <div style={{ padding: '0 14px 14px', borderTop: `1px solid ${C.b1}` }}>
-              {/* AI 洞察 */}
-              <div style={{ marginTop: 12, padding: '10px 12px', background: `${C.P}15`, borderRadius: 10, borderLeft: `3px solid ${C.P}` }}>
-                <div style={{ fontSize: 10, color: C.PL, marginBottom: 4, fontWeight: 600 }}>🤖 AI 爆款洞察</div>
-                <div style={{ fontSize: 12, color: C.t2, lineHeight: 1.6 }}>{video.insight}</div>
-              </div>
-              {/* 数据详情 */}
-              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                <div style={{ flex: 1, textAlign: 'center', background: C.s2, borderRadius: 8, padding: '8px 4px' }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: C.green }}>
-                    {(video.likeCount / 1000).toFixed(1)}K
-                  </div>
-                  <div style={{ fontSize: 10, color: C.t3 }}>点赞</div>
-                </div>
-                <div style={{ flex: 1, textAlign: 'center', background: C.s2, borderRadius: 8, padding: '8px 4px' }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: C.blue }}>
-                    {(video.commentCount / 1000).toFixed(1)}K
-                  </div>
-                  <div style={{ fontSize: 10, color: C.t3 }}>评论</div>
-                </div>
-                <div style={{ flex: 1, textAlign: 'center', background: C.s2, borderRadius: 8, padding: '8px 4px' }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: C.amber }}>{video.duration}s</div>
-                  <div style={{ fontSize: 10, color: C.t3 }}>时长</div>
-                </div>
-              </div>
-              {/* BGM */}
-              <div style={{ marginTop: 8, fontSize: 11, color: C.t3 }}>
-                🎵 BGM：<span style={{ color: C.t2 }}>{video.bgm}</span>
-              </div>
-              {/* 话题标签 */}
-              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 8 }}>
-                {video.tags.map(tag => (
-                  <span key={tag} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 6, background: C.s2, color: C.indigo }}>{tag}</span>
-                ))}
-              </div>
+      {/* 4 段式脚本摘要 */}
+      {(s.hook || s.value_prop) && (
+        <div style={{ marginBottom: 12 }}>
+          {[
+            { label: '🎣 Hook', content: s.hook },
+            { label: '💎 Value', content: s.value_prop },
+            { label: '✅ Proof', content: s.proof },
+            { label: '📣 CTA', content: s.cta },
+          ].filter(item => item.content).map(item => (
+            <div key={item.label} style={{
+              display: 'flex', gap: 8, marginBottom: 6, alignItems: 'flex-start',
+            }}>
+              <span style={{ color: C.PL, fontSize: 10, fontWeight: 700, flexShrink: 0, marginTop: 1 }}>
+                {item.label}
+              </span>
+              <span style={{ color: C.t2, fontSize: 11, lineHeight: 1.5 }}>
+                {item.content}
+              </span>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          ))}
+        </div>
+      )}
+
+      {/* 完整脚本（可展开） */}
+      {s.full_script && (
+        <div style={{ marginBottom: 12 }}>
+          <button
+            onClick={() => { setExpanded(!expanded); hapticLight(); }}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 4,
+              color: C.PL, fontSize: 11, padding: 0,
+            }}
+          >
+            <span>📝 查看完整脚本</span>
+            <span style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: '0.2s' }}>▾</span>
+          </button>
+          <AnimatePresence>
+            {expanded && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }} style={{ overflow: 'hidden' }}
+              >
+                <div style={{
+                  background: `${C.P}10`, border: `1px solid ${C.P}25`,
+                  borderRadius: 10, padding: '12px', marginTop: 8,
+                }}>
+                  <pre style={{
+                    color: C.t2, fontSize: 11, lineHeight: 1.7, margin: 0,
+                    whiteSpace: 'pre-wrap', fontFamily: 'inherit',
+                  }}>
+                    {s.full_script}
+                  </pre>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+
+      {/* 标签 */}
+      {s.tags.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 12 }}>
+          {s.tags.map(tag => (
+            <span key={tag} style={{
+              background: 'rgba(99,102,241,0.12)', color: C.indigo,
+              fontSize: 10, padding: '2px 7px', borderRadius: 20,
+            }}>
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* 操作按钮 */}
+      {s.status === 'pending' && (
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => { onUpdateStatus(s.id, 'approved'); hapticSuccess(); }}
+            style={{
+              flex: 1, background: `linear-gradient(135deg, ${C.green}, #059669)`,
+              border: 'none', borderRadius: 10, padding: '9px 0',
+              color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            ✓ 采纳选题
+          </button>
+          <button
+            onClick={() => { onUpdateStatus(s.id, 'rejected'); hapticLight(); }}
+            style={{
+              width: 40, background: C.s2, border: `1px solid ${C.b1}`,
+              borderRadius: 10, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14,
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+      {s.status === 'approved' && (
+        <button
+          onClick={() => { onUpdateStatus(s.id, 'used'); hapticSuccess(); }}
+          style={{
+            width: '100%', background: `${C.teal}20`, border: `1px solid ${C.teal}40`,
+            borderRadius: 10, padding: '9px 0',
+            color: C.teal, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+          }}
+        >
+          🎬 标记为已拍摄
+        </button>
+      )}
     </motion.div>
   );
 }
 
-function SuggestionCard({ s, index }: { s: typeof MOCK_SUGGESTIONS[0]; index: number }) {
-  const [expanded, setExpanded] = useState(index === 0);
-  const priorityColors = ['#F59E0B', '#A78BFA', '#60A5FA'];
-  const priorityLabels = ['首选', '备选', '参考'];
-
+/* ── 竞品视频小卡片 ── */
+function TrendVideoMini({ video, rank }: { video: TrendVideo; rank: number }) {
   return (
     <motion.div
-      layout
-      initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-      transition={{ ...SPRING_GENTLE, delay: index * 0.1 }}
+      initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+      transition={{ ...SPRING_SNAPPY, delay: rank * 0.05 }}
       style={{
-        background: index === 0 ? `linear-gradient(135deg, rgba(124,58,237,0.12), rgba(45,212,191,0.06))` : C.s1,
-        border: `1px solid ${index === 0 ? C.bP : C.b1}`,
-        borderRadius: 16, overflow: 'hidden', marginBottom: 12,
+        background: C.s1, border: `1px solid ${video.is_viral ? 'rgba(245,158,11,0.3)' : C.b1}`,
+        borderRadius: 12, padding: '12px 14px', marginBottom: 8,
       }}
     >
-      {/* 优先级标签 */}
-      <div style={{ padding: '14px 14px 0' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-          <span style={{
-            fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6,
-            background: `${priorityColors[index]}22`, color: priorityColors[index],
-          }}>
-            {index === 0 ? '⭐ ' : ''}{priorityLabels[index]}推荐
-          </span>
-          <span style={{ fontSize: 10, color: C.t3 }}>预测互动率</span>
-          <span style={{ fontSize: 12, fontWeight: 700, color: C.green }}>{s.predictedRate}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{
+          width: 24, height: 24, borderRadius: 6, flexShrink: 0,
+          background: rank <= 3 ? `linear-gradient(135deg, ${C.amber}, #D97706)` : C.s2,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 11, fontWeight: 800, color: rank <= 3 ? '#000' : C.t3,
+        }}>
+          {rank}
         </div>
-
-        {/* 标题 */}
-        <div style={{ fontSize: 14, fontWeight: 700, color: C.t1, lineHeight: 1.45, marginBottom: 8 }}>
-          "{s.title}"
-        </div>
-
-        {/* 基础参数 */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-          <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, background: C.s2, color: C.teal }}>
-            ⏱ {s.duration}
-          </span>
-          <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, background: C.s2, color: C.amber }}>
-            🎬 {s.openingType}
-          </span>
-          <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, background: C.s2, color: C.t3 }}>
-            参考：{s.refVideo}
-          </span>
-        </div>
-
-        {/* AI 推荐理由 */}
-        <div style={{ padding: '8px 10px', background: `${C.green}12`, borderRadius: 8, marginBottom: 10, borderLeft: `2px solid ${C.green}` }}>
-          <div style={{ fontSize: 10, color: C.green, fontWeight: 600, marginBottom: 3 }}>📊 AI 推荐理由</div>
-          <div style={{ fontSize: 11, color: C.t2, lineHeight: 1.6 }}>{s.reasoning}</div>
-        </div>
-
-        {/* 展开/收起脚本 */}
-        <div
-          style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', paddingBottom: 12 }}
-          onClick={() => { setExpanded(!expanded); hapticLight(); }}
-        >
-          <div style={{ fontSize: 11, color: C.PL, fontWeight: 600 }}>
-            {expanded ? '收起' : '查看'}脚本框架
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ color: C.t1, fontSize: 12, fontWeight: 600, lineHeight: 1.3, marginBottom: 3 }}>
+            {video.title}
           </div>
-          <motion.div animate={{ rotate: expanded ? 180 : 0 }} style={{ color: C.PL, fontSize: 11 }}>▼</motion.div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <span style={{ color: C.t3, fontSize: 10 }}>{video.account_handle}</span>
+            <span style={{ color: video.engagement_rate >= 7 ? C.amber : C.t3, fontSize: 10, fontWeight: 600 }}>
+              {video.engagement_rate}% 互动
+            </span>
+          </div>
         </div>
-      </div>
-
-      {/* 脚本框架 */}
-      <AnimatePresence>
-        {expanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }} transition={SPRING_GENTLE}
-            style={{ overflow: 'hidden' }}
-          >
-            <div style={{ padding: '0 14px 14px', borderTop: `1px solid ${C.b1}` }}>
-              <div style={{ fontSize: 11, color: C.t3, marginTop: 12, marginBottom: 8, fontWeight: 600 }}>
-                📝 脚本框架（可直接使用）
-              </div>
-              {s.scriptFramework.map((step, i) => (
-                <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-                  <div style={{
-                    flexShrink: 0, width: 48, height: 20, borderRadius: 6,
-                    background: C.s2, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 9, color: C.t3, fontWeight: 600,
-                  }}>{step.time}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 10, color: C.PL, fontWeight: 600, marginBottom: 2 }}>{step.action}</div>
-                    <div style={{ fontSize: 11, color: C.t2, lineHeight: 1.55 }}>{step.content}</div>
-                  </div>
-                </div>
-              ))}
-
-              {/* BGM 建议 */}
-              <div style={{ marginTop: 8, padding: '8px 10px', background: C.s2, borderRadius: 8 }}>
-                <div style={{ fontSize: 10, color: C.t3 }}>🎵 BGM 建议</div>
-                <div style={{ fontSize: 11, color: C.t2, marginTop: 2 }}>{s.bgmSuggestion}</div>
-              </div>
-
-              {/* 话题标签 */}
-              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 8 }}>
-                {s.tags.map(tag => (
-                  <span key={tag} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 6, background: C.s2, color: C.indigo }}>{tag}</span>
-                ))}
-              </div>
-            </div>
-          </motion.div>
+        {video.is_viral === 1 && (
+          <span style={{ fontSize: 14 }}>🔥</span>
         )}
-      </AnimatePresence>
+      </div>
     </motion.div>
   );
 }
@@ -334,114 +249,224 @@ function SuggestionCard({ s, index }: { s: typeof MOCK_SUGGESTIONS[0]; index: nu
 /* ── 主页面 ── */
 export default function ContentIntelAgent() {
   const [, navigate] = useLocation();
-  const [tab, setTab] = useState<'suggest' | 'videos'>('suggest');
-  const [status, setStatus] = useState<'pending' | 'running' | 'done'>('pending');
-  const [progress, setProgress] = useState(0);
-  const [showConfirm, setShowConfirm] = useState(true);
-  const [lastRunTime] = useState('今日 02:14');
-  const [nextRunTime] = useState('明日 02:00');
-  const progressRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 模拟执行进度
-  const handleConfirm = () => {
-    hapticSuccess();
-    setShowConfirm(false);
-    setStatus('running');
-    setProgress(0);
-    let p = 0;
-    progressRef.current = setInterval(() => {
-      p += Math.random() * 8 + 2;
-      if (p >= 100) {
-        p = 100;
-        clearInterval(progressRef.current!);
-        setTimeout(() => setStatus('done'), 400);
+  // Agent 状态
+  const [agent, setAgent] = useState<Agent | null>(null);
+  const [currentTask, setCurrentTask] = useState<AgentTask | null>(null);
+  const [suggestions, setSuggestions] = useState<ContentSuggestion[]>([]);
+  const [trendVideos, setTrendVideos] = useState<TrendVideo[]>([]);
+
+  // UI 状态
+  const [loading, setLoading] = useState(true);
+  const [triggering, setTriggering] = useState(false);
+  const [tab, setTab] = useState<'suggest' | 'videos'>('suggest');
+  const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
+
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── 加载数据 ──────────────────────────────────────────────────
+  const loadData = useCallback(async () => {
+    try {
+      const agentList = await agentApi.list();
+      const contentPilot = agentList.find(a => a.type === 'content_pilot');
+      if (contentPilot) {
+        setAgent(contentPilot);
+        const tasksRes = await agentApi.tasks(contentPilot.id, { limit: 1 });
+        if (tasksRes.items.length > 0) {
+          setCurrentTask(tasksRes.items[0]);
+          setProgress(tasksRes.items[0].progress);
+        }
       }
-      setProgress(Math.min(p, 100));
-    }, 300);
+
+      const [suggRes, trendRes] = await Promise.all([
+        agentApi.suggestions({ limit: 20 }),
+        agentApi.trends({ limit: 5, viral_only: true }),
+      ]);
+      setSuggestions(suggRes.items);
+      setTrendVideos(trendRes.items);
+    } catch (e: any) {
+      setError(e.message ?? '加载失败');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [loadData]);
+
+  // ── 轮询任务状态 ──────────────────────────────────────────────
+  const startPolling = useCallback((taskId: string) => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      try {
+        const task = await agentApi.getTask(taskId);
+        setCurrentTask(task);
+        setProgress(task.progress);
+
+        if (task.status === 'success' || task.status === 'failed' || task.status === 'cancelled') {
+          clearInterval(pollRef.current!);
+          pollRef.current = null;
+
+          const agentList = await agentApi.list();
+          const updated = agentList.find(a => a.type === 'content_pilot');
+          if (updated) setAgent(updated);
+
+          const suggRes = await agentApi.suggestions({ limit: 20 });
+          setSuggestions(suggRes.items);
+
+          if (task.status === 'success') hapticSuccess();
+        }
+      } catch { /* 忽略轮询错误 */ }
+    }, 2000);
+  }, []);
+
+  // ── 触发 Agent ────────────────────────────────────────────────
+  const handleTrigger = async () => {
+    if (!agent || triggering) return;
+    setTriggering(true);
+    setError(null);
+    setProgress(0);
+    try {
+      const res = await agentApi.trigger(agent.id);
+      const task = await agentApi.getTask(res.taskId);
+      setCurrentTask(task);
+      startPolling(res.taskId);
+      hapticMedium();
+    } catch (e: any) {
+      setError(e.message ?? '触发失败');
+    } finally {
+      setTriggering(false);
+    }
   };
 
-  useEffect(() => () => { if (progressRef.current) clearInterval(progressRef.current); }, []);
+  // ── 更新选题状态 ──────────────────────────────────────────────
+  const handleUpdateStatus = async (id: string, status: ContentSuggestion['status']) => {
+    try {
+      await agentApi.updateSuggestion(id, status);
+      setSuggestions(prev => prev.map(s => s.id === id ? { ...s, status } : s));
+    } catch (e: any) {
+      setError(e.message ?? '更新失败');
+    }
+  };
+
+  const isRunning = agent?.status === 'running' || currentTask?.status === 'running' || currentTask?.status === 'pending';
+  const pendingSuggestions = suggestions.filter(s => s.status === 'pending');
+  const approvedSuggestions = suggestions.filter(s => s.status === 'approved');
+
+  // 最后运行时间
+  const lastRunTime = agent?.last_run_at
+    ? new Date(agent.last_run_at).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : '从未运行';
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+          style={{ width: 32, height: 32, borderRadius: '50%', border: `2px solid ${C.P}`, borderTopColor: 'transparent' }} />
+      </div>
+    );
+  }
 
   return (
-    <div style={{ background: C.bg, minHeight: '100vh', color: C.t1, fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
+    <div style={{
+      minHeight: '100vh', background: C.bg,
+      fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
+    }}>
       {/* 顶部导航 */}
       <div style={{
         position: 'sticky', top: 0, zIndex: 50,
         background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(20px)',
-        borderBottom: `1px solid ${C.b1}`, padding: '12px 16px',
+        borderBottom: `1px solid ${C.b1}`, padding: '14px 20px 12px',
         display: 'flex', alignItems: 'center', gap: 12,
       }}>
-        <button onClick={() => { hapticLight(); navigate('/tiktok'); }}
-          style={{ background: C.s2, border: 'none', borderRadius: 8, padding: '6px 10px', color: C.t2, cursor: 'pointer', fontSize: 13 }}>
-          ← 返回
+        <button
+          onClick={() => { navigate('/boss-warroom'); hapticLight(); }}
+          style={{
+            background: C.s2, border: `1px solid ${C.b1}`, borderRadius: 10,
+            width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', fontSize: 16, color: C.t1,
+          }}
+        >
+          ←
         </button>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: C.t1 }}>内容情报 Agent</div>
-          <div style={{ fontSize: 11, color: C.t3 }}>竞品监控 · AI 选题建议</div>
-        </div>
-        {/* 状态指示 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{
-            width: 7, height: 7, borderRadius: '50%',
-            background: status === 'running' ? C.amber : status === 'done' ? C.green : C.t3,
-            boxShadow: status === 'running' ? `0 0 8px ${C.amber}` : status === 'done' ? `0 0 8px ${C.green}` : 'none',
-          }} />
-          <span style={{ fontSize: 11, color: C.t3 }}>
-            {status === 'running' ? '分析中' : status === 'done' ? '已完成' : '等待确认'}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 16 }}>✍️</span>
+            <span style={{ color: C.t1, fontSize: 16, fontWeight: 700 }}>选题助手</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <motion.div
+                animate={isRunning ? { scale: [1, 1.4, 1] } : {}}
+                transition={{ duration: 1, repeat: Infinity }}
+                style={{
+                  width: 7, height: 7, borderRadius: '50%',
+                  background: isRunning ? C.P : suggestions.length > 0 ? C.green : C.t3,
+                }}
+              />
+              <span style={{
+                fontSize: 10, fontWeight: 600,
+                color: isRunning ? C.PL : suggestions.length > 0 ? C.green : C.t3,
+              }}>
+                {isRunning ? '生成中' : suggestions.length > 0 ? '已完成' : '待机'}
+              </span>
+            </div>
+          </div>
+          <p style={{ color: C.t3, fontSize: 11, margin: 0, marginTop: 1 }}>
+            Agent 03 · 选题助手 · 上次运行：{lastRunTime}
+          </p>
         </div>
       </div>
 
       <div style={{ padding: '16px 16px 100px' }}>
 
-        {/* 定时确认横幅 */}
+        {/* 错误提示 */}
         <AnimatePresence>
-          {showConfirm && status === 'pending' && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }} transition={SPRING_SNAPPY}
+          {error && (
+            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
               style={{
-                background: `linear-gradient(135deg, rgba(245,158,11,0.15), rgba(251,146,60,0.08))`,
-                border: `1px solid ${C.amber}44`, borderRadius: 14, padding: '14px 16px', marginBottom: 16,
+                background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)',
+                borderRadius: 12, padding: '10px 14px', marginBottom: 12,
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                <span style={{ fontSize: 18 }}>⏰</span>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.amberL }}>定时任务已到，等待您确认</div>
-                  <div style={{ fontSize: 11, color: C.t3 }}>将分析 Top 20 竞品账号过去 24 小时的视频</div>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <motion.button
-                  whileTap={{ scale: 0.96 }} onClick={handleConfirm}
-                  style={{
-                    flex: 1, padding: '10px', borderRadius: 10, border: 'none', cursor: 'pointer',
-                    background: `linear-gradient(135deg, ${C.amber}, ${C.orange})`,
-                    color: '#000', fontWeight: 700, fontSize: 13,
-                  }}
-                >确认执行</motion.button>
-                <motion.button
-                  whileTap={{ scale: 0.96 }} onClick={() => { hapticLight(); setShowConfirm(false); }}
-                  style={{
-                    padding: '10px 16px', borderRadius: 10, border: `1px solid ${C.b2}`,
-                    background: C.s1, color: C.t3, cursor: 'pointer', fontSize: 13,
-                  }}
-                >跳过</motion.button>
-              </div>
+              <span style={{ color: C.red, fontSize: 12 }}>{error}</span>
+              <button onClick={() => setError(null)} style={{ background: 'none', border: 'none', color: C.red, cursor: 'pointer', fontSize: 16 }}>×</button>
             </motion.div>
           )}
         </AnimatePresence>
 
+        {/* 统计卡 */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          <div style={{ background: C.s1, border: `1px solid ${C.b1}`, borderRadius: 12, padding: '12px 14px', flex: 1 }}>
+            <div style={{ fontSize: 11, color: C.t3, marginBottom: 4 }}>竞品参考</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: C.PL }}>{trendVideos.length}</div>
+            <div style={{ fontSize: 10, color: C.t3, marginTop: 2 }}>爆款视频</div>
+          </div>
+          <div style={{ background: C.s1, border: `1px solid ${C.b1}`, borderRadius: 12, padding: '12px 14px', flex: 1 }}>
+            <div style={{ fontSize: 11, color: C.t3, marginBottom: 4 }}>待审选题</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: C.amber }}>{pendingSuggestions.length}</div>
+            <div style={{ fontSize: 10, color: C.t3, marginTop: 2 }}>AI 生成</div>
+          </div>
+          <div style={{ background: C.s1, border: `1px solid ${C.b1}`, borderRadius: 12, padding: '12px 14px', flex: 1 }}>
+            <div style={{ fontSize: 11, color: C.t3, marginBottom: 4 }}>已采纳</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: C.green }}>{approvedSuggestions.length}</div>
+            <div style={{ fontSize: 10, color: C.t3, marginTop: 2 }}>选题</div>
+          </div>
+        </div>
+
         {/* 执行进度条 */}
         <AnimatePresence>
-          {status === 'running' && (
+          {isRunning && (
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               style={{ background: C.s1, border: `1px solid ${C.b1}`, borderRadius: 14, padding: '14px 16px', marginBottom: 16 }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span style={{ fontSize: 12, color: C.amberL, fontWeight: 600 }}>🤖 AI 正在分析竞品视频...</span>
+                <span style={{ fontSize: 12, color: C.amberL, fontWeight: 600 }}>
+                  🤖 {currentTask?.current_step ?? 'AI 正在生成选题...'}
+                </span>
                 <span style={{ fontSize: 12, color: C.t2, fontWeight: 700 }}>{Math.round(progress)}%</span>
               </div>
               <div style={{ height: 4, background: C.s2, borderRadius: 2, overflow: 'hidden' }}>
@@ -450,32 +475,26 @@ export default function ContentIntelAgent() {
                   style={{ height: '100%', background: `linear-gradient(90deg, ${C.amber}, ${C.P})`, borderRadius: 2 }}
                 />
               </div>
-              <div style={{ fontSize: 10, color: C.t3, marginTop: 6 }}>
-                {progress < 30 ? '正在抓取竞品账号视频数据...' :
-                  progress < 60 ? '正在计算互动率和爆款特征...' :
-                    progress < 85 ? '正在调用 AI 生成选题建议...' : '正在生成脚本框架...'}
-              </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* 顶部统计卡 */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-          <StatCard label="监控账号" value="20" sub="Top 竞品" color={C.PL} />
-          <StatCard label="今日爆款" value="5" sub="互动率>7%" color={C.green} />
-          <StatCard label="选题建议" value="3" sub="AI 生成" color={C.amber} />
-        </div>
-
-        {/* 运行时间 */}
-        <div style={{
-          background: C.s1, border: `1px solid ${C.b1}`, borderRadius: 12,
-          padding: '10px 14px', marginBottom: 16,
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        }}>
-          <div style={{ fontSize: 11, color: C.t3 }}>上次运行：<span style={{ color: C.t2 }}>{lastRunTime}</span></div>
-          <div style={{ width: 1, height: 14, background: C.b2 }} />
-          <div style={{ fontSize: 11, color: C.t3 }}>下次运行：<span style={{ color: C.amber }}>{nextRunTime} 02:00</span></div>
-        </div>
+        {/* 任务完成提示 */}
+        <AnimatePresence>
+          {currentTask?.status === 'success' && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+              style={{
+                background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)',
+                borderRadius: 14, padding: '12px 16px', marginBottom: 16,
+              }}
+            >
+              <span style={{ color: C.green, fontSize: 13, fontWeight: 600 }}>
+                ✅ {currentTask.result_data?.summary ?? '选题生成完成'}
+              </span>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Tab 切换 */}
         <div style={{
@@ -491,7 +510,7 @@ export default function ContentIntelAgent() {
                 color: tab === t ? '#fff' : C.t3,
               }}
             >
-              {t === 'suggest' ? '⭐ AI 选题建议' : '📊 爆款视频榜'}
+              {t === 'suggest' ? `⭐ AI 选题建议 (${suggestions.length})` : `📊 竞品爆款 (${trendVideos.length})`}
             </motion.button>
           ))}
         </div>
@@ -500,20 +519,81 @@ export default function ContentIntelAgent() {
         <AnimatePresence mode="wait">
           {tab === 'suggest' ? (
             <motion.div key="suggest" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }}>
-              <div style={{ fontSize: 12, color: C.t3, marginBottom: 12 }}>
-                基于过去 24 小时竞品爆款分析，AI 为您生成以下选题建议：
-              </div>
-              {MOCK_SUGGESTIONS.map((s, i) => <SuggestionCard key={s.id} s={s} index={i} />)}
+              {suggestions.length > 0 ? (
+                <>
+                  <div style={{ fontSize: 12, color: C.t3, marginBottom: 12 }}>
+                    基于竞品爆款分析，AI 为您生成以下选题建议：
+                  </div>
+                  {suggestions.map((s, i) => (
+                    <SuggestionCard key={s.id} s={s} index={i} onUpdateStatus={handleUpdateStatus} />
+                  ))}
+                </>
+              ) : (
+                <motion.div
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                  style={{
+                    textAlign: 'center', padding: '60px 20px',
+                    background: C.s1, border: `1px solid ${C.b1}`, borderRadius: 20,
+                  }}
+                >
+                  <div style={{ fontSize: 48, marginBottom: 16 }}>✍️</div>
+                  <p style={{ color: C.t2, fontSize: 14, fontWeight: 600, margin: '0 0 8px' }}>
+                    {isRunning ? 'AI 正在生成选题...' : '暂无选题建议'}
+                  </p>
+                  <p style={{ color: C.t3, fontSize: 12, margin: 0 }}>
+                    点击下方按钮触发 AI 选题生成
+                  </p>
+                </motion.div>
+              )}
             </motion.div>
           ) : (
             <motion.div key="videos" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}>
-              <div style={{ fontSize: 12, color: C.t3, marginBottom: 12 }}>
-                过去 24 小时内，互动率最高的竞品视频：
-              </div>
-              {MOCK_TOP_VIDEOS.map((v, i) => <VideoCard key={v.id} video={v} rank={i + 1} />)}
+              {trendVideos.length > 0 ? (
+                <>
+                  <div style={{ fontSize: 12, color: C.t3, marginBottom: 12 }}>
+                    过去 30 天内，互动率最高的竞品视频：
+                  </div>
+                  {trendVideos.map((v, i) => (
+                    <TrendVideoMini key={v.id} video={v} rank={i + 1} />
+                  ))}
+                </>
+              ) : (
+                <motion.div
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                  style={{
+                    textAlign: 'center', padding: '60px 20px',
+                    background: C.s1, border: `1px solid ${C.b1}`, borderRadius: 20,
+                  }}
+                >
+                  <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
+                  <p style={{ color: C.t2, fontSize: 14, fontWeight: 600, margin: '0 0 8px' }}>暂无竞品数据</p>
+                  <p style={{ color: C.t3, fontSize: 12, margin: 0 }}>请先运行爆款雷达 Agent 获取竞品数据</p>
+                </motion.div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
+      </div>
+
+      {/* 底部触发按钮 */}
+      <div style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0,
+        padding: '12px 16px 28px',
+        background: 'linear-gradient(to top, rgba(0,0,0,0.95) 60%, transparent)',
+      }}>
+        <button
+          onClick={handleTrigger}
+          disabled={isRunning || triggering}
+          style={{
+            width: '100%',
+            background: isRunning || triggering ? C.b1 : `linear-gradient(135deg, ${C.P}, #6D28D9)`,
+            border: 'none', borderRadius: 16, padding: '15px 0',
+            color: isRunning || triggering ? C.t3 : '#fff',
+            fontSize: 15, fontWeight: 700, cursor: isRunning ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {isRunning ? '⏳ 生成中...' : triggering ? '⚡ 启动中...' : '▶ 立即生成 AI 选题'}
+        </button>
       </div>
     </div>
   );

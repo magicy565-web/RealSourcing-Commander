@@ -214,6 +214,119 @@ CREATE TABLE IF NOT EXISTS industry_knowledge (
   created_at      TEXT DEFAULT (datetime('now'))
 );
 
+-- ─── Phase 9 (AI 全家桶): Agent 定义表 ─────────────────────────────────────
+CREATE TABLE IF NOT EXISTS agents (
+  id              TEXT PRIMARY KEY,
+  tenant_id       TEXT REFERENCES tenants(id),
+  name            TEXT NOT NULL,
+  type            TEXT NOT NULL,  -- 'leads_hunter'|'trend_radar'|'content_pilot'|'digital_human'|'auto_poster'|'seo_optimizer'|'dm_closer'|'email_follower'|'payment_pilot'|'finance_pilot'|'logistics_sentinel'|'gov_compliance'
+  description     TEXT,
+  config          TEXT DEFAULT '{}',  -- JSON: 任务参数（目标账号、关键词等）
+  cron_expr       TEXT,               -- Cron 表达式，如 '0 9 * * *'
+  status          TEXT DEFAULT 'idle', -- 'idle'|'running'|'paused'|'error'
+  is_enabled      INTEGER DEFAULT 1,
+  last_run_at     TEXT,
+  last_result     TEXT DEFAULT '{}',  -- 最近一次运行结果摘要
+  created_at      TEXT DEFAULT (datetime('now')),
+  updated_at      TEXT DEFAULT (datetime('now'))
+);
+
+-- ─── Phase 9 (AI 全家桶): Agent 任务流水表 ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS agent_tasks (
+  id              TEXT PRIMARY KEY,
+  agent_id        TEXT REFERENCES agents(id),
+  tenant_id       TEXT REFERENCES tenants(id),
+  status          TEXT DEFAULT 'pending', -- 'pending'|'running'|'success'|'failed'|'cancelled'
+  session_id      TEXT,                   -- AgentBay 会话 ID
+  trigger_type    TEXT DEFAULT 'manual',  -- 'manual'|'cron'|'chain'
+  input_data      TEXT DEFAULT '{}',      -- 任务输入参数
+  result_data     TEXT DEFAULT '{}',      -- 任务输出结果
+  error_msg       TEXT,
+  progress        INTEGER DEFAULT 0,      -- 0-100
+  current_step    TEXT,
+  started_at      TEXT,
+  completed_at    TEXT,
+  created_at      TEXT DEFAULT (datetime('now')),
+  updated_at      TEXT DEFAULT (datetime('now'))
+);
+
+-- ─── Phase 9 (AI 全家桶): 线索表 ────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS leads (
+  id              TEXT PRIMARY KEY,
+  tenant_id       TEXT REFERENCES tenants(id),
+  agent_task_id   TEXT REFERENCES agent_tasks(id),
+  source_platform TEXT NOT NULL DEFAULT 'tiktok', -- 'tiktok'|'instagram'|'youtube'|'other'
+  source_url      TEXT,                           -- 来源帖子/视频 URL
+  user_handle     TEXT,                           -- 用户名 @handle
+  user_name       TEXT,                           -- 显示名称
+  content         TEXT,                           -- 原始评论/消息内容
+  intent_score    INTEGER DEFAULT 0,              -- 0-100 意向评分
+  intent_label    TEXT DEFAULT 'general',         -- 'inquiry'|'interest'|'general'|'spam'
+  contact_info    TEXT DEFAULT '{}',              -- JSON: {email, whatsapp, website}
+  ai_summary      TEXT,                           -- AI 摘要
+  status          TEXT DEFAULT 'new',             -- 'new'|'contacted'|'converted'|'ignored'
+  created_at      TEXT DEFAULT (datetime('now')),
+  updated_at      TEXT DEFAULT (datetime('now'))
+);
+
+-- ─── Phase 9 (AI 全家桶): 财务流水表 ────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS finance_records (
+  id              TEXT PRIMARY KEY,
+  tenant_id       TEXT REFERENCES tenants(id),
+  type            TEXT NOT NULL,    -- 'income'|'expense'
+  category        TEXT,             -- 'ads'|'shipping'|'purchase'|'payment'|'other'
+  amount          REAL NOT NULL,
+  currency        TEXT DEFAULT 'USD',
+  platform        TEXT,             -- 'stripe'|'airwallex'|'manual'
+  order_id        TEXT,
+  description     TEXT,
+  timestamp       TEXT DEFAULT (datetime('now')),
+  created_at      TEXT DEFAULT (datetime('now'))
+);
+
+-- ─── Phase 9 (AI 全家桶): 竞品视频分析表 ────────────────────────────────────
+CREATE TABLE IF NOT EXISTS trend_videos (
+  id              TEXT PRIMARY KEY,
+  tenant_id       TEXT REFERENCES tenants(id),
+  agent_task_id   TEXT REFERENCES agent_tasks(id),
+  platform        TEXT NOT NULL DEFAULT 'tiktok',
+  account_handle  TEXT,
+  account_name    TEXT,
+  video_url       TEXT,
+  title           TEXT,
+  views           INTEGER DEFAULT 0,
+  likes           INTEGER DEFAULT 0,
+  comments        INTEGER DEFAULT 0,
+  shares          INTEGER DEFAULT 0,
+  engagement_rate REAL DEFAULT 0,
+  duration        INTEGER DEFAULT 0,
+  opening_type    TEXT,             -- '工厂参观式'|'痛点质疑式' 等
+  bgm             TEXT,
+  tags            TEXT DEFAULT '[]',
+  thumbnail_url   TEXT,
+  ai_analysis     TEXT,             -- AI 视觉分析结果
+  is_viral        INTEGER DEFAULT 0,
+  published_at    TEXT,
+  created_at      TEXT DEFAULT (datetime('now'))
+);
+
+-- ─── Phase 9 (AI 全家桶): 选题建议表 ────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS content_suggestions (
+  id              TEXT PRIMARY KEY,
+  tenant_id       TEXT REFERENCES tenants(id),
+  agent_task_id   TEXT REFERENCES agent_tasks(id),
+  title           TEXT NOT NULL,
+  hook            TEXT,             -- 开场钩子
+  value_prop      TEXT,             -- 价值主张
+  proof           TEXT,             -- 证明/案例
+  cta             TEXT,             -- 行动号召
+  full_script     TEXT,             -- 完整脚本
+  estimated_views INTEGER DEFAULT 0,
+  tags            TEXT DEFAULT '[]',
+  status          TEXT DEFAULT 'pending', -- 'pending'|'approved'|'rejected'|'used'
+  created_at      TEXT DEFAULT (datetime('now'))
+);
+
 -- Phase 3: 用户偏好（推荐引擎使用）
 CREATE TABLE IF NOT EXISTS user_preferences (
   id              TEXT PRIMARY KEY,

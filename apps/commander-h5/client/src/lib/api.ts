@@ -1130,3 +1130,218 @@ export interface WeekStats {
   highValue: number;
   replyRate: number;
 }
+
+// ─── Phase 9: Agent API ───────────────────────────────────────
+export const agentApi = {
+  /** 获取 Agent 列表（首次访问自动初始化前 3 个） */
+  async list() {
+    return request<Agent[]>("/agents");
+  },
+
+  /** 获取 Agent 模板列表 */
+  async templates() {
+    return request<AgentTemplate[]>("/agents/templates");
+  },
+
+  /** 创建 Agent */
+  async create(data: { type: string; name: string; description?: string; config?: Record<string, any>; cron_expr?: string }) {
+    return request<Agent>("/agents", { method: "POST", body: JSON.stringify(data) });
+  },
+
+  /** 获取 Agent 详情（含最近任务） */
+  async get(id: string) {
+    return request<Agent & { recent_tasks: AgentTask[] }>(`/agents/${id}`);
+  },
+
+  /** 更新 Agent 配置 */
+  async update(id: string, data: Partial<Pick<Agent, "name" | "description" | "config" | "cron_expr" | "is_enabled">>) {
+    return request<Agent>(`/agents/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+  },
+
+  /** 手动触发 Agent 任务 */
+  async trigger(id: string, override?: Record<string, any>) {
+    return request<{ taskId: string; agentId: string; status: string; message: string; createdAt: string }>(
+      `/agents/${id}/trigger`,
+      { method: "POST", body: JSON.stringify({ override }) }
+    );
+  },
+
+  /** 获取 Agent 任务历史 */
+  async tasks(agentId: string, params?: { limit?: number; offset?: number }) {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    return request<{ items: AgentTask[]; total: number }>(`/agents/${agentId}/tasks?${qs.toString()}`);
+  },
+
+  /** 获取任务详情 */
+  async getTask(taskId: string) {
+    return request<AgentTask>(`/agents/tasks/${taskId}`);
+  },
+
+  /** 取消任务 */
+  async cancelTask(taskId: string) {
+    return request<{ taskId: string; status: string; message: string }>(
+      `/agents/tasks/${taskId}/cancel`,
+      { method: "POST" }
+    );
+  },
+
+  /** 获取线索列表 */
+  async leads(params?: { status?: string; platform?: string; intent?: string; limit?: number; offset?: number }) {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set("status", params.status);
+    if (params?.platform) qs.set("platform", params.platform);
+    if (params?.intent) qs.set("intent", params.intent);
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    return request<{ items: Lead[]; total: number; limit: number; offset: number }>(`/agents/leads?${qs.toString()}`);
+  },
+
+  /** 更新线索状态 */
+  async updateLead(id: string, status: Lead["status"]) {
+    return request<{ id: string; status: string; message: string }>(
+      `/agents/leads/${id}`,
+      { method: "PATCH", body: JSON.stringify({ status }) }
+    );
+  },
+
+  /** 获取竞品视频列表 */
+  async trends(params?: { limit?: number; viral_only?: boolean }) {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.viral_only) qs.set("viral_only", "true");
+    return request<{ items: TrendVideo[]; total: number }>(`/agents/trends?${qs.toString()}`);
+  },
+
+  /** 获取选题建议列表 */
+  async suggestions(params?: { status?: string; limit?: number }) {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set("status", params.status);
+    if (params?.limit) qs.set("limit", String(params.limit));
+    return request<{ items: ContentSuggestion[]; total: number }>(`/agents/suggestions?${qs.toString()}`);
+  },
+
+  /** 更新选题状态 */
+  async updateSuggestion(id: string, status: ContentSuggestion["status"]) {
+    return request<{ id: string; status: string; message: string }>(
+      `/agents/suggestions/${id}`,
+      { method: "PATCH", body: JSON.stringify({ status }) }
+    );
+  },
+};
+
+// ─── Phase 9: Agent 相关类型定义 ─────────────────────────────
+export interface Agent {
+  id: string;
+  tenant_id: string;
+  name: string;
+  type: AgentType;
+  description: string;
+  config: Record<string, any>;
+  cron_expr: string | null;
+  status: "idle" | "running" | "paused" | "error";
+  is_enabled: number;
+  last_run_at: string | null;
+  last_result: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+export type AgentType =
+  | "leads_hunter"
+  | "trend_radar"
+  | "content_pilot"
+  | "digital_human"
+  | "auto_poster"
+  | "seo_optimizer"
+  | "dm_closer"
+  | "email_follower"
+  | "payment_pilot"
+  | "finance_pilot"
+  | "logistics_sentinel"
+  | "gov_compliance";
+
+export interface AgentTemplate {
+  type: AgentType;
+  name: string;
+  description: string;
+  defaultConfig: Record<string, any>;
+}
+
+export interface AgentTask {
+  id: string;
+  agent_id: string;
+  tenant_id: string;
+  status: "pending" | "running" | "success" | "failed" | "cancelled";
+  session_id: string | null;
+  trigger_type: "manual" | "cron" | "chain";
+  input_data: Record<string, any>;
+  result_data: Record<string, any>;
+  error_msg: string | null;
+  progress: number;
+  current_step: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Lead {
+  id: string;
+  tenant_id: string;
+  agent_task_id: string;
+  source_platform: "tiktok" | "instagram" | "youtube" | "other";
+  source_url: string | null;
+  user_handle: string;
+  user_name: string;
+  content: string;
+  intent_score: number;
+  intent_label: "inquiry" | "interest" | "general" | "spam";
+  contact_info: { email?: string; whatsapp?: string; website?: string };
+  ai_summary: string;
+  status: "new" | "contacted" | "converted" | "ignored";
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TrendVideo {
+  id: string;
+  tenant_id: string;
+  agent_task_id: string;
+  platform: string;
+  account_handle: string;
+  account_name: string;
+  video_url: string | null;
+  title: string;
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  engagement_rate: number;
+  duration: number;
+  opening_type: string;
+  bgm: string;
+  tags: string[];
+  thumbnail_url: string | null;
+  ai_analysis: string;
+  is_viral: number;
+  published_at: string | null;
+  created_at: string;
+}
+
+export interface ContentSuggestion {
+  id: string;
+  tenant_id: string;
+  agent_task_id: string;
+  title: string;
+  hook: string;
+  value_prop: string;
+  proof: string;
+  cta: string;
+  full_script: string;
+  estimated_views: number;
+  tags: string[];
+  status: "pending" | "approved" | "rejected" | "used";
+  created_at: string;
+}

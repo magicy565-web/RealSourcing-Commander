@@ -57,6 +57,8 @@ import multiAccountRouter from "./routes/multi-account.js";
 import roiRouter from "./routes/roi.js";
 // Phase 6 新增路由
 import bossRouter from "./routes/boss.js";
+// Phase 9 AI 全家桶 新增路由
+import agentsRouter from "./routes/agents.js";
 
 import { scanAndPushFollowupReminders } from "./services/followup.js";
 import { scheduleDailyReport } from "./services/dailyReport.js";
@@ -79,7 +81,7 @@ app.use(
 app.get("/health", (c) =>
   c.json({
     status: "ok",
-    version: "5.0.6-phase6",
+    version: "5.0.7-phase9",
     service: "RealSourcing Commander Server",
     timestamp: new Date().toISOString(),
     database: "SQLite (local)",
@@ -90,6 +92,7 @@ app.get("/health", (c) =>
       "social-media", "geo-insight", "multi-account", "roi-calculator",
       "daily-report", "funnel-tracking",
       "boss-command", "approval-loop", "warroom",
+      "agent-manager", "leads-hunter", "trend-radar", "content-pilot",
     ],
   })
 );
@@ -113,6 +116,8 @@ app.route("/api/v1/multi-account", multiAccountRouter);
 app.route("/api/v1/roi", roiRouter);
 // Phase 6 新增路由
 app.route("/api/v1/boss", bossRouter);
+// Phase 9 AI 全家桶 新增路由
+app.route("/api/v1/agents", agentsRouter);
 
 // ─── 404 ──────────────────────────────────────────────────────
 app.notFound((c) => c.json({ error: "接口不存在" }, 404));
@@ -126,7 +131,7 @@ app.onError((err, c) => {
 // ─── 启动服务 ─────────────────────────────────────────────────
 const PORT = Number(process.env.PORT ?? 4000);
 serve({ fetch: app.fetch, port: PORT }, () => {
-  console.log(`🚀 Commander Server v5.0.6-phase6 已启动 → http://localhost:${PORT}`);
+  console.log(`🚀 Commander Server v5.0.7-phase9 已启动 → http://localhost:${PORT}`);
   console.log(`🤖 AI 引擎：阿里云百炼 Qwen-Plus`);
   console.log(`📌 演示账号: admin@minghui.com / admin123`);
   console.log(`📡 Phase 5 新增：社交媒体管理、GEO洞察、多账号协同、ROI计算器、每日战报`);
