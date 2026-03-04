@@ -1435,7 +1435,13 @@ function LeadDetailFlow({ lead: initialLead, onBack, onUpdate }: {
                     onClick={async () => {
                       setSmartQuoteLoading(true);
                       try {
-                        const res = await inquiriesApi.smartQuote(lead.id);
+                        const res = await inquiriesApi.smartQuote(lead.id, {
+                          productName: lead.product,
+                          quantity: lead.quantity,
+                          buyerCountry: lead.country,
+                          buyerCompany: lead.company,
+                          inquiryContent: lead.originalMsg,
+                        });
                         setSmartQuoteSuggestion(res.suggestion);
                         toast.success("✨ AI 报价建议已生成！");
                       } catch (e: any) {

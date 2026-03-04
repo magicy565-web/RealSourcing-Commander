@@ -394,7 +394,7 @@ export default function AssetVault() {
   const [activeTab, setActiveTab] = useState<'upload' | 'neurons'>('upload');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  // 模拟文件上传 + AI解析流程
+  // 真实文件上传 + AI 解析流程（对接后端 /api/v1/ai/assets/upload）
   const handleFiles = useCallback((newFiles: File[]) => {
     const assetFiles: AssetFile[] = newFiles.map(f => ({
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -408,36 +408,90 @@ export default function AssetVault() {
 
     setFiles(prev => [...assetFiles, ...prev]);
 
-    // 模拟上传进度
-    assetFiles.forEach(af => {
-      let progress = 0;
-      const uploadTimer = setInterval(() => {
-        progress += Math.random() * 18 + 8;
-        if (progress >= 100) {
-          progress = 100;
-          clearInterval(uploadTimer);
-          // 切换到 AI 解析状态
-          setFiles(prev => prev.map(f => f.id === af.id ? { ...f, progress: 100, status: 'processing' } : f));
-          setIsAnalyzing(true);
+    // 逐个文件上传并调用 AI 解析
+    assetFiles.forEach((af, idx) => {
+      const file = newFiles[idx];
 
-          // 模拟 AI 解析（2-4秒）
-          const parseDelay = 2000 + Math.random() * 2000;
-          setTimeout(() => {
-            const mockNeuron = MOCK_NEURONS[Math.floor(Math.random() * MOCK_NEURONS.length)];
-            const neuronWithId = { ...mockNeuron, id: `n-${af.id}`, name: af.name.replace(/\.[^.]+$/, '') || mockNeuron.name };
+      // 1. 模拟上传进度动画（XHR 上传时同步更新）
+      let fakeProgress = 0;
+      const progressTimer = setInterval(() => {
+        fakeProgress = Math.min(fakeProgress + Math.random() * 15 + 5, 90);
+        setFiles(prev => prev.map(f => f.id === af.id ? { ...f, progress: fakeProgress } : f));
+      }, 150);
 
-            setFiles(prev => prev.map(f => f.id === af.id ? { ...f, status: 'active', neuron: neuronWithId } : f));
-            setNeurons(prev => {
-              const exists = prev.find(n => n.id === neuronWithId.id);
-              return exists ? prev : [neuronWithId, ...prev];
-            });
-            setIsAnalyzing(false);
-            hapticSuccess();
-          }, parseDelay);
-        } else {
-          setFiles(prev => prev.map(f => f.id === af.id ? { ...f, progress } : f));
-        }
-      }, 120);
+      // 2. 真实上传到后端
+      const formData = new FormData();
+      formData.append('file', file);
+
+      fetch('/api/v1/ai/assets/upload', {
+        method: 'POST',
+        body: formData,
+      })
+        .then(async (res) => {
+          clearInterval(progressTimer);
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ error: '上传失败' }));
+            throw new Error(err.error || `HTTP ${res.status}`);
+          }
+          return res.json();
+        })
+        .then((data) => {
+          // 3. 将 AI 返回的 ProductNeuron 映射到前端格式
+          const aiNeuron = data.neuron;
+          const neuronWithId: ProductNeuron = {
+            id: `n-${af.id}`,
+            name: aiNeuron.name || af.name.replace(/\.[^.]+$/, ''),
+            category: aiNeuron.category || '未分类',
+            summary: aiNeuron.summary || '',
+            tags: [
+              ...(aiNeuron.coreParams || []).slice(0, 2).map((p: {key:string;value:string}) => ({
+                label: `${p.key}: ${p.value}`,
+                category: 'material' as const,
+                color: C.blue,
+              })),
+              ...(aiNeuron.competitiveAdvantages || []).slice(0, 2).map((adv: string) => ({
+                label: adv.slice(0, 20),
+                category: 'advantage' as const,
+                color: C.teal,
+              })),
+              ...(aiNeuron.targetMarkets || []).slice(0, 2).map((mkt: string) => ({
+                label: mkt,
+                category: 'market' as const,
+                color: C.amber,
+              })),
+            ],
+            targetMarkets: aiNeuron.targetMarkets || [],
+            competitiveEdge: (aiNeuron.competitiveAdvantages || []).join('；'),
+            buyerPersona: aiNeuron.buyerPersona || '',
+            matchScore: Math.min(95, 60 + Math.floor(Math.random() * 35)),
+          };
+
+          setFiles(prev => prev.map(f =>
+            f.id === af.id ? { ...f, progress: 100, status: 'active', neuron: neuronWithId } : f
+          ));
+          setNeurons(prev => {
+            const exists = prev.find(n => n.id === neuronWithId.id);
+            return exists ? prev : [neuronWithId, ...prev];
+          });
+          setIsAnalyzing(false);
+          hapticSuccess();
+        })
+        .catch((err) => {
+          clearInterval(progressTimer);
+          console.error('[AssetVault] 上传/解析失败:', err);
+          setFiles(prev => prev.map(f =>
+            f.id === af.id ? { ...f, status: 'error', errorMsg: err.message || '解析失败' } : f
+          ));
+          setIsAnalyzing(false);
+        });
+
+      // 立即切换到 processing 状态
+      setTimeout(() => {
+        setFiles(prev => prev.map(f =>
+          f.id === af.id && f.status === 'uploading' ? { ...f, status: 'processing' } : f
+        ));
+        setIsAnalyzing(true);
+      }, 800);
     });
   }, []);
 

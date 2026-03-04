@@ -91,14 +91,41 @@ const MARKET_SIGNALS = [
     confirmLabel: '发起 Webinar',
     executionResult: 'Webinar 邀请已发送给 28 家分销商，收集报名中',
   },
-];
-
-// ── Hook 实现 ─────────────────────────────────────────────────
+];// ── Hook 实现 ─────────────────────────────────────────────────────
 export function useProactiveCardsV6(data: WarroomData | null) {
   const [cards, setCards] = useState<ProactiveCardV6Data[]>([]);
   const [showMorningBriefing, setShowMorningBriefing] = useState(false);
+  const [aiBriefingData, setAiBriefingData] = useState<{
+    greeting: string;
+    todaySummary: string;
+    topPriorities: Array<{ rank: number; action: string; reason: string; urgency: string }>;
+    marketInsight: string;
+    aiRecommendation: string;
+  } | null>(null);
   const shownRef = useRef<Set<string>>(new Set());
   const initRef = useRef(false);
+
+  // 调用 AI 简报接口
+  const fetchAiBriefing = useCallback(async (warroomData: WarroomData) => {
+    try {
+      const res = await fetch('/api/v1/ai/briefing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          totalPending: warroomData.totalPending,
+          urgentInquiries: warroomData.categories?.find(c => c.id === 'notification')?.count ?? 0,
+          platforms: warroomData.platforms?.map(p => p.id) ?? ['TikTok', 'Meta'],
+          topProducts: ['工业管材', 'LED灯具', '太阳能板'],
+        }),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        setAiBriefingData(d.briefing);
+      }
+    } catch (err) {
+      console.warn('[useProactiveCardsV6] AI 简报获取失败:', err);
+    }
+  }, []);
 
   const addCard = useCallback((
     signal: typeof MARKET_SIGNALS[0],
@@ -164,6 +191,8 @@ export function useProactiveCardsV6(data: WarroomData | null) {
       // 判断是否展示早晨简报（8-10点）
       const hour = new Date().getHours();
       if (hour >= 8 && hour < 10) {
+        // 先获取 AI 简报数据，再展示
+        fetchAiBriefing(data);
         setTimeout(() => setShowMorningBriefing(true), 1500);
       }
     }, 1200);
@@ -190,5 +219,7 @@ export function useProactiveCardsV6(data: WarroomData | null) {
     showMorningBriefing,
     setShowMorningBriefing,
     morningBriefingCards: cards.slice(0, 3),
+    aiBriefingData,
+    fetchAiBriefing,
   };
 }

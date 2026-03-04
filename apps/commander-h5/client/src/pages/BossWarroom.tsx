@@ -1309,11 +1309,11 @@ function InquiryRow({ inq, index, total }: { inq: RealInquiry; index: number; to
       <div style={{ flexShrink:0, textAlign:'right' }}>
         {inq.estimatedValue ? (
           <div style={{ fontSize:14, fontWeight:800, color:C.t1, letterSpacing:-0.5, fontVariantNumeric:'tabular-nums' }}>
-            ${'{'}inq.estimatedValue.toLocaleString(){'}'}
+            ${inq.estimatedValue.toLocaleString()}
           </div>
         ) : null}
         {inq.quantity && (
-          <div style={{ fontSize:10.5, color:C.t3, marginTop:2 }}>{'{'}inq.quantity{'}'}</div>
+          <div style={{ fontSize:10.5, color:C.t3, marginTop:2 }}>{inq.quantity}</div>
         )}
         <IconChevronRight size={13} color={C.t3} style={{ marginTop:2 }}/>
       </div>

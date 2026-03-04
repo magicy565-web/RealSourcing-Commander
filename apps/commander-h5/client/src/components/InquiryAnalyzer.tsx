@@ -338,16 +338,110 @@ interface InquiryAnalyzerProps {
 export function InquiryAnalyzer({ inquiry, onClose, onSent }: InquiryAnalyzerProps) {
   const [isAnalyzing, setIsAnalyzing] = useState(true);
   const [analysisResult, setAnalysisResult] = useState<ReturnType<typeof mockAnalyzeInquiry> | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [sentState, setSentState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [activeSection, setActiveSection] = useState<'profile' | 'intent' | 'reply'>('profile');
 
-  // 模拟 AI 分析过程
+  // 真实 AI 分析（对接后端 /api/v1/ai/inquiries/:id/analyze）
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setAnalysisResult(mockAnalyzeInquiry(inquiry));
-      setIsAnalyzing(false);
-    }, 1800);
-    return () => clearTimeout(timer);
+    setIsAnalyzing(true);
+    setAiError(null);
+
+    fetch(`/api/v1/ai/inquiries/${inquiry.id}/analyze`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rawContent: inquiry.rawContent,
+        buyerName: inquiry.buyerName,
+        buyerCompany: inquiry.buyerCompany,
+        buyerCountry: inquiry.buyerCountry,
+        productName: inquiry.productName,
+        sourcePlatform: inquiry.platform,
+      }),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'AI 分析失败' }));
+          throw new Error(err.error || `HTTP ${res.status}`);
+        }
+        return res.json();
+      })
+      .then((data) => {
+        // 将后端返回的结构化数据映射到前端格式
+        const bp = data.buyerProfile;
+        const ia = data.intentAnalysis;
+        const rd = data.replyDraft;
+
+        const COUNTRY_FLAGS: Record<string, string> = {
+          SA: '🇸🇦', AE: '🇦🇪', US: '🇺🇸', DE: '🇩🇪',
+          GB: '🇬🇧', CN: '🇨🇳', MX: '🇲🇽', IN: '🇮🇳',
+          BR: '🇧🇷', TR: '🇹🇷',
+        };
+        const tierMap: Record<string, 'A'|'B'|'C'> = { high: 'A', medium: 'B', low: 'C' };
+        const tierLabelMap: Record<string, string> = { A: '高价值', B: '潜力客户', C: '普通客户' };
+        const intentTypeMap: Record<string, string> = {
+          price_inquiry: '价格询盘',
+          sample_request: '样品申请',
+          bulk_order: '大宗采购',
+          agent_seeking: '寻找代理',
+          general_inquiry: '一般咨询',
+        };
+
+        const profile: BuyerProfile = {
+          name: bp.name || inquiry.buyerName || '未知买家',
+          company: bp.company || inquiry.buyerCompany || '未知公司',
+          country: bp.country || inquiry.buyerCountry || '未知',
+          flag: COUNTRY_FLAGS[inquiry.buyerCountry] || '🏳️',
+          tier: tierMap[bp.decisionPower] || 'B',
+          tierLabel: tierLabelMap[tierMap[bp.decisionPower] || 'B'],
+          purchaseFrequency: bp.purchaseRole || '待确认',
+          decisionPower: bp.decisionPower === 'high' ? '最终决策人' : bp.decisionPower === 'medium' ? '影响者' : '执行者',
+          estimatedValue: inquiry.estimatedValue ? `$${(inquiry.estimatedValue / 1000).toFixed(0)}K` : '待评估',
+          tags: [bp.purchaseRole || '待确认', ...(ia.keyRequirements || []).slice(0, 3)],
+        };
+
+        // 将后端意图类型映射到前端 IntentType
+        const intentTypeToFrontend = (t: string): IntentType => {
+          if (t === 'bulk_order') return 'purchase';
+          if (t === 'price_inquiry') return 'compare';
+          if (t === 'sample_request') return 'technical';
+          if (t === 'general_inquiry') return 'unknown';
+          return 'unknown';
+        };
+        // 将后端 urgency 映射到前端 urgency
+        const urgencyToFrontend = (u: string): 'low' | 'medium' | 'high' => {
+          if (u === 'urgent' || u === 'high') return 'high';
+          if (u === 'normal') return 'medium';
+          return 'low';
+        };
+
+        const intent: IntentAnalysis = {
+          type: intentTypeToFrontend(ia.intentType),
+          label: intentTypeMap[ia.intentType] || ia.intentType,
+          confidence: ia.confidenceScore || 75,
+          signals: ia.keyRequirements || [],
+          urgency: urgencyToFrontend(ia.urgency),
+          suggestedAction: ia.reasoning || '建议尽快回复',
+        };
+
+        const reply: ReplyDraft = {
+          draftEn: rd.bodyEn || '',
+          draftZh: rd.bodyCn || '',
+          tone: rd.tone === 'formal' ? '专业 · 正式' : rd.tone === 'urgent' ? '紧迫 · 快速' : '专业 · 热情',
+          keyPoints: ia.keyRequirements?.slice(0, 4) || [],
+          followupSuggestion: rd.followUpSuggestion || '建议 24h 内跟进',
+        };
+
+        setAnalysisResult({ profile, intent, reply });
+        setIsAnalyzing(false);
+      })
+      .catch((err) => {
+        console.error('[InquiryAnalyzer] AI 分析失败:', err);
+        // 降级到 Mock 数据
+        setAnalysisResult(mockAnalyzeInquiry(inquiry));
+        setAiError(err.message || 'AI 分析失败，展示预设结果');
+        setIsAnalyzing(false);
+      });
   }, [inquiry]);
 
   const handleSend = () => {
@@ -389,6 +483,13 @@ export function InquiryAnalyzer({ inquiry, onClose, onSent }: InquiryAnalyzerPro
           </div>
           <div style={{ width: 36 }}/>
         </div>
+
+        {/* AI 降级提示 */}
+        {aiError && (
+          <div style={{ padding: '8px 12px', borderRadius: 10, background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', marginBottom: 12, fontSize: 11, color: '#F59E0B' }}>
+            ⚠️ AI 实时分析不可用，展示预设结果
+          </div>
+        )}
 
         {/* 原始询盘内容 */}
         <div style={{ padding: '12px 14px', borderRadius: 16, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', marginBottom: 16 }}>
