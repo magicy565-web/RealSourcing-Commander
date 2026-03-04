@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import { hapticLight, hapticMedium, hapticSuccess } from '../lib/haptics';
 import { agentApi, type Agent, type AgentTask, type TrendVideo } from '../lib/api';
+import { AgentIcon } from '../components/AgentIcons';
 
 /* ─────────────────────────────────────────────────────────────────
    Agent 02 — 爆款雷达看板（Phase 9 真实 API 版）
@@ -297,7 +298,7 @@ export default function VideoTrendAgent() {
         </button>
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 16 }}>📡</span>
+            <AgentIcon type="trend_radar" size={28} />
             <span style={{ color: C.t1, fontSize: 16, fontWeight: 700 }}>爆款雷达</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <motion.div

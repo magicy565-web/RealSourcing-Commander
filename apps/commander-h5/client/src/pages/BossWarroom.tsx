@@ -10,6 +10,7 @@ import { ProactiveCardStack } from '../components/ProactiveCard';
 import { VoiceInput } from '../components/VoiceInput';
 import { QuickActions, buildQuickActions } from '../components/QuickActions';
 import { useLocation } from 'wouter';
+import { AgentIcon } from '../components/AgentIcons';
 import { hapticLight, hapticMedium, hapticSuccess, hapticSelection } from '../lib/haptics';
 import {
   IconInquiry, IconMessage, IconReply, IconBuyer, IconGlobe, IconUrgent,
@@ -1723,68 +1724,41 @@ function AgentEntryCards() {
   const agents = [
     {
       id: 'comment-leads',
-      title: '评论区线索挖掘',
-      subtitle: 'Agent A · 竞品评论区买家监听',
+      agentType: 'leads_hunter',
+      title: '线索猎手',
+      subtitle: 'Agent 01 · 竞品评论区买家监听',
       status: '5 条新线索',
-      statusColor: C.green,
+      statusColor: '#7C3AED',
       badge: 'NEW',
-      gradient: 'linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(5,150,105,0.06) 100%)',
-      border: 'rgba(16,185,129,0.25)',
-      glow: 'rgba(16,185,129,0.15)',
-      icon: (
-        <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
-          <circle cx="10" cy="10" r="5" fill="rgba(16,185,129,0.3)" stroke="#10B981" strokeWidth="1.5"/>
-          <circle cx="22" cy="10" r="5" fill="rgba(16,185,129,0.2)" stroke="rgba(16,185,129,0.6)" strokeWidth="1.5"/>
-          <circle cx="16" cy="22" r="5" fill="rgba(16,185,129,0.2)" stroke="rgba(16,185,129,0.6)" strokeWidth="1.5"/>
-          <line x1="14" y1="14" x2="10" y2="17" stroke="#10B981" strokeWidth="1.5" strokeLinecap="round"/>
-          <line x1="18" y1="14" x2="22" y2="17" stroke="rgba(16,185,129,0.6)" strokeWidth="1.5" strokeLinecap="round"/>
-          <circle cx="10" cy="10" r="2" fill="#10B981"/>
-        </svg>
-      ),
+      gradient: 'linear-gradient(135deg, rgba(124,58,237,0.12) 0%, rgba(109,40,217,0.06) 100%)',
+      border: 'rgba(124,58,237,0.25)',
+      glow: 'rgba(124,58,237,0.15)',
       href: '/agent/comment-leads',
     },
     {
       id: 'video-trends',
-      title: '爆款视频分析',
-      subtitle: 'Agent B · 竞品爆款特征分析',
+      agentType: 'trend_radar',
+      title: '爆款雷达',
+      subtitle: 'Agent 02 · 竞品爆款特征分析',
       status: '3 条选题建议',
-      statusColor: C.PL,
+      statusColor: '#F59E0B',
       badge: 'AI',
-      gradient: 'linear-gradient(135deg, rgba(124,58,237,0.12) 0%, rgba(109,40,217,0.06) 100%)',
-      border: 'rgba(124,58,237,0.25)',
-      glow: 'rgba(124,58,237,0.15)',
-      icon: (
-        <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
-          <rect x="3" y="20" width="4" height="9" rx="2" fill="rgba(124,58,237,0.4)"/>
-          <rect x="9" y="14" width="4" height="15" rx="2" fill="rgba(124,58,237,0.55)"/>
-          <rect x="15" y="8" width="4" height="21" rx="2" fill="rgba(124,58,237,0.7)"/>
-          <rect x="21" y="3" width="4" height="26" rx="2" fill="#7C3AED"/>
-          <path d="M5 19 L11 13 L17 7 L23 2" stroke="#7C3AED" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-          <circle cx="23" cy="2" r="2.5" fill="#7C3AED"/>
-        </svg>
-      ),
+      gradient: 'linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(251,146,60,0.06) 100%)',
+      border: 'rgba(245,158,11,0.25)',
+      glow: 'rgba(245,158,11,0.15)',
       href: '/agent/video-trends',
     },
     {
       id: 'content-intel',
-      title: '内容情报 Agent',
-      subtitle: 'Agent C · AI 选题建议 + 脚本框架',
+      agentType: 'content_pilot',
+      title: '选题助手',
+      subtitle: 'Agent 03 · AI 选题建议 + 脚本框架',
       status: '3 条选题待拍摄',
-      statusColor: '#F59E0B',
+      statusColor: '#10B981',
       badge: 'NEW',
-      gradient: 'linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(251,146,60,0.06) 100%)',
-      border: 'rgba(245,158,11,0.25)',
-      glow: 'rgba(245,158,11,0.15)',
-      icon: (
-        <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
-          <rect x="4" y="4" width="24" height="24" rx="6" fill="rgba(245,158,11,0.15)" stroke="rgba(245,158,11,0.5)" strokeWidth="1.5"/>
-          <line x1="9" y1="11" x2="23" y2="11" stroke="#F59E0B" strokeWidth="1.8" strokeLinecap="round"/>
-          <line x1="9" y1="16" x2="19" y2="16" stroke="rgba(245,158,11,0.7)" strokeWidth="1.8" strokeLinecap="round"/>
-          <line x1="9" y1="21" x2="15" y2="21" stroke="rgba(245,158,11,0.4)" strokeWidth="1.8" strokeLinecap="round"/>
-          <circle cx="25" cy="8" r="5" fill="#F59E0B"/>
-          <text x="25" y="11.5" textAnchor="middle" fontSize="7" fontWeight="800" fill="#000">AI</text>
-        </svg>
-      ),
+      gradient: 'linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(5,150,105,0.06) 100%)',
+      border: 'rgba(16,185,129,0.25)',
+      glow: 'rgba(16,185,129,0.15)',
       href: '/agent/content-intel',
     },
   ];
@@ -1794,9 +1768,12 @@ function AgentEntryCards() {
       {/* 区块标题 */}
       <div style={{ display:'flex', alignItems:'center', gap:8, padding:'0 2px' }}>
         <div style={{ width:3, height:14, borderRadius:2, background:`linear-gradient(to bottom, ${C.PL}, ${C.green})` }}/>
-        <span style={{ fontSize:12, fontWeight:700, color:C.t2, letterSpacing:0.3 }}>AI 监听 Agent</span>
+        <span style={{ fontSize:12, fontWeight:700, color:C.t2, letterSpacing:0.3 }}>AI 全家桶 Agent</span>
         <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.06)' }}/>
-        <span style={{ fontSize:10, color:C.t4 }}>3 个运行中</span>
+        <button
+          onClick={() => { hapticMedium(); navigate('/agent-hub'); }}
+          style={{ fontSize:10, color:C.PL, background:'rgba(124,58,237,0.12)', border:'1px solid rgba(124,58,237,0.25)', cursor:'pointer', padding:'2px 8px', borderRadius:6, fontFamily:'inherit' } as React.CSSProperties}
+        >查看全部 12 个 ›</button>
       </div>
 
       {/* 卡片列表 */}
@@ -1828,7 +1805,7 @@ function AgentEntryCards() {
             border:`1px solid ${agent.border}`,
             display:'flex', alignItems:'center', justifyContent:'center',
           }}>
-            {agent.icon}
+            <AgentIcon type={(agent as any).agentType} size={32} />
           </div>
 
           {/* 文字区 */}

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import { hapticLight, hapticMedium, hapticSuccess } from '../lib/haptics';
 import { agentApi, type Agent, type AgentTask, type Lead } from '../lib/api';
+import { AgentIcon } from '../components/AgentIcons';
 
 /* ─────────────────────────────────────────────────────────────────
    Agent 01 — 评论区买家线索挖掘看板（Phase 9 真实 API 版）
@@ -362,8 +363,8 @@ export default function CommentLeadAgent() {
         </button>
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 16 }}>🔍</span>
-            <span style={{ color: C.t1, fontSize: 16, fontWeight: 700 }}>评论区买家线索</span>
+            <AgentIcon type="leads_hunter" size={28} />
+            <span style={{ color: C.t1, fontSize: 16, fontWeight: 700 }}>线索猎手</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <motion.div
                 animate={isRunning ? { scale: [1, 1.4, 1] } : {}}

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import { hapticMedium, hapticSuccess, hapticLight } from '../lib/haptics';
 import { agentApi, type Agent, type AgentTask, type ContentSuggestion, type TrendVideo } from '../lib/api';
+import { AgentIcon } from '../components/AgentIcons';
 
 /* ─────────────────────────────────────────────────────────────────
    Agent 03 — 选题助手看板（Phase 9 真实 API 版）
@@ -394,7 +395,7 @@ export default function ContentIntelAgent() {
         </button>
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 16 }}>✍️</span>
+            <AgentIcon type="content_pilot" size={28} />
             <span style={{ color: C.t1, fontSize: 16, fontWeight: 700 }}>选题助手</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <motion.div

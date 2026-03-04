@@ -38,6 +38,8 @@ import SocialHostingLanding from "./pages/SocialHostingLanding";
 import CommentLeadAgent from "./pages/CommentLeadAgent";
 import VideoTrendAgent from "./pages/VideoTrendAgent";
 import ContentIntelAgent from "./pages/ContentIntelAgent";
+// Phase 9 AI 全家桶
+import AgentHub from "./pages/AgentHub";
 // ─── 受保护路由 ───────────────────────────────────────────────
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   if (!isLoggedIn()) {
@@ -147,6 +149,8 @@ function Router() {
       <Route path="/warroom">{() => <ProtectedRoute component={BossWarroom} />}</Route>
       {/* Phase 7 社媒托管解锁落地页 */}
       <Route path="/hosting/:platform">{(params) => isLoggedIn() ? <SocialHostingLandingPage platform={(params as any).platform} /> : <Redirect to="/login" />}</Route>
+      {/* Phase 9 AI 全家桶 */}
+      <Route path="/agent-hub">{() => <ProtectedRoute component={AgentHub} />}</Route>
       {/* Phase 8 Agent 看板 */}
       <Route path="/agent/comment-leads">{() => <ProtectedRoute component={CommentLeadAgent} />}</Route>
       <Route path="/agent/video-trends">{() => <ProtectedRoute component={VideoTrendAgent} />}</Route>
