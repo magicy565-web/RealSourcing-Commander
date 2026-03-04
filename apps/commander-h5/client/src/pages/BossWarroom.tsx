@@ -10,7 +10,6 @@ import { ProactiveCardStack } from '../components/ProactiveCard';
 import { VoiceInput } from '../components/VoiceInput';
 import { QuickActions, buildQuickActions } from '../components/QuickActions';
 import { useLocation } from 'wouter';
-import { AgentIcon } from '../components/AgentIcons';
 import { hapticLight, hapticMedium, hapticSuccess, hapticSelection } from '../lib/haptics';
 import {
   IconInquiry, IconMessage, IconReply, IconBuyer, IconGlobe, IconUrgent,
@@ -1203,99 +1202,40 @@ interface BentoItem {
   span?: 'wide' | 'normal'; // wide = 2 columns
 }
 
-const MOCK_INQUIRIES = [
-  {
-    id: 'inq-001',
-    platform: 'tiktok',
-    platformColor: '#FE2C55',
-    platformLabel: 'TikTok',
-    buyerName: 'SunPower Solutions',
-    country: '🇻🇳',
-    countryName: 'Vietnam',
-    product: '太阳能电池板 300W',
-    amount: '$12,500',
-    qty: '500 pcs',
-    status: 'urgent' as const,
-    time: '2分钟前',
-    isNew: true,
-    trend: 'up' as const,
-  },
-  {
-    id: 'inq-002',
-    platform: 'meta',
-    platformColor: '#1877F2',
-    platformLabel: 'Meta',
-    buyerName: 'Klaus Weber',
-    country: '🇩🇪',
-    countryName: 'Germany',
-    product: 'LED 路灯 150W',
-    amount: '$8,200',
-    qty: '200 pcs',
-    status: 'pending' as const,
-    time: '18分钟前',
-    isNew: true,
-    trend: 'up' as const,
-  },
-  {
-    id: 'inq-003',
-    platform: 'linkedin',
-    platformColor: '#0A66C2',
-    platformLabel: 'LinkedIn',
-    buyerName: 'Ahmed Al-Rashid',
-    country: '🇦🇪',
-    countryName: 'UAE',
-    product: '工业储能系统 100kWh',
-    amount: '$45,000',
-    qty: '2 sets',
-    status: 'replied' as const,
-    time: '1小时前',
-    isNew: false,
-    trend: 'up' as const,
-  },
-  {
-    id: 'inq-004',
-    platform: 'shopify',
-    platformColor: '#96BF48',
-    platformLabel: 'Shopify',
-    buyerName: 'Maria Santos',
-    country: '🇧🇷',
-    countryName: 'Brazil',
-    product: '便携式充电宝 20000mAh',
-    amount: '$3,600',
-    qty: '300 pcs',
-    status: 'pending' as const,
-    time: '3小时前',
-    isNew: false,
-    trend: 'down' as const,
-  },
-  {
-    id: 'inq-005',
-    platform: 'tiktok',
-    platformColor: '#FE2C55',
-    platformLabel: 'TikTok',
-    buyerName: 'Nguyen Van Minh',
-    country: '🇻🇳',
-    countryName: 'Vietnam',
-    product: '蓝牙耳机 TWS',
-    amount: '$5,800',
-    qty: '1000 pcs',
-    status: 'urgent' as const,
-    time: '4小时前',
-    isNew: false,
-    trend: 'up' as const,
-  },
-];
-
-type InquiryStatus = 'urgent' | 'pending' | 'replied';
-
-const STATUS_CFG: Record<InquiryStatus, { label:string; color:string; bg:string; icon:React.ReactNode }> = {
-  urgent:  { label:'紧急', color:'#F87171', bg:'rgba(248,113,113,0.12)', icon: <IconUrgent size={10} color="#F87171" strokeWidth={2}/> },
-  pending: { label:'待回复', color:'#FCD34D', bg:'rgba(252,211,77,0.1)',  icon: <IconClock size={10} color="#FCD34D" strokeWidth={2}/> },
-  replied: { label:'已回复', color:'#10B981', bg:'rgba(16,185,129,0.1)', icon: <IconCheckCircle size={10} color="#10B981" strokeWidth={2}/> },
+type InquiryStatus = 'urgent' | 'pending' | 'replied' | 'unread' | 'reading' | 'contracted';
+const STATUS_CFG: Record<string, { label:string; color:string; bg:string; icon:React.ReactNode }> = {
+  urgent:     { label:'紧急',  color:'#F87171', bg:'rgba(248,113,113,0.12)', icon: <IconUrgent size={10} color="#F87171" strokeWidth={2}/> },
+  unread:     { label:'未读',  color:'#F87171', bg:'rgba(248,113,113,0.12)', icon: <IconUrgent size={10} color="#F87171" strokeWidth={2}/> },
+  pending:    { label:'待回复', color:'#FCD34D', bg:'rgba(252,211,77,0.1)',  icon: <IconClock size={10} color="#FCD34D" strokeWidth={2}/> },
+  reading:    { label:'处理中', color:'#FCD34D', bg:'rgba(252,211,77,0.1)',  icon: <IconClock size={10} color="#FCD34D" strokeWidth={2}/> },
+  replied:    { label:'已回复', color:'#10B981', bg:'rgba(16,185,129,0.1)', icon: <IconCheckCircle size={10} color="#10B981" strokeWidth={2}/> },
+  contracted: { label:'已成交', color:'#A78BFA', bg:'rgba(167,139,250,0.1)', icon: <IconStar size={10} color="#A78BFA" strokeWidth={2}/> },
 };
-
-function InquiryRow({ inq, index }: { inq: typeof MOCK_INQUIRIES[0]; index: number }) {
-  const sc = STATUS_CFG[inq.status];
+interface RealInquiry {
+  id: string;
+  sourcePlatform: string;
+  buyerName: string;
+  buyerCountry: string;
+  productName: string;
+  estimatedValue?: number;
+  quantity?: string;
+  status: string;
+  receivedAt: string;
+}
+function InquiryRow({ inq, index, total }: { inq: RealInquiry; index: number; total: number }) {
+  const sc = STATUS_CFG[inq.status] ?? STATUS_CFG['pending'];
+  const platformColor = inq.sourcePlatform === 'tiktok' ? '#FE2C55' :
+    inq.sourcePlatform === 'meta' ? '#1877F2' :
+    inq.sourcePlatform === 'linkedin' ? '#0A66C2' :
+    inq.sourcePlatform === 'shopify' ? '#96BF48' : '#7C3AED';
+  const timeAgo = (() => {
+    const diff = Date.now() - new Date(inq.receivedAt).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return mins + '分钟前';
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + '小时前';
+    return Math.floor(hrs / 24) + '天前';
+  })();
   return (
     <motion.div
       initial={{ opacity:0, x:-12 }}
@@ -1306,61 +1246,46 @@ function InquiryRow({ inq, index }: { inq: typeof MOCK_INQUIRIES[0]; index: numb
       style={{
         display:'flex', alignItems:'center', gap:12,
         padding:'12px 0',
-        borderBottom: index < MOCK_INQUIRIES.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+        borderBottom: index < total - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
         cursor:'pointer', borderRadius:4,
       }}
     >
-      {/* Platform badge + country flag */}
       <div style={{ position:'relative', flexShrink:0 }}>
         <div style={{
           width:40, height:40, borderRadius:12,
-          background:`${inq.platformColor}18`,
-          border:`1px solid ${inq.platformColor}30`,
+          background:platformColor + '18',
+          border:'1px solid ' + platformColor + '30',
           display:'flex', alignItems:'center', justifyContent:'center',
-          boxShadow:`0 0 12px ${inq.platformColor}20`,
+          boxShadow:'0 0 12px ' + platformColor + '20',
         }}>
-          <span style={{ fontSize:18 }}>
-            {inq.platform === 'tiktok' ? '𝕋' :
-             inq.platform === 'meta' ? 'f' :
-             inq.platform === 'linkedin' ? 'in' : '🛍'}
+          <span style={{ fontSize:14, fontWeight:700, color:platformColor }}>
+            {inq.sourcePlatform === 'tiktok' ? 'T' :
+             inq.sourcePlatform === 'meta' ? 'f' :
+             inq.sourcePlatform === 'linkedin' ? 'in' : 'S'}
           </span>
         </div>
-        {/* Country flag badge */}
-        <div style={{
-          position:'absolute', bottom:-3, right:-3,
-          width:18, height:18, borderRadius:'50%',
-          background:C.bg, border:`1.5px solid rgba(255,255,255,0.08)`,
-          display:'flex', alignItems:'center', justifyContent:'center',
-          fontSize:10, lineHeight:1,
-        }}>
-          {inq.country}
-        </div>
-        {/* New dot */}
-        {inq.isNew && (
+        {(inq.status === 'unread' || inq.status === 'urgent') && (
           <motion.div
             animate={{ scale:[1,1.4,1], opacity:[1,0.6,1] }}
             transition={{ duration:1.8, repeat:Infinity }}
             style={{
               position:'absolute', top:-2, left:-2,
               width:8, height:8, borderRadius:'50%',
-              background:C.red, border:`1.5px solid ${C.bg}`,
-              boxShadow:`0 0 6px ${C.red}`,
+              background:C.red, border:'1.5px solid ' + C.bg,
+              boxShadow:'0 0 6px ' + C.red,
             }}
           />
         )}
       </div>
-
-      {/* Main info */}
       <div style={{ flex:1, minWidth:0 }}>
         <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:3 }}>
           <span style={{ fontSize:13.5, fontWeight:700, color:C.t1, letterSpacing:-0.3, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:140 }}>
-            {inq.buyerName}
+            {inq.buyerName || '未知买家'}
           </span>
-          {/* Status chip */}
           <div style={{
             display:'flex', alignItems:'center', gap:3,
             padding:'2px 7px', borderRadius:50,
-            background:sc.bg, border:`1px solid ${sc.color}30`,
+            background:sc.bg, border:'1px solid ' + sc.color + '30',
             flexShrink:0,
           }}>
             {sc.icon}
@@ -1369,35 +1294,28 @@ function InquiryRow({ inq, index }: { inq: typeof MOCK_INQUIRIES[0]; index: numb
         </div>
         <div style={{ fontSize:11.5, color:C.t3, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginBottom:4 }}>
           <IconPackage size={10} color={C.t3} style={{ display:'inline', verticalAlign:'middle', marginRight:3 }}/>
-          {inq.product}
+          {inq.productName}
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-          <span style={{ fontSize:11, color:C.t3 }}>{inq.countryName}</span>
+          <span style={{ fontSize:11, color:C.t3 }}>{inq.buyerCountry}</span>
           <span style={{ width:2, height:2, borderRadius:'50%', background:C.t3, flexShrink:0 }}/>
-          <span style={{ fontSize:11, color:C.t3 }}>{inq.time}</span>
+          <span style={{ fontSize:11, color:C.t3 }}>{timeAgo}</span>
         </div>
       </div>
-
-      {/* Amount + trend */}
       <div style={{ flexShrink:0, textAlign:'right' }}>
-        <div style={{ fontSize:14, fontWeight:800, color:C.t1, letterSpacing:-0.5, fontVariantNumeric:'tabular-nums' }}>
-          {inq.amount}
-        </div>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', gap:3, marginTop:2 }}>
-          {inq.trend === 'up'
-            ? <IconTrending size={11} color={C.green}/>
-            : <IconTrendingDown size={11} color={C.red}/>
-          }
-          <span style={{ fontSize:10.5, color:inq.trend==='up'?C.green:C.red, fontWeight:600 }}>
-            {inq.qty}
-          </span>
-        </div>
+        {inq.estimatedValue ? (
+          <div style={{ fontSize:14, fontWeight:800, color:C.t1, letterSpacing:-0.5, fontVariantNumeric:'tabular-nums' }}>
+            ${'{'}inq.estimatedValue.toLocaleString(){'}'}
+          </div>
+        ) : null}
+        {inq.quantity && (
+          <div style={{ fontSize:10.5, color:C.t3, marginTop:2 }}>{'{'}inq.quantity{'}'}</div>
+        )}
         <IconChevronRight size={13} color={C.t3} style={{ marginTop:2 }}/>
       </div>
     </motion.div>
   );
 }
-
 function BentoInquiryFeed() {
   const [, navigate] = useLocation();
   // 快捷功能入口配置
@@ -1527,16 +1445,16 @@ function BentoInquiryFeed() {
     },
   ];
 
-  const urgentCount = 3; // 来自真实数据
-  const [activeFilter, setActiveFilter] = useState<'all'|'urgent'|'pending'|'replied'>('all');
-  const [searchOpen, setSearchOpen] = useState(false);
-
-  const filters: Array<{ id: 'all'|'urgent'|'pending'|'replied'; label:string; count:number }> = [
-    { id:'all',     label:'全部', count: MOCK_INQUIRIES.length },
-    { id:'urgent',  label:'紧急', count: MOCK_INQUIRIES.filter(i=>i.status==='urgent').length },
-    { id:'pending', label:'待回复', count: MOCK_INQUIRIES.filter(i=>i.status==='pending').length },
-    { id:'replied', label:'已回复', count: MOCK_INQUIRIES.filter(i=>i.status==='replied').length },
-  ];
+  const [inquiries, setInquiries] = useState<RealInquiry[]>([]);
+  const [inqLoading, setInqLoading] = useState(true);
+  useEffect(() => {
+    import('../lib/api').then(({ inquiriesApi }) => {
+      inquiriesApi.list({ limit: 5 })
+        .then(res => { setInquiries(res.items as unknown as RealInquiry[]); setInqLoading(false); })
+        .catch(() => setInqLoading(false));
+    });
+  }, []);
+  const urgentCount = inquiries.filter(i => i.status === 'unread' || i.status === 'urgent').length;
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
@@ -1656,6 +1574,41 @@ function BentoInquiryFeed() {
           <BentoIconTile key={item.id} item={item} index={i+4} compact/>
         ))}
       </div>
+
+      {/* ── 最新询盘列表（真实数据）── */}
+      <div style={{
+        borderRadius:20, padding:'16px',
+        background:'rgba(255,255,255,0.03)',
+        border:'1px solid rgba(255,255,255,0.07)',
+      }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+            <IconInquiry size={14} color={C.PL}/>
+            <span style={{ fontSize:13, fontWeight:700, color:C.t1 }}>最新询盘</span>
+            {urgentCount > 0 && (
+              <div style={{ padding:'1px 7px', borderRadius:50, background:'rgba(248,113,113,0.15)', border:'1px solid rgba(248,113,113,0.3)' }}>
+                <span style={{ fontSize:10, fontWeight:700, color:C.red }}>{urgentCount} 待处理</span>
+              </div>
+            )}
+          </div>
+          <span style={{ fontSize:10.5, color:C.t3 }}>查看全部 ›</span>
+        </div>
+        {inqLoading ? (
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {[0,1,2].map(i => <Skeleton key={i} w="100%" h={56} r={12}/>)}
+          </div>
+        ) : inquiries.length === 0 ? (
+          <div style={{ textAlign:'center', padding:'20px 0', color:C.t3, fontSize:12 }}>
+            暂无询盘，上传产品资料后 AI 将自动为您寻找买家
+          </div>
+        ) : (
+          <div>
+            {inquiries.map((inq, i) => (
+              <InquiryRow key={inq.id} inq={inq} index={i} total={inquiries.length}/>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1717,129 +1670,116 @@ function BentoIconTile({ item, index, compact }: { item: BentoItem; index: numbe
 }
 
 // ══════════════════════════════════════════════════════════════════
-// Agent Entry Cards — 同行监听 Agent 入口
+// 产品资料库 & AI 执行中心入口卡片
 // ══════════════════════════════════════════════════════════════════
-function AgentEntryCards() {
+function ProductLibraryCard() {
   const [, navigate] = useLocation();
-  const agents = [
+  const cards = [
     {
-      id: 'comment-leads',
-      agentType: 'leads_hunter',
-      title: '线索猎手',
-      subtitle: 'Agent 01 · 竞品评论区买家监听',
-      status: '5 条新线索',
-      statusColor: '#7C3AED',
-      badge: 'NEW',
-      gradient: 'linear-gradient(135deg, rgba(124,58,237,0.12) 0%, rgba(109,40,217,0.06) 100%)',
-      border: 'rgba(124,58,237,0.25)',
-      glow: 'rgba(124,58,237,0.15)',
-      href: '/agent/comment-leads',
-    },
-    {
-      id: 'video-trends',
-      agentType: 'trend_radar',
-      title: '爆款雷达',
-      subtitle: 'Agent 02 · 竞品爆款特征分析',
-      status: '3 条选题建议',
-      statusColor: '#F59E0B',
-      badge: 'AI',
-      gradient: 'linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(251,146,60,0.06) 100%)',
-      border: 'rgba(245,158,11,0.25)',
+      id: 'upload-product',
+      title: '上传产品资料',
+      subtitle: '让 AI 深度学习您的产品',
+      color: '#F59E0B',
+      gradient: 'linear-gradient(135deg, rgba(245,158,11,0.18) 0%, rgba(217,119,6,0.1) 100%)',
+      border: 'rgba(245,158,11,0.3)',
       glow: 'rgba(245,158,11,0.15)',
-      href: '/agent/video-trends',
+      badge: '开始' as string | undefined,
+      href: '/admin',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+          <rect width="32" height="32" rx="8" fill="rgba(245,158,11,0.15)"/>
+          <path d="M16 4L28 10V22L16 28L4 22V10L16 4Z" stroke="#F59E0B" strokeWidth="1.8" fill="rgba(245,158,11,0.12)" strokeLinejoin="round"/>
+          <path d="M16 12v8M12 16l4-4 4 4" stroke="#F59E0B" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      ),
     },
     {
-      id: 'content-intel',
-      agentType: 'content_pilot',
-      title: '选题助手',
-      subtitle: 'Agent 03 · AI 选题建议 + 脚本框架',
-      status: '3 条选题待拍摄',
-      statusColor: '#10B981',
-      badge: 'NEW',
-      gradient: 'linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(5,150,105,0.06) 100%)',
-      border: 'rgba(16,185,129,0.25)',
+      id: 'market-scan',
+      title: '市场扫描',
+      subtitle: 'AI 分析目标市场机会',
+      color: '#7C3AED',
+      gradient: 'linear-gradient(135deg, rgba(124,58,237,0.18) 0%, rgba(109,40,217,0.1) 100%)',
+      border: 'rgba(124,58,237,0.3)',
+      glow: 'rgba(124,58,237,0.15)',
+      badge: 'AI' as string | undefined,
+      href: '/feed',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+          <rect width="32" height="32" rx="8" fill="rgba(124,58,237,0.15)"/>
+          <circle cx="14" cy="14" r="7" stroke="#A78BFA" strokeWidth="1.8" fill="none"/>
+          <path d="M19 19l5 5" stroke="#A78BFA" strokeWidth="2" strokeLinecap="round"/>
+          <path d="M11 14h6M14 11v6" stroke="#A78BFA" strokeWidth="1.5" strokeLinecap="round"/>
+        </svg>
+      ),
+    },
+    {
+      id: 'task-queue',
+      title: '任务队列',
+      subtitle: 'AI 执行进度',
+      color: '#10B981',
+      gradient: 'linear-gradient(135deg, rgba(16,185,129,0.18) 0%, rgba(5,150,105,0.1) 100%)',
+      border: 'rgba(16,185,129,0.3)',
       glow: 'rgba(16,185,129,0.15)',
-      href: '/agent/content-intel',
+      badge: undefined as string | undefined,
+      href: '/task-queue',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+          <rect width="32" height="32" rx="8" fill="rgba(16,185,129,0.12)"/>
+          <rect x="6" y="8" width="20" height="3" rx="1.5" fill="rgba(16,185,129,0.7)"/>
+          <rect x="6" y="14" width="14" height="3" rx="1.5" fill="rgba(16,185,129,0.5)"/>
+          <rect x="6" y="20" width="17" height="3" rx="1.5" fill="rgba(16,185,129,0.35)"/>
+          <circle cx="25" cy="22" r="4" fill="#10B981"/>
+          <path d="M23 22l1.5 1.5 2.5-2.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      ),
     },
   ];
-
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-      {/* 区块标题 */}
       <div style={{ display:'flex', alignItems:'center', gap:8, padding:'0 2px' }}>
-        <div style={{ width:3, height:14, borderRadius:2, background:`linear-gradient(to bottom, ${C.PL}, ${C.green})` }}/>
-        <span style={{ fontSize:12, fontWeight:700, color:C.t2, letterSpacing:0.3 }}>AI 全家桶 Agent</span>
+        <div style={{ width:3, height:14, borderRadius:2, background:'linear-gradient(to bottom, ' + C.PL + ', ' + C.green + ')' }}/>
+        <span style={{ fontSize:12, fontWeight:700, color:C.t2, letterSpacing:0.3 }}>AI 执行中心</span>
         <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.06)' }}/>
-        <button
-          onClick={() => { hapticMedium(); navigate('/agent-hub'); }}
-          style={{ fontSize:10, color:C.PL, background:'rgba(124,58,237,0.12)', border:'1px solid rgba(124,58,237,0.25)', cursor:'pointer', padding:'2px 8px', borderRadius:6, fontFamily:'inherit' } as React.CSSProperties}
-        >查看全部 12 个 ›</button>
       </div>
-
-      {/* 卡片列表 */}
-      {agents.map((agent, i) => (
+      {cards.map((card, i) => (
         <motion.button
-          key={agent.id}
+          key={card.id}
           initial={{ opacity:0, y:12 }}
           animate={{ opacity:1, y:0 }}
           transition={{ ...SPRING_GENTLE, delay: i * 0.08 }}
           whileTap={{ scale:0.97 }}
-          onClick={() => { hapticMedium(); navigate(agent.href); }}
+          onClick={() => { hapticMedium(); navigate(card.href); }}
           style={{
-            width:'100%', border:`1px solid ${agent.border}`,
+            width:'100%', border:'1px solid ' + card.border,
             borderRadius:20, padding:'14px 16px',
-            background:agent.gradient,
-            boxShadow:`inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 20px ${agent.glow}`,
+            background:card.gradient,
+            boxShadow:'inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 20px ' + card.glow,
             cursor:'pointer', fontFamily:'inherit',
             display:'flex', alignItems:'center', gap:14,
             position:'relative', overflow:'hidden',
           } as React.CSSProperties}
         >
-          {/* 背景光晓 */}
-          <div aria-hidden style={{ position:'absolute', top:-20, right:-20, width:100, height:100, borderRadius:'50%', background:`radial-gradient(circle, ${agent.glow} 0%, transparent 70%)`, filter:'blur(20px)', pointerEvents:'none' }}/>
-
-          {/* 图标 */}
+          <div aria-hidden style={{ position:'absolute', top:-20, right:-20, width:100, height:100, borderRadius:'50%', background:'radial-gradient(circle, ' + card.glow + ' 0%, transparent 70%)', filter:'blur(20px)', pointerEvents:'none' }}/>
           <div style={{
             width:50, height:50, borderRadius:15, flexShrink:0,
-            background:`rgba(255,255,255,0.04)`,
-            border:`1px solid ${agent.border}`,
+            background:'rgba(255,255,255,0.04)',
+            border:'1px solid ' + card.border,
             display:'flex', alignItems:'center', justifyContent:'center',
           }}>
-            <AgentIcon type={(agent as any).agentType} size={32} />
+            {card.icon}
           </div>
-
-          {/* 文字区 */}
           <div style={{ flex:1, textAlign:'left' }}>
             <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:4 }}>
-              <span style={{ fontSize:15, fontWeight:800, color:C.t1, letterSpacing:-0.3 }}>{agent.title}</span>
-              {/* Badge */}
-              <div style={{
-                padding:'2px 7px', borderRadius:50,
-                background:`rgba(255,255,255,0.08)`,
-                border:`1px solid rgba(255,255,255,0.12)`,
-              }}>
-                <span style={{ fontSize:9, fontWeight:800, color:C.t2, letterSpacing:0.5 }}>{agent.badge}</span>
-              </div>
+              <span style={{ fontSize:15, fontWeight:800, color:C.t1, letterSpacing:-0.3 }}>{card.title}</span>
+              {card.badge && (
+                <div style={{ padding:'2px 7px', borderRadius:50, background:'rgba(255,255,255,0.08)', border:'1px solid rgba(255,255,255,0.12)' }}>
+                  <span style={{ fontSize:10, fontWeight:700, color:card.color }}>{card.badge}</span>
+                </div>
+              )}
             </div>
-            <div style={{ fontSize:11, color:C.t3, marginBottom:6 }}>{agent.subtitle}</div>
-            {/* 状态行 */}
-            <div style={{ display:'flex', alignItems:'center', gap:5 }}>
-              <motion.div
-                animate={{ opacity:[1,0.4,1] }}
-                transition={{ duration:2, repeat:Infinity }}
-                style={{ width:5, height:5, borderRadius:'50%', background:agent.statusColor, boxShadow:`0 0 6px ${agent.statusColor}` }}
-              />
-              <span style={{ fontSize:11, fontWeight:600, color:agent.statusColor }}>{agent.status}</span>
-            </div>
+            <div style={{ fontSize:11.5, color:C.t3 }}>{card.subtitle}</div>
           </div>
-
-          {/* 右箭头 */}
-          <div style={{
-            width:30, height:30, borderRadius:'50%', flexShrink:0,
-            background:`rgba(255,255,255,0.05)`,
-            border:`1px solid rgba(255,255,255,0.1)`,
-            display:'flex', alignItems:'center', justifyContent:'center',
-          }}>
+          <div style={{ width:28, height:28, borderRadius:'50%', flexShrink:0, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', display:'flex', alignItems:'center', justifyContent:'center' }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.t3} strokeWidth="2.5" strokeLinecap="round">
               <path d="M9 18l6-6-6-6"/>
             </svg>
@@ -1849,7 +1789,6 @@ function AgentEntryCards() {
     </div>
   );
 }
-
 // ══════════════════════════════════════════════════════════════════
 // Pull-to-Refresh Indicator
 // ══════════════════════════════════════════════════════════════════
@@ -1911,10 +1850,10 @@ export default function BossWarroom() {
 
   // Quick actions
   const quickActions = buildQuickActions({
-    totalPending: data?.totalPending ?? 0,
-    completionRate: data?.completionRate ?? 0,
-    hasTikTok: !!(data?.platforms.find(p => p.id === 'tiktok')?.isConnected),
-    hasMeta: !!(data?.platforms.find(p => p.id === 'meta')?.isConnected),
+    totalPending: data?.stats.totalPending ?? 0,
+    completionRate: data?.stats.completionRate ?? 0,
+    hasProducts: true, // TODO: 从产品库接口获取
+    hasInquiries: !!(inquiries && inquiries.length > 0),
   });
 
   // Clock
@@ -2045,8 +1984,8 @@ export default function BossWarroom() {
         {/* Bento Grid — 信息流询盘 */}
         <BentoInquiryFeed/>
 
-        {/* ── Agent 入口卡片 ── */}
-        <AgentEntryCards/>
+        {/* ── AI 执行中心入口 ── */}
+        <ProductLibraryCard/>
 
         {/* AI Chat card */}
         <AIChatCard

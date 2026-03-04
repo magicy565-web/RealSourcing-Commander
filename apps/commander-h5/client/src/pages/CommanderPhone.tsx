@@ -40,7 +40,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useNotifSettings, useUserPlan } from "../App";
-import AIThinkingPanel, { useAIThinking } from "../components/AIThinkingPanel";
 
 // ─── 类型定义 ─────────────────────────────────────────────────
 

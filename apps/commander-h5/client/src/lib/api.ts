@@ -1345,3 +1345,40 @@ export interface ContentSuggestion {
   status: "pending" | "approved" | "rejected" | "used";
   created_at: string;
 }
+
+// ─── Phase 10: AI 自动回复日志 ───────────────────────────────
+
+export interface AutoReplyLog {
+  id: string;
+  inquiry_id: string;
+  reply_type: "auto_reply";
+  content_en: string;
+  send_status: "sent" | "draft" | "failed";
+  sent_at: string | null;
+  created_at: string;
+  buyer_name: string | null;
+  buyer_company: string | null;
+  buyer_country: string | null;
+  product_name: string | null;
+  source_platform: string;
+  buyerEmailMasked: string;
+}
+
+export interface AutoReplyLogsResponse {
+  items: AutoReplyLog[];
+  total: number;
+  stats: {
+    totalSent: number;
+    totalDraft: number;
+  };
+}
+
+export const autoReplyApi = {
+  /** 获取 AI 自动回复日志 */
+  getLogs: (params?: { limit?: number; offset?: number }): Promise<AutoReplyLogsResponse> => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    return request(`/agents/auto-reply-logs?${qs.toString()}`);
+  },
+};

@@ -4,42 +4,21 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch, useLocation, Redirect } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import CommanderPhone from "./pages/CommanderPhone";
-import WebDashboard from "./pages/WebDashboard";
-import LandingPage from "./pages/LandingPage";
-import NotificationCenter from "./pages/NotificationCenter";
-import NotificationSettings from "./pages/NotificationSettings";
-import TikTokManager from "./pages/TikTokManager";
-import FacebookManager from "./pages/FacebookManager";
-import LinkedInManager from "./pages/LinkedInManager";
-import WhatsAppManager from "./pages/WhatsAppManager";
-import OpenClawDetail from "./pages/OpenClawDetail";
-import MarketExpansion from "./pages/MarketExpansion";
-import ProductLaunch from "./pages/ProductLaunch";
-import GeoOptimizer from "./pages/GeoOptimizer";
 import { useState, createContext, useContext } from "react";
 import { AuthContext, useAuthState } from "./hooks/useAuth";
 import { isLoggedIn } from "./lib/api";
+
+// ─── 核心页面 ─────────────────────────────────────────────────
 import Login from "./pages/Login";
-import StyleTraining from "./pages/StyleTraining";
+import BossWarroom from "./pages/BossWarroom";
+import CommanderPhone from "./pages/CommanderPhone";
+import NotificationCenter from "./pages/NotificationCenter";
+import NotificationSettings from "./pages/NotificationSettings";
 import TaskQueue from "./pages/TaskQueue";
-// Phase 3
 import FeedPage from "./pages/FeedPage";
 import AdminPage from "./pages/AdminPage";
 import VideoFeedPlayer from "./pages/VideoFeedPlayer";
-// Phase 5 新增路由
-import MultiAccountManager from "./pages/MultiAccountManager";
-import ROICalculator from "./pages/ROICalculator";
-// Phase 6 老板指挥台
-import BossWarroom from "./pages/BossWarroom";
-// Phase 7 社媒托管解锁落地页
-import SocialHostingLanding from "./pages/SocialHostingLanding";
-// Phase 8 Agent 看板
-import CommentLeadAgent from "./pages/CommentLeadAgent";
-import VideoTrendAgent from "./pages/VideoTrendAgent";
-import ContentIntelAgent from "./pages/ContentIntelAgent";
-// Phase 9 AI 全家桶
-import AgentHub from "./pages/AgentHub";
+
 // ─── 受保护路由 ───────────────────────────────────────────────
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   if (!isLoggedIn()) {
@@ -48,46 +27,38 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
   return <Component />;
 }
 
-// ─── 用户类型 Context（标准版 vs 独立部署版）─────────────────────
-
+// ─── 用户类型 Context ─────────────────────────────────────────
 export type UserPlan = "standard" | "enterprise";
-
 interface UserPlanCtx {
   plan: UserPlan;
   setPlan: (p: UserPlan) => void;
   isEnterprise: boolean;
 }
-
 export const UserPlanContext = createContext<UserPlanCtx>({
   plan: "standard",
   setPlan: () => {},
   isEnterprise: false,
 });
-
 export function useUserPlan() {
   return useContext(UserPlanContext);
 }
 
 // ─── 全局通知设置 Context ─────────────────────────────────────
-
 interface NotifSettingsCtx {
   pushHour: number;
   pushMinute: number;
   setPushTime: (h: number, m: number) => void;
 }
-
 export const NotifSettingsContext = createContext<NotifSettingsCtx>({
   pushHour: 8,
   pushMinute: 0,
   setPushTime: () => {},
 });
-
 export function useNotifSettings() {
   return useContext(NotifSettingsContext);
 }
 
-// ─── 通知中心路由包装（带返回和设置跳转）────────────────────────
-
+// ─── 页面包装器 ───────────────────────────────────────────────
 function NotificationCenterPage() {
   const [, navigate] = useLocation();
   const { pushHour, pushMinute } = useNotifSettings();
@@ -119,78 +90,20 @@ function NotificationSettingsPage() {
   );
 }
 
-// ─── 路由 ─────────────────────────────────────────────────────
-
-function Router() {
-  return (
-    <Switch>
-      <Route path="/">{() => isLoggedIn() ? <Redirect to="/boss-warroom" /> : <Redirect to="/login" />}</Route>
-      <Route path="/landing" component={LandingPage} />
-      <Route path="/login" component={Login} />
-      <Route path="/phone">{() => <ProtectedRoute component={CommanderPhone} />}</Route>
-      <Route path="/web">{() => <ProtectedRoute component={WebDashboard} />}</Route>
-      <Route path="/notifications">{() => <ProtectedRoute component={NotificationCenterPage} />}</Route>
-      <Route path="/notification-settings">{() => <ProtectedRoute component={NotificationSettingsPage} />}</Route>
-      <Route path="/tiktok">{() => <ProtectedRoute component={TikTokManager} />}</Route>
-      <Route path="/facebook">{() => <ProtectedRoute component={FacebookManager} />}</Route>
-      <Route path="/linkedin">{() => <ProtectedRoute component={LinkedInManager} />}</Route>
-      <Route path="/whatsapp">{() => <ProtectedRoute component={WhatsAppManager} />}</Route>
-      <Route path="/openclaw">{() => <ProtectedRoute component={OpenClawDetail} />}</Route>
-      <Route path="/market">{() => <ProtectedRoute component={MarketExpansion} />}</Route>
-      <Route path="/product-launch">{() => <ProtectedRoute component={ProductLaunch} />}</Route>
-      <Route path="/geo">{() => <ProtectedRoute component={GeoOptimizer} />}</Route>
-      <Route path="/style-training">{() => <ProtectedRoute component={StyleTrainingPage} />}</Route>
-      <Route path="/task-queue">{() => <ProtectedRoute component={TaskQueuePage} />}</Route>
-      {/* Phase 5 新增路由 */}
-      <Route path="/multi-account">{() => <ProtectedRoute component={MultiAccountManager} />}</Route>
-      <Route path="/roi">{() => <ProtectedRoute component={ROICalculator} />}</Route>
-      {/* Phase 6 老板指挥台 */}
-      <Route path="/boss-warroom">{() => <ProtectedRoute component={BossWarroom} />}</Route>
-      <Route path="/warroom">{() => <ProtectedRoute component={BossWarroom} />}</Route>
-      {/* Phase 7 社媒托管解锁落地页 */}
-      <Route path="/hosting/:platform">{(params) => isLoggedIn() ? <SocialHostingLandingPage platform={(params as any).platform} /> : <Redirect to="/login" />}</Route>
-      {/* Phase 9 AI 全家桶 */}
-      <Route path="/agent-hub">{() => <ProtectedRoute component={AgentHub} />}</Route>
-      {/* Phase 8 Agent 看板 */}
-      <Route path="/agent/comment-leads">{() => <ProtectedRoute component={CommentLeadAgent} />}</Route>
-      <Route path="/agent/video-trends">{() => <ProtectedRoute component={VideoTrendAgent} />}</Route>
-      <Route path="/agent/content-intel">{() => <ProtectedRoute component={ContentIntelAgent} />}</Route>
-      {/* Phase 3 新增路由 */}
-      <Route path="/video-feed">{() => <ProtectedRoute component={VideoFeedPlayerWrapper} />}</Route>
-      <Route path="/feed">{() => <ProtectedRoute component={FeedPageWrapper} />}</Route>
-      <Route path="/admin">{() => <ProtectedRoute component={AdminPageWrapper} />}</Route>
-      <Route path="/404" component={NotFound} />
-      <Route component={NotFound} />
-    </Switch>
-  );
-}
-
-// ─── 页面包装器 ─────────────────────────────────────────────────────
-function StyleTrainingPage() {
-  const [, navigate] = useLocation();
-  return (
-    <div className="min-h-screen" style={{ background: "oklch(0.14 0.02 250)" }}>
-      <StyleTraining onBack={() => navigate("/boss-warroom")} />
-    </div>
-  );
-}
-
 function TaskQueuePage() {
   const [, navigate] = useLocation();
   return (
     <div className="min-h-screen" style={{ background: "oklch(0.14 0.02 250)" }}>
-      <TaskQueue onBack={() => navigate("/phone")} />
+      <TaskQueue onBack={() => navigate("/boss-warroom")} />
     </div>
   );
 }
 
-// Phase 3 视频信息流包装器
 function VideoFeedPlayerWrapper() {
   const [, navigate] = useLocation();
-  return <VideoFeedPlayer onBack={() => navigate('/phone')} />;
+  return <VideoFeedPlayer onBack={() => navigate("/boss-warroom")} />;
 }
 
-// Phase 3 页面包装器
 function FeedPageWrapper() {
   return (
     <div className="min-h-screen" style={{ background: "oklch(0.14 0.02 250)" }}>
@@ -211,45 +124,53 @@ function AdminPageWrapper() {
   );
 }
 
-// Phase 7 社媒托管解锁落地页包装器
-function SocialHostingLandingPage({ platform }: { platform?: string }) {
-  const [, navigate] = useLocation();
+// ─── 路由 ─────────────────────────────────────────────────────
+function Router() {
   return (
-    <SocialHostingLanding
-      platform={platform}
-      onBack={() => navigate("/boss-warroom")}
-    />
+    <Switch>
+      <Route path="/">{() => isLoggedIn() ? <Redirect to="/boss-warroom" /> : <Redirect to="/login" />}</Route>
+      <Route path="/login" component={Login} />
+      <Route path="/boss-warroom">{() => <ProtectedRoute component={BossWarroom} />}</Route>
+      <Route path="/warroom">{() => <ProtectedRoute component={BossWarroom} />}</Route>
+      <Route path="/phone">{() => <ProtectedRoute component={CommanderPhone} />}</Route>
+      <Route path="/notifications">{() => <ProtectedRoute component={NotificationCenterPage} />}</Route>
+      <Route path="/notification-settings">{() => <ProtectedRoute component={NotificationSettingsPage} />}</Route>
+      <Route path="/task-queue">{() => <ProtectedRoute component={TaskQueuePage} />}</Route>
+      <Route path="/video-feed">{() => <ProtectedRoute component={VideoFeedPlayerWrapper} />}</Route>
+      <Route path="/feed">{() => <ProtectedRoute component={FeedPageWrapper} />}</Route>
+      <Route path="/admin">{() => <ProtectedRoute component={AdminPageWrapper} />}</Route>
+      <Route path="/404" component={NotFound} />
+      <Route component={NotFound} />
+    </Switch>
   );
 }
 
 // ─── App Root ─────────────────────────────────────────────────
-
 function App() {
   const [pushHour, setPushHour] = useState(8);
   const [pushMinute, setPushMinute] = useState(0);
   const [plan, setPlan] = useState<UserPlan>("standard");
   const authState = useAuthState();
-
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="dark">
         <AuthContext.Provider value={authState}>
-        <UserPlanContext.Provider value={{
-          plan,
-          setPlan,
-          isEnterprise: plan === "enterprise",
-        }}>
-          <NotifSettingsContext.Provider value={{
-            pushHour,
-            pushMinute,
-            setPushTime: (h, m) => { setPushHour(h); setPushMinute(m); },
+          <UserPlanContext.Provider value={{
+            plan,
+            setPlan,
+            isEnterprise: plan === "enterprise",
           }}>
-            <TooltipProvider>
-              <Toaster />
-              <Router />
-            </TooltipProvider>
-          </NotifSettingsContext.Provider>
-        </UserPlanContext.Provider>
+            <NotifSettingsContext.Provider value={{
+              pushHour,
+              pushMinute,
+              setPushTime: (h, m) => { setPushHour(h); setPushMinute(m); },
+            }}>
+              <TooltipProvider>
+                <Toaster />
+                <Router />
+              </TooltipProvider>
+            </NotifSettingsContext.Provider>
+          </UserPlanContext.Provider>
         </AuthContext.Provider>
       </ThemeProvider>
     </ErrorBoundary>

@@ -81,68 +81,64 @@ export function QuickActions({ actions, onSelect }: QuickActionsProps) {
   );
 }
 
-// ── 根据 Warroom 数据生成上下文快捷指令 ──────────────────────────
+// ── 根据 Warroom 数据生成上下文快捷指令（对齐新产品方向）──────────
 export function buildQuickActions(params: {
   totalPending: number;
   completionRate: number;
-  hasTikTok: boolean;
-  hasMeta: boolean;
+  hasProducts: boolean;
+  hasInquiries: boolean;
 }): QuickAction[] {
   const actions: QuickAction[] = [];
 
+  // 核心：产品资料库上传引导
+  actions.push({
+    id: 'upload-product',
+    label: '上传产品资料',
+    icon: '📦',
+    prompt: '我想上传产品资料，让 AI 开始学习并分析市场机会。请告诉我需要准备哪些文件格式，以及上传后 AI 会做什么。',
+    color: '#F59E0B',
+  });
+
+  // 有待处理询盘时优先提示
   if (params.totalPending > 0) {
     actions.push({
-      id: 'summarize',
-      label: '汇总今日待办',
-      icon: '📋',
-      prompt: `请汇总今日 ${params.totalPending} 条待处理消息的优先级，并给出处理建议。`,
+      id: 'handle-inquiries',
+      label: `处理 ${params.totalPending} 条询盘`,
+      icon: '📬',
+      prompt: `当前有 ${params.totalPending} 条待处理询盘，请按优先级排序，并为每条询盘生成一份专业的英文回复草稿。`,
+      color: '#F87171',
+    });
+  }
+
+  // 有产品资料时推送市场扫描
+  if (params.hasProducts) {
+    actions.push({
+      id: 'market-scan',
+      label: '扫描目标市场',
+      icon: '🔍',
+      prompt: '请基于我的产品资料库，分析中东（沙特、UAE）市场的需求趋势、竞争强度和进入机会，给出优先开发的市场建议。',
       color: '#A78BFA',
     });
   }
 
-  if (params.completionRate < 60) {
+  // 有询盘时推送质量分析
+  if (params.hasInquiries) {
     actions.push({
-      id: 'boost',
-      label: '提升完成率',
-      icon: '🚀',
-      prompt: '当前完成率偏低，请分析原因并给出 3 个快速提升完成率的具体行动方案。',
-      color: '#F59E0B',
+      id: 'inquiries-analysis',
+      label: '询盘质量分析',
+      icon: '📊',
+      prompt: '请分析最近的询盘数据，识别高意向买家特征，给出提升询盘转化率的具体建议。',
+      color: '#34D399',
     });
   }
 
-  if (params.hasTikTok) {
-    actions.push({
-      id: 'tiktok',
-      label: 'TikTok 分析',
-      icon: '🎵',
-      prompt: '请分析 TikTok 平台近 7 日的询盘趋势，识别高转化内容特征，并给出内容优化建议。',
-      color: '#FE2C55',
-    });
-  }
-
-  if (params.hasMeta) {
-    actions.push({
-      id: 'meta',
-      label: 'Meta 广告优化',
-      icon: '📘',
-      prompt: '请分析 Meta 平台广告效果，给出受众定向和创意优化的具体建议。',
-      color: '#60A5FA',
-    });
-  }
-
+  // 本土化内容生成
   actions.push({
-    id: 'weekly',
-    label: '本周报告',
-    icon: '📊',
-    prompt: '请生成本周业务数据摘要报告，包含询盘量、回复率、转化率等核心指标的分析。',
-    color: '#34D399',
-  });
-
-  actions.push({
-    id: 'competitors',
-    label: '竞品动态',
-    icon: '🔍',
-    prompt: '请分析近期竞品的市场动态，识别潜在威胁和机会，给出差异化竞争建议。',
+    id: 'localize-content',
+    label: '生成本土化内容',
+    icon: '🌍',
+    prompt: '请为我的产品生成一套面向中东市场的本土化内容方案，包括：阿拉伯语产品介绍、Facebook 帖子文案、海报设计方向。',
+    color: '#60A5FA',
   });
 
   return actions.slice(0, 5);
