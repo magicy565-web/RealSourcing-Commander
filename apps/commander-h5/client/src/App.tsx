@@ -18,6 +18,7 @@ import TaskQueue from "./pages/TaskQueue";
 import FeedPage from "./pages/FeedPage";
 import AdminPage from "./pages/AdminPage";
 import VideoFeedPlayer from "./pages/VideoFeedPlayer";
+import AssetVault from "./pages/AssetVault";
 
 // ─── 受保护路由 ───────────────────────────────────────────────
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -139,6 +140,7 @@ function Router() {
       <Route path="/video-feed">{() => <ProtectedRoute component={VideoFeedPlayerWrapper} />}</Route>
       <Route path="/feed">{() => <ProtectedRoute component={FeedPageWrapper} />}</Route>
       <Route path="/admin">{() => <ProtectedRoute component={AdminPageWrapper} />}</Route>
+      <Route path="/asset-vault">{() => <ProtectedRoute component={AssetVault} />}</Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

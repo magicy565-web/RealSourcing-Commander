@@ -4,6 +4,10 @@ import { motion, AnimatePresence, useSpring, useTransform } from 'framer-motion'
 import { useWarroomData } from '../hooks/useWarroomData';
 import { useWarroomWS } from '../hooks/useWarroomWS';
 import { useProactiveCards } from '../hooks/useProactiveCards';
+import { useProactiveCardsV6 } from '../hooks/useProactiveCardsV6';
+import { ProactiveCardV6Stack, MorningBriefing } from '../components/ProactiveCardV6';
+import { InquiryAnalyzer } from '../components/InquiryAnalyzer';
+import type { InquiryData } from '../components/InquiryAnalyzer';
 import { usePullToRefresh } from '../hooks/useSpringGesture';
 import { FluidAurora } from '../components/FluidAurora';
 import { ProactiveCardStack } from '../components/ProactiveCard';
@@ -1826,6 +1830,7 @@ function PullIndicator({ indicatorRef }: { indicatorRef: React.RefObject<HTMLDiv
 // Main Page — BossWarroom V5
 // ══════════════════════════════════════════════════════════════════
 export default function BossWarroom() {
+  const [, navigate] = useLocation();
   const { data, isLoading, refetch } = useWarroomData();
   const [time, setTime] = useState('');
   const [input, setInput] = useState('');
@@ -1840,20 +1845,27 @@ export default function BossWarroom() {
     }, [])
   );
 
-  // Proactive AI cards
+  // Proactive AI cards (V5 legacy)
   const { cards: proactiveCards, dismissCard } = useProactiveCards(data);
+  // Proactive AI cards V6 — 三种决策形态
+  const { cards: v6Cards, dismissCard: dismissV6Card, confirmCard: confirmV6Card, showMorningBriefing, setShowMorningBriefing, morningBriefingCards } = useProactiveCardsV6(data);
+  // Inquiry Analyzer
+  const [selectedInquiry, setSelectedInquiry] = useState<InquiryData | null>(null);
 
   // Pull-to-refresh
   const { containerRef, indicatorRef, onTouchStart, onTouchMove, onTouchEnd } = usePullToRefresh(
     async () => { await refetch(); hapticSuccess(); }
   );
 
+  // Asset Vault 入口
+  const handleOpenAssetVault = useCallback(() => { hapticMedium(); navigate('/asset-vault'); }, [navigate]);
+
   // Quick actions
   const quickActions = buildQuickActions({
-    totalPending: data?.stats.totalPending ?? 0,
-    completionRate: data?.stats.completionRate ?? 0,
+    totalPending: data?.totalPending ?? 0,
+    completionRate: data?.completionRate ?? 0,
     hasProducts: true, // TODO: 从产品库接口获取
-    hasInquiries: !!(inquiries && inquiries.length > 0),
+    hasInquiries: false,
   });
 
   // Clock
@@ -1952,7 +1964,26 @@ export default function BossWarroom() {
       >
         <PullIndicator indicatorRef={indicatorRef}/>
 
-        {/* Proactive AI cards */}
+        {/* Proactive AI cards V6 — 三种决策形态 */}
+        <AnimatePresence mode="popLayout">
+          {v6Cards.length > 0 && (
+            <motion.div
+              key="v6-proactive-stack"
+              initial={{ opacity:0, y:-10 }}
+              animate={{ opacity:1, y:0 }}
+              exit={{ opacity:0, y:-8 }}
+              transition={SPRING_GENTLE}
+            >
+              <ProactiveCardV6Stack
+                cards={v6Cards}
+                onDismiss={dismissV6Card}
+                onConfirm={confirmV6Card}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* V5 Legacy Proactive AI cards */}
         <AnimatePresence mode="popLayout">
           {proactiveCards.length > 0 && (
             <motion.div
@@ -2057,6 +2088,29 @@ export default function BossWarroom() {
         {/* Home indicator */}
         <div style={{ width:108, height:4, borderRadius:2, background:'rgba(255,255,255,0.2)', margin:'10px auto 0' }}/>
       </div>
+
+      {/* 早晨简报 Overlay */}
+      <AnimatePresence>
+        {showMorningBriefing && (
+          <MorningBriefing
+            cards={morningBriefingCards}
+            onConfirm={confirmV6Card}
+            onDismiss={dismissV6Card}
+            onClose={() => setShowMorningBriefing(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* 询盘 AI 解析器 */}
+      <AnimatePresence>
+        {selectedInquiry && (
+          <InquiryAnalyzer
+            inquiry={selectedInquiry}
+            onClose={() => setSelectedInquiry(null)}
+            onSent={(id) => { setSelectedInquiry(null); hapticSuccess(); }}
+          />
+        )}
+      </AnimatePresence>
 
       <style>{`
         @keyframes ambA   { 0%{transform:scale(1)translate(0,0);}    100%{transform:scale(1.2)translate(32px,-22px);} }

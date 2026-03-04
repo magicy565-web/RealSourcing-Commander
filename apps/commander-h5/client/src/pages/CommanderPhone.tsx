@@ -337,19 +337,19 @@ function apiInquiryToLead(inq: Inquiry): Lead {
   const score = inq.confidence_score ?? 0;
   const color = score >= 80 ? "#22c55e" : score >= 60 ? "#f59e0b" : "#ef4444";
   const label: "高意向" | "中等" | "待验证" = score >= 80 ? "高意向" : score >= 60 ? "中等" : "待验证";
-  const platform = inq.source_platform;
+  const platform = inq.source_platform ?? 'custom';
   const channelType = (["alibaba","linkedin","facebook","tiktok","whatsapp","seo","geo","email"].includes(platform)
     ? platform : "custom") as Lead["channelType"];
   const country = inq.buyer_country ?? "";
   return {
     id: inq.id,
-    channel: PLATFORM_LABELS[platform] ?? platform,
+    channel: PLATFORM_LABELS[platform as keyof typeof PLATFORM_LABELS] ?? platform,
     channelType,
     company: inq.buyer_company ?? "未知公司",
     contact: inq.buyer_name ?? "未知买家",
     contactTitle: "",
-    email: inq.buyer_contact?.includes("@") ? inq.buyer_contact : undefined,
-    whatsapp: inq.buyer_contact && !inq.buyer_contact.includes("@") ? inq.buyer_contact : undefined,
+    email: inq.buyerContact?.includes("@") ? inq.buyerContact : undefined,
+    whatsapp: inq.buyerContact && !inq.buyerContact.includes("@") ? inq.buyerContact : undefined,
     country,
     flag: COUNTRY_FLAGS[country] ?? "🌍",
     product: inq.product_name ?? "",
@@ -369,7 +369,7 @@ function apiInquiryToLead(inq: Inquiry): Lead {
     status: inq.status as Lead["status"],
     urgency: (inq.urgency as "high" | "normal" | "low") ?? "normal",
     tags: Array.isArray(inq.tags) ? inq.tags : [],
-    receivedAt: formatRelativeTime(inq.received_at),
+    receivedAt: formatRelativeTime(inq.received_at ?? ''),
     followUpRecords: [],
     followUpStyle: "business",
     quotedPrice: undefined,
@@ -1086,7 +1086,10 @@ function LeadDetailFlow({ lead: initialLead, onBack, onUpdate }: {
   const [showConfidence, setShowConfidence] = useState(false);
   const [showAIThinking, setShowAIThinking] = useState(false);
   const [aiThinkingTriggered, setAiThinkingTriggered] = useState(false);
-  const { steps: thinkingSteps, isRunning: thinkingRunning, totalDuration: thinkingDuration } = useAIThinking(aiThinkingTriggered);
+  // useAIThinking 未实现，使用占位符
+  const thinkingSteps: { label: string; detail: string; status: 'pending' | 'running' | 'done' }[] = [];
+  const thinkingRunning = false;
+  const thinkingDuration = 0;
   const [transferTo, setTransferTo] = useState("");
   const [transferNote, setTransferNote] = useState("");
   // SmartQuoteAI state
@@ -1234,13 +1237,10 @@ function LeadDetailFlow({ lead: initialLead, onBack, onUpdate }: {
           </button>
           {showAIThinking && (
             <div className="px-4 py-3 border-b border-white/8">
-              <AIThinkingPanel
-                steps={thinkingSteps}
-                isRunning={thinkingRunning}
-                totalDuration={thinkingDuration}
-                creditsUsed={thinkingRunning ? undefined : 3}
-                styleUsed={false}
-              />
+              {/* AIThinkingPanel 占位符 */}
+              <div style={{ padding: '8px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.04)', fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
+                AI 思考过程（{thinkingDuration}ms）
+              </div>
             </div>
           )}
 

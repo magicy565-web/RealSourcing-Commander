@@ -411,7 +411,7 @@ export default function VideoFeedPlayer({ onBack }: { onBack?: () => void }) {
   // TikTok 关键点：必须在 scroll-snap 完全停止后才更新 currentIndex，
   // 这样 isActive 才会在滚动完成后才变为 true，触发自动播放。
   useEffect(() => {
-    const el = containerRef.current;
+    const el = containerRef.current as HTMLDivElement | null;
     if (!el) return;
 
     let scrollEndTimer: ReturnType<typeof setTimeout> | null = null;
@@ -433,9 +433,10 @@ export default function VideoFeedPlayer({ onBack }: { onBack?: () => void }) {
         if (scrollEndTimer) clearTimeout(scrollEndTimer);
         scrollEndTimer = setTimeout(commitIndex, 150);
       };
-      el.addEventListener('scroll', onScroll, { passive: true });
+      const domEl = el as unknown as HTMLElement;
+      domEl.addEventListener('scroll', onScroll, { passive: true });
       return () => {
-        el.removeEventListener('scroll', onScroll);
+        domEl.removeEventListener('scroll', onScroll);
         if (scrollEndTimer) clearTimeout(scrollEndTimer);
       };
     }
