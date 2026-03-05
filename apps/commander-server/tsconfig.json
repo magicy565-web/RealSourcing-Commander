@@ -10,11 +10,14 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
+    "declaration": false,
+    "sourceMap": false,
     "noImplicitAny": false,
-    "isolatedModules": true
+    "isolatedModules": true,
+    "noEmitOnError": false,
+    "suppressImplicitAnyIndexErrors": true,
+    "allowJs": true,
+    "checkJs": false
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
