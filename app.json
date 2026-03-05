@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "Commander Boss Phone",
+    "slug": "commander-boss-phone",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#000000",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.realsourcing.commander"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#000000"
+      },
+      "package": "com.realsourcing.commander",
+      "enableDangerousExperimentalLeanBuildForAndroid": false
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "scheme": "commander",
+    "web": {
+      "bundler": "metro"
+    },
+    "experiments": {
+      "typedRoutes": true,
+      "baseUrl": "/"
+    }
+  }
+}
