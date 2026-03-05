@@ -10,8 +10,9 @@ import { Hono } from "hono";
 import { db } from "../db/index.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { nanoid } from "nanoid";
+import type { AppContext } from "../types/context.js";
 
-const feed = new Hono();
+const feed = new Hono<AppContext>();
 feed.use("*", authMiddleware);
 
 // ─── 推荐引擎：三维加权算法 ────────────────────────────────────

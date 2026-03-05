@@ -18,3 +18,19 @@ export async function getKnowledgeStatus(id: string) {
     count: 0
   };
 }
+
+export async function parseExcel(file: any) {
+  console.log("[Knowledge Import] Parsing Excel", file);
+  return {
+    success: true,
+    rows: []
+  };
+}
+
+export async function parseWord(file: any) {
+  console.log("[Knowledge Import] Parsing Word", file);
+  return {
+    success: true,
+    content: ""
+  };
+}

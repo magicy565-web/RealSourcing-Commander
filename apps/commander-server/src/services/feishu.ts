@@ -44,3 +44,11 @@ export async function addBitableRecord(appToken: string, tableId: string, data: 
   console.log("[Feishu] Adding Bitable record", { appToken, tableId, data });
   return { success: true, recordId: "rec_new" };
 }
+
+export async function createQuotationNotificationCard(data: any) {
+  console.log("[Feishu] Creating quotation notification card", data);
+  return {
+    success: true,
+    cardId: "card_" + Math.random().toString(36).substr(2, 9)
+  };
+}

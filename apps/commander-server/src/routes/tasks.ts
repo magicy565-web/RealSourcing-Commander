@@ -10,8 +10,9 @@ import { db } from "../db/index.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { planAgentTask } from "../services/ai.js";
 import { pushTaskNotification, sendFeishuCard } from "../services/feishu.js";
+import type { AppContext } from "../types/context.js";
 
-const tasks = new Hono();
+const tasks = new Hono<AppContext>();
 tasks.use("*", authMiddleware);
 
 // ─── 确保 task_queue 表存在 ───────────────────────────────────

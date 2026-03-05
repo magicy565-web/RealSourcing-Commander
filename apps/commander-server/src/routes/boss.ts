@@ -15,8 +15,9 @@ import { Hono } from "hono";
 import { db } from "../db/index.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { chat, parseComplexCommand } from "../services/ai.js";
+import type { AppContext } from "../types/context.js";
 
-const boss = new Hono();
+const boss = new Hono<AppContext>();
 boss.use("*", authMiddleware);
 
 // ─── 确保 boss_commands 表存在 ────────────────────────────────────
