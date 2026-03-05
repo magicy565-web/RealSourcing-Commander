@@ -365,7 +365,7 @@ inquiries.post("/:id/quote", async (c) => {
       "报价时间": Date.now(),
       "状态": "已发送",
       "备注": `${row.product_name} - $${body.unitPrice}/${body.unit ?? '件'}`
-    }).catch(err => console.error("Failed to write to Feishu Bitable:", err));
+    }).catch((err: any) => console.error("Failed to write to Feishu Bitable:", err));
   }
   // 推送飞书 Webhook 通知
   pushQuotationNotification({
@@ -375,7 +375,7 @@ inquiries.post("/:id/quote", async (c) => {
     unit_price: body.unitPrice,
     currency: body.currency ?? "USD",
     buyer_name: row.buyer_name
-  }).catch(err => console.error("Failed to push Feishu notification:", err));
+  }).catch((err: any) => console.error("Failed to push Feishu notification:", err));
 
   return c.json({ success: true, quotationId, creditsUsed, newBalance: tenant.credits_balance });
 });
@@ -525,7 +525,7 @@ inquiries.post("/:id/concept-image", async (c) => {
   db.prepare("UPDATE inquiries SET concept_image_status = 'generating' WHERE id = ?").run(id);
 
   // 异步生成（不 await）
-  generateConceptImage(id).catch((err) => {
+  generateConceptImage(id).catch((err: any) => {
     console.error(`[ConceptImage] 后台生成失败 ${id}:`, err?.message || err);
   });
 

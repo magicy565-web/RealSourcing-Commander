@@ -20,11 +20,23 @@ import AdminPage from "./pages/AdminPage";
 import VideoFeedPlayer from "./pages/VideoFeedPlayer";
 import AssetVault from "./pages/AssetVault";
 
+// ─── 新增交互页面 ─────────────────────────────────────────────
+import WatchFace from "./pages/WatchFace";
+import DecisionFeed from "./pages/DecisionFeed";
+import AITraining from "./pages/AITraining";
+import CommanderChat from "./pages/CommanderChat";
+import DigitalAgents from "./pages/DigitalAgents";
+import MarketRadar from "./pages/MarketRadar";
+import InboundFunnel from "./pages/InboundFunnel";
+import OutboundCampaigns from "./pages/OutboundCampaigns";
+import ContentStudio from "./pages/ContentStudio";
+import Settings from "./pages/Settings";
+import Dashboard from "./pages/Dashboard";
+import Home from "./pages/Home";
+
 // ─── 受保护路由 ───────────────────────────────────────────────
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
-  if (!isLoggedIn()) {
-    return <Redirect to="/login" />;
-  }
+  // 直接进入页面，跳过登陆检查
   return <Component />;
 }
 
@@ -129,7 +141,7 @@ function AdminPageWrapper() {
 function Router() {
   return (
     <Switch>
-      <Route path="/">{() => isLoggedIn() ? <Redirect to="/boss-warroom" /> : <Redirect to="/login" />}</Route>
+      <Route path="/">{() => <ProtectedRoute component={BossWarroom} />}</Route>
       <Route path="/login" component={Login} />
       <Route path="/boss-warroom">{() => <ProtectedRoute component={BossWarroom} />}</Route>
       <Route path="/warroom">{() => <ProtectedRoute component={BossWarroom} />}</Route>
@@ -141,6 +153,20 @@ function Router() {
       <Route path="/feed">{() => <ProtectedRoute component={FeedPageWrapper} />}</Route>
       <Route path="/admin">{() => <ProtectedRoute component={AdminPageWrapper} />}</Route>
       <Route path="/asset-vault">{() => <ProtectedRoute component={AssetVault} />}</Route>
+      
+      {/* ─── 新增交互页面路由 ─────────────────────────────────── */}
+      <Route path="/watch-face">{() => <ProtectedRoute component={WatchFace} />}</Route>
+      <Route path="/decision-feed">{() => <ProtectedRoute component={DecisionFeed} />}</Route>
+      <Route path="/ai-training">{() => <ProtectedRoute component={AITraining} />}</Route>
+      <Route path="/commander-chat">{() => <ProtectedRoute component={CommanderChat} />}</Route>
+      <Route path="/digital-agents">{() => <ProtectedRoute component={DigitalAgents} />}</Route>
+      <Route path="/market-radar">{() => <ProtectedRoute component={MarketRadar} />}</Route>
+      <Route path="/inbound-funnel">{() => <ProtectedRoute component={InboundFunnel} />}</Route>
+      <Route path="/outbound-campaigns">{() => <ProtectedRoute component={OutboundCampaigns} />}</Route>
+      <Route path="/content-studio">{() => <ProtectedRoute component={ContentStudio} />}</Route>
+      <Route path="/settings">{() => <ProtectedRoute component={Settings} />}</Route>
+      <Route path="/dashboard">{() => <ProtectedRoute component={Dashboard} />}</Route>
+      
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

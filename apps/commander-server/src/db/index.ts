@@ -10,7 +10,7 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_PATH = process.env.DB_PATH ?? path.join(__dirname, "../../commander.db");
 
-export const db = new Database(DB_PATH);
+export const db: any = new Database(DB_PATH);
 
 // WAL 模式提升并发读性能
 db.pragma("journal_mode = WAL");
@@ -766,7 +766,7 @@ function seedDemoData() {
     { id: "kb-009", industry: "furniture", category: "term", key: "交货条款", value: "FOB、CIF、EXW、DAP" },
     { id: "kb-010", industry: "furniture", category: "term", key: "包装", value: "Flat-pack / KD（平板包装）、RTA（即装）" },
     { id: "kb-011", industry: "furniture", category: "template", key: "标准报价", value: "含价格、MOQ、交货期、付款方式、有效期" },
-    { id: "kb-012", industry: "furniture", category: "template", key: "24h 跟进", value: "商务/友好/强势三种风格" },
+    { id: "kb-012", industry: "furniture", category: "template", key: "24h 跟进", value: "商���/友好/强势三种风格" },
     // 纵织行业
     { id: "kb-013", industry: "textile", category: "price_range", key: "有机棉 T 恤", value: "FOB $2.5-$8/件，视克重和印花" },
     { id: "kb-014", industry: "textile", category: "price_range", key: "亚麻面料", value: "FOB $3-$12/米，视密度和宽幅" },

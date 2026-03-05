@@ -15,7 +15,7 @@
  */
 
 import { Queue, Worker, Job, QueueEvents } from "bullmq";
-import { redisConnection } from "./queue"; // 复用 4.0 的 Redis 连接
+import { redisConnection } from "./queue.js"; // 复用 4.0 的 Redis 连接
 
 // ─── 队列名称常量 ─────────────────────────────────────────────
 

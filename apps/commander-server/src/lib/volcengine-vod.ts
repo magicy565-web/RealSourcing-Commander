@@ -87,7 +87,7 @@ export async function listMediaInfos(spaceName: string, pageNum = 1, pageSize = 
  * 兼容旧版 getUploadAuthToken 调用，内部委托给 applyUploadInfo。
  * 将官方 SDK 返回结构适配为旧版格式，保持 video-feed.ts 路由的兼容性。
  */
-export async function getUploadAuthToken(spaceName: string) {
+export async function getUploadAuthToken(spaceName: string): Promise<any> {
   const result = await applyUploadInfo(spaceName);
   return {
     Result: {

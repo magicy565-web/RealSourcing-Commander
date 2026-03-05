@@ -25,9 +25,9 @@
  */
 
 import { Worker, Job } from "bullmq";
-import { redisConnection } from "./queue";
-import { COMMANDER_QUEUES, RfqMonitorJobData } from "./commanderQueue";
-import { notifyLeadArrived } from "./wechatService";
+import { redisConnection } from "./queue.js";
+import { COMMANDER_QUEUES, RfqMonitorJobData } from "./commanderQueue.js";
+import { notifyLeadArrived } from "./wechatService.js";
 // import { callClawAgent } from "./clawAgentRouter";   // TODO: 集成 OpenClaw 指令
 // import { generateText } from "./aiService";           // TODO: AI 摘要
 // import { writeToFeishuTable } from "./feishuService"; // TODO: 飞书归档

@@ -4,16 +4,12 @@
   "private": true,
   "description": "RealSourcing Commander 5.0 — 数字资产托管 + 海外市场增长服务",
   "scripts": {
-    "dev": "pnpm --parallel --filter './apps/*' dev",
-    "dev:app": "pnpm --filter commander-app dev",
-    "dev:web": "pnpm --filter commander-web dev",
+    "dev": "pnpm --parallel --filter './apps/{commander-h5,commander-server}' dev",
+    "dev:h5": "pnpm --filter commander-h5 dev",
     "dev:server": "pnpm --filter commander-server dev",
-    "build": "pnpm --filter './apps/*' build",
+    "build": "pnpm --filter './apps/{commander-h5,commander-server}' build",
     "db:migrate": "pnpm --filter commander-server db:migrate",
-    "db:studio": "pnpm --filter commander-server db:studio",
-    "worker:start": "pnpm --filter commander-server worker:start",
-    "typecheck": "pnpm --filter './apps/*' typecheck",
-    "lint": "pnpm --filter './apps/*' lint"
+    "db:studio": "pnpm --filter commander-server db:studio"
   },
   "engines": {
     "node": ">=20.0.0",

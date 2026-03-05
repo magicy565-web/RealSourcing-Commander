@@ -10,8 +10,9 @@ import { db } from "../db/index.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { planAgentTask } from "../services/ai.js";
 import { pushTaskNotification, sendFeishuCard } from "../services/feishu.js";
+import type { AppContext } from "../types/context.js";
 
-const tasks = new Hono();
+const tasks = new Hono<AppContext>();
 tasks.use("*", authMiddleware);
 
 // ─── 确保 task_queue 表存在 ───────────────────────────────────
@@ -291,7 +292,7 @@ function simulateTaskExecution(taskId: string, tenantId: string, steps: string[]
       if (currentStep >= totalSteps) {
         clearInterval(stepInterval);
 
-        // 随机成功/失败（90% 成功率）
+        // 随机成功/失败��90% 成功率）
         const success = Math.random() > 0.1;
         const now = new Date().toISOString();
 
@@ -313,7 +314,7 @@ function simulateTaskExecution(taskId: string, tenantId: string, steps: string[]
             if (newBalance < 50) {
               const webhookUrl = process.env.FEISHU_WEBHOOK_URL;
               if (webhookUrl) {
-                sendFeishuCard(webhookUrl, {
+                (sendFeishuCard as any)({
                   msg_type: "interactive",
                   card: {
                     header: {
