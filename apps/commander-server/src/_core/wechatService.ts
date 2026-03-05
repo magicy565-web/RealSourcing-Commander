@@ -10,7 +10,7 @@
  * 文档：https://developers.weixin.qq.com/doc/offiaccount/Message_Management/Template_Message_Interface.html
  */
 
-import { env } from "./env";
+import { env } from "./env.js";
 
 // ─── 通知类型定义 ─────────────────────────────────────────────
 

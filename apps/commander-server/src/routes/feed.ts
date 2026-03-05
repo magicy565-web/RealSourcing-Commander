@@ -64,7 +64,7 @@ function calculateRecommendationScore(
 
 // ─── 获取今日配额状态 ─────────────────────────────────────────
 feed.get("/quota", (c) => {
-  const user = c.get("user");
+  const user = c.get("user") as any;
   const today = new Date().toISOString().split("T")[0];
 
   let prefs = db
