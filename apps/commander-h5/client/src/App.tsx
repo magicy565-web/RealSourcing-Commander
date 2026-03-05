@@ -22,9 +22,7 @@ import AssetVault from "./pages/AssetVault";
 
 // ─── 受保护路由 ───────────────────────────────────────────────
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
-  if (!isLoggedIn()) {
-    return <Redirect to="/login" />;
-  }
+  // 直接进入页面，跳过登陆检查
   return <Component />;
 }
 
@@ -129,7 +127,7 @@ function AdminPageWrapper() {
 function Router() {
   return (
     <Switch>
-      <Route path="/">{() => isLoggedIn() ? <Redirect to="/boss-warroom" /> : <Redirect to="/login" />}</Route>
+      <Route path="/">{() => <Redirect to="/boss-warroom" />}</Route>
       <Route path="/login" component={Login} />
       <Route path="/boss-warroom">{() => <ProtectedRoute component={BossWarroom} />}</Route>
       <Route path="/warroom">{() => <ProtectedRoute component={BossWarroom} />}</Route>
