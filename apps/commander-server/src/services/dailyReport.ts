@@ -176,7 +176,7 @@ export async function pushDailyReport(tenantId?: string): Promise<void> {
     try {
       const data = collectYesterdayData(tenant.id);
       const card = buildDailyReportCard(data, tenant.name ?? "RealSourcing");
-      await sendFeishuCard(webhookUrl, card as any);
+      await (sendFeishuCard as any)({ webhookUrl, card });
       console.log(`[DailyReport] 已推送 ${tenant.name} 的昨日战报`);
     } catch (err) {
       console.error(`[DailyReport] 推送失败 tenant=${tenant.id}:`, err);

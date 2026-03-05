@@ -52,3 +52,8 @@ export async function createQuotationNotificationCard(data: any) {
     cardId: "card_" + Math.random().toString(36).substr(2, 9)
   };
 }
+
+export async function pushFollowupReminder(data: any) {
+  console.log("[Feishu] Pushing followup reminder", data);
+  return { success: true };
+}

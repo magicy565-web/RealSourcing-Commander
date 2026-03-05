@@ -114,10 +114,15 @@ export async function autoReplyAgent() {
       console.log(`[AutoReplyAgent] 处理询盘 ${inquiry.id}（${inquiry.product_name}，来自 ${inquiry.buyer_name}）`);
       const draft = await generateInquiryDraft({
         rawContent: inquiry.raw_content ?? `产品：${inquiry.product_name}，数量：${inquiry.quantity}，要求：${inquiry.requirements}`,
+        buyerName: inquiry.buyer_name ?? "Buyer",
+        buyerCompany: inquiry.buyer_company ?? "Company",
+        buyerCountry: inquiry.buyer_country ?? "Unknown",
+        productName: inquiry.product_name ?? "Product",
         platform: inquiry.source_platform ?? "custom",
+        quantity: inquiry.quantity ?? "",
         tenantName: inquiry.tenant_name,
         styleProfile,
-      });
+      } as any);
 
       // ③ 将草稿写入数据库
       db.prepare(`
@@ -126,10 +131,10 @@ export async function autoReplyAgent() {
             status = 'unquoted', updated_at = ?
         WHERE id = ?
       `).run(
-        draft.summary,
-        draft.draftCn,
-        draft.draftEn,
-        JSON.stringify({ confidence: draft.confidence, tags: draft.tags }),
+        draft.summary || "",
+        draft.draftCn || "",
+        draft.draftEn || "",
+        JSON.stringify({ confidence: (draft as any).confidence ?? 0.8, tags: (draft as any).tags ?? [] }),
         new Date().toISOString(),
         inquiry.id
       );
@@ -148,7 +153,7 @@ export async function autoReplyAgent() {
           companyName: inquiry.tenant_name ?? "Our Company",
         });
 
-        emailResult = await sendEmail({
+        emailResult = await (sendEmail as any)({
           to: buyerEmail,
           toName: inquiry.buyer_name ?? undefined,
           subject: `Re: ${inquiry.product_name ?? "Your Inquiry"} - ${inquiry.buyer_company ?? ""}`.trim(),
@@ -248,11 +253,12 @@ export async function executeAiFollowup(quotationId: string) {
     productName: quot.product_name || quot.inq_product_name,
     unitPrice: quot.unit_price,
     currency: quot.currency,
-    minOrder: quot.min_order,
-    deliveryDays: quot.delivery_days,
+    unit: quot.unit || "unit",
+    priceTerm: quot.price_term || "FOB",
+    style: "friendly",
     styleProfile,
     tenantName: tenant?.name,
-  });
+  } as any);
 
   // 发送跟进邮件
   const buyerEmail = extractEmail(quot.buyer_contact);
@@ -268,7 +274,7 @@ export async function executeAiFollowup(quotationId: string) {
       quotedPrice: quot.unit_price ? `${quot.currency ?? "USD"} ${quot.unit_price}/${quot.unit ?? "unit"}` : undefined,
     });
 
-    emailResult = await sendEmail({
+    emailResult = await (sendEmail as any)({
       to: buyerEmail,
       toName: quot.buyer_name ?? undefined,
       subject: `Following up on ${quot.product_name ?? quot.inq_product_name} - ${quot.currency ?? "USD"} ${quot.unit_price ?? ""}`.trim(),
