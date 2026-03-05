@@ -1,0 +1,2 @@
+# Allow pnpm to install with non-frozen lockfile in CI
+frozen-lockfile = false
