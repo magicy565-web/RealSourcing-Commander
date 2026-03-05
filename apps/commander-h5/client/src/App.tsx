@@ -141,7 +141,7 @@ function AdminPageWrapper() {
 function Router() {
   return (
     <Switch>
-      <Route path="/">{() => <ProtectedRoute component={Home} />}</Route>
+      <Route path="/">{() => <ProtectedRoute component={BossWarroom} />}</Route>
       <Route path="/login" component={Login} />
       <Route path="/boss-warroom">{() => <ProtectedRoute component={BossWarroom} />}</Route>
       <Route path="/warroom">{() => <ProtectedRoute component={BossWarroom} />}</Route>
