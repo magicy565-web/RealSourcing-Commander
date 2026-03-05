@@ -20,7 +20,7 @@ import {
   ArrowUpRight,
   Sparkles,
 } from 'lucide-react';
-import { triggerHaptic } from '../lib/haptics';
+import { hapticLight, hapticMedium } from '../lib/haptics';
 
 interface Lead {
   id: string;
