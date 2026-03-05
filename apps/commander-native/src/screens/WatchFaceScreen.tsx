@@ -38,7 +38,7 @@ interface WatchFaceScreenProps {
   navigation: any;
 }
 
-export const WatchFaceScreen: React.FC<WatchFaceScreenProps> = ({ navigation }) => {
+export default function WatchFaceScreen({ navigation }: WatchFaceScreenProps) {
   const [time, setTime] = useState(new Date());
   
   // Animation values
@@ -303,7 +303,7 @@ export const WatchFaceScreen: React.FC<WatchFaceScreenProps> = ({ navigation }) 
       </ScrollView>
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -566,5 +566,7 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
   },
 });
+
+export default WatchFaceScreen;
 
 export default WatchFaceScreen;
