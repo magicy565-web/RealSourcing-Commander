@@ -32,6 +32,7 @@ import OutboundCampaigns from "./pages/OutboundCampaigns";
 import ContentStudio from "./pages/ContentStudio";
 import Settings from "./pages/Settings";
 import Dashboard from "./pages/Dashboard";
+import Home from "./pages/Home";
 
 // ─── 受保护路由 ───────────────────────────────────────────────
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -140,7 +141,7 @@ function AdminPageWrapper() {
 function Router() {
   return (
     <Switch>
-      <Route path="/">{() => <Redirect to="/dashboard" />}</Route>
+      <Route path="/">{() => <ProtectedRoute component={Home} />}</Route>
       <Route path="/login" component={Login} />
       <Route path="/boss-warroom">{() => <ProtectedRoute component={BossWarroom} />}</Route>
       <Route path="/warroom">{() => <ProtectedRoute component={BossWarroom} />}</Route>
