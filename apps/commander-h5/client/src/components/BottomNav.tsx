@@ -6,10 +6,8 @@ import {
   Users,
   Settings,
   Sparkles,
-  Activity,
-  BarChart3,
 } from 'lucide-react';
-import { triggerHaptic } from '../lib/haptics';
+import { hapticLight, hapticMedium } from '../lib/haptics';
 
 export type TabId = 'home' | 'decisions' | 'chat' | 'agents' | 'settings';
 
@@ -53,7 +51,7 @@ export function BottomNav({ activeTab, onTabChange, pendingDecisions = 0, unread
                 <motion.button
                   key={tab.id}
                   onClick={() => {
-                    triggerHaptic('medium');
+                    hapticMedium();
                     onTabChange(tab.id);
                   }}
                   className="relative -mt-6"
@@ -130,7 +128,7 @@ export function BottomNav({ activeTab, onTabChange, pendingDecisions = 0, unread
               <motion.button
                 key={tab.id}
                 onClick={() => {
-                  triggerHaptic('light');
+                  hapticLight();
                   onTabChange(tab.id);
                 }}
                 className="relative flex flex-col items-center justify-center w-16 py-1"
