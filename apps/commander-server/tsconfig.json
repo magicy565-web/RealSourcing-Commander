@@ -15,7 +15,6 @@
     "noImplicitAny": false,
     "isolatedModules": true,
     "noEmitOnError": false,
-    "suppressImplicitAnyIndexErrors": true,
     "allowJs": true,
     "checkJs": false
   },
